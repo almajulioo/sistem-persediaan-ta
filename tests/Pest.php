@@ -12,7 +12,9 @@
 */
 
 pest()->extend(Tests\TestCase::class)
- // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    // Uji fitur merender Blade tanpa memerlukan hasil build Vite.
+    ->beforeEach(fn () => $this->withoutVite())
     ->in('Feature');
 
 /*

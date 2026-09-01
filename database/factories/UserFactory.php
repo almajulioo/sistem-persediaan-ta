@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -26,8 +27,8 @@ class UserFactory extends Factory
         return [
             'username' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
-            'role' => fake()->randomElement(['admin', 'gudang', 'pimpinan']),
-            'unit' => fake()->randomElement(['Gudang', 'Administrasi', 'Operasional']),
+            'role' => fake()->randomElement(UserRole::cases()),
+            'unit' => fake()->randomElement(['Sekretariat Perwakilan', 'Subbagian Umum dan TU', 'Subauditorat Lampung I']),
             'fullname' => fake()->name(),
             'is_active' => true,
             'email_verified_at' => now(),
@@ -44,5 +45,21 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
         ]);
+    }
+
+    /**
+     * Akun dengan peran tertentu.
+     */
+    public function role(UserRole $role): static
+    {
+        return $this->state(fn (array $attributes) => ['role' => $role]);
+    }
+
+    /**
+     * Akun yang dinonaktifkan Admin.
+     */
+    public function inactive(): static
+    {
+        return $this->state(fn (array $attributes) => ['is_active' => false]);
     }
 }

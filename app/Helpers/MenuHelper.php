@@ -2,99 +2,150 @@
 
 namespace App\Helpers;
 
+use App\Enums\UserRole;
+use App\Models\User;
+
 class MenuHelper
 {
-    public static function getMainNavItems()
+    /**
+     * Menu utama modul sistem persediaan.
+     *
+     * Kunci `roles` menentukan peran yang boleh melihat item tersebut.
+     * Item tanpa kunci `roles` terlihat oleh seluruh pengguna.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getMainNavItems(): array
     {
         return [
             [
                 'icon' => 'dashboard',
-                'name' => 'Dashboard',
-                'subItems' => [
-                    ['name' => 'Ecommerce', 'path' => '/'],
-                ],
+                'name' => 'Dasbor',
+                'path' => '/dasbor',
             ],
             [
-                'icon' => 'calendar',
-                'name' => 'Calendar',
-                'path' => '/calendar',
-            ],
-            [
-                'icon' => 'user-profile',
-                'name' => 'User Profile',
-                'path' => '/profile',
-            ],
-            [
-                'name' => 'Forms',
                 'icon' => 'forms',
-                'subItems' => [
-                    ['name' => 'Form Elements', 'path' => '/form-elements', 'pro' => false],
-                ],
+                'name' => 'Permintaan Barang',
+                'path' => '#',
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
             ],
             [
-                'name' => 'Tables',
-                'icon' => 'tables',
-                'subItems' => [
-                    ['name' => 'Basic Tables', 'path' => '/basic-tables', 'pro' => false]
-                ],
-            ],
-            [
-                'name' => 'Pages',
                 'icon' => 'pages',
-                'subItems' => [
-                    ['name' => 'Blank Page', 'path' => '/blank', 'pro' => false],
-                    ['name' => '404 Error', 'path' => '/error-404', 'pro' => false]
-                ],
+                'name' => 'Pengadaan',
+                'path' => '#',
+                'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
             ],
-        ];
-    }
-
-    public static function getOthersItems()
-    {
-        return [
             [
-                'icon' => 'charts',
-                'name' => 'Charts',
+                'icon' => 'tables',
+                'name' => 'Manajemen Gudang',
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
                 'subItems' => [
-                    ['name' => 'Line Chart', 'path' => '/line-chart', 'pro' => false],
-                    ['name' => 'Bar Chart', 'path' => '/bar-chart', 'pro' => false]
+                    ['name' => 'Stok Barang', 'path' => '#'],
+                    ['name' => 'Mutasi Stok', 'path' => '#'],
+                    ['name' => 'Stock Opname', 'path' => '#'],
                 ],
             ],
             [
                 'icon' => 'ui-elements',
-                'name' => 'UI Elements',
-                'subItems' => [
-                    ['name' => 'Alerts', 'path' => '/alerts', 'pro' => false],
-                    ['name' => 'Avatar', 'path' => '/avatars', 'pro' => false],
-                    ['name' => 'Badge', 'path' => '/badge', 'pro' => false],
-                    ['name' => 'Buttons', 'path' => '/buttons', 'pro' => false],
-                    ['name' => 'Images', 'path' => '/image', 'pro' => false],
-                    ['name' => 'Videos', 'path' => '/videos', 'pro' => false],
-                ],
+                'name' => 'Master Data Barang',
+                'path' => '#',
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+            ],
+        ];
+    }
+
+    /**
+     * Menu administrasi sistem, khusus Admin.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getAdminItems(): array
+    {
+        return [
+            [
+                'icon' => 'user-profile',
+                'name' => 'Manajemen Pengguna',
+                'path' => '/pengguna',
+                'roles' => [UserRole::Admin],
             ],
             [
-                'icon' => 'authentication',
-                'name' => 'Authentication',
+                'icon' => 'task',
+                'name' => 'Log Aktivitas',
+                'path' => '#',
+                'roles' => [UserRole::Admin],
+            ],
+            [
+                'icon' => 'ai-assistant',
+                'name' => 'Referensi UI',
+                'roles' => [UserRole::Admin],
                 'subItems' => [
-                    ['name' => 'Sign In', 'path' => '/signin', 'pro' => false],
-                    ['name' => 'Sign Up', 'path' => '/signup', 'pro' => false],
+                    ['name' => 'Form Elements', 'path' => '/form-elements'],
+                    ['name' => 'Basic Tables', 'path' => '/basic-tables'],
+                    ['name' => 'Charts', 'path' => '/line-chart'],
+                    ['name' => 'Alerts', 'path' => '/alerts'],
+                    ['name' => 'Buttons', 'path' => '/buttons'],
+                    ['name' => 'Blank Page', 'path' => '/blank'],
                 ],
             ],
         ];
     }
 
-    public static function getMenuGroups()
+    /**
+     * Menu akun pengguna.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getOthersItems(): array
     {
         return [
             [
-                'title' => 'Menu',
-                'items' => self::getMainNavItems()
+                'icon' => 'user-profile',
+                'name' => 'Profil Saya',
+                'path' => '/profil',
             ],
-            // [
-            //     'title' => 'Others',
-            //     'items' => self::getOthersItems()
-            // ]
         ];
+    }
+
+    /**
+     * Kelompok menu yang sudah disaring sesuai peran pengguna yang sedang masuk.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getMenuGroups(): array
+    {
+        /** @var User|null $user */
+        $user = auth()->user();
+
+        $groups = [
+            ['title' => 'Menu', 'items' => self::getMainNavItems()],
+            ['title' => 'Administrasi', 'items' => self::getAdminItems()],
+            ['title' => 'Akun', 'items' => self::getOthersItems()],
+        ];
+
+        $groups = array_map(
+            function (array $group) use ($user) {
+                $group['items'] = self::filterByRole($group['items'], $user);
+
+                return $group;
+            },
+            $groups,
+        );
+
+        // Kelompok yang seluruh itemnya tersaring habis tidak perlu ditampilkan.
+        return array_values(array_filter($groups, fn (array $group) => $group['items'] !== []));
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private static function filterByRole(array $items, ?User $user): array
+    {
+        return array_values(array_filter(
+            $items,
+            fn (array $item) => ! isset($item['roles'])
+                || ($user !== null && $user->hasRole(...$item['roles'])),
+        ));
     }
 
     public static function isActive($path)

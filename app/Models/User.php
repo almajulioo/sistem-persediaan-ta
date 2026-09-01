@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
@@ -71,7 +71,71 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'is_active' => 'boolean',
             'password' => 'hashed',
+            'role' => UserRole::class,
+            'last_login_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Apakah pengguna memiliki salah satu dari peran yang diberikan.
+     */
+    public function hasRole(UserRole|string ...$roles): bool
+    {
+        foreach ($roles as $role) {
+            $role = $role instanceof UserRole ? $role : UserRole::tryFrom($role);
+
+            if ($role !== null && $this->role === $role) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->hasRole(UserRole::Admin);
+    }
+
+    /**
+     * Inisial nama lengkap, untuk avatar teks pada UI.
+     */
+    public function initials(): string
+    {
+        $parts = preg_split('/\s+/', trim($this->fullname ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return mb_strtoupper(mb_substr($parts[0] ?? 'U', 0, 1).mb_substr($parts[1] ?? '', 0, 1));
+    }
+
+    /**
+     * Relasi transaksional yang memakai onDelete restrict. Selama masih ada
+     * isinya, akun tidak boleh dihapus dan sebaiknya dinonaktifkan saja.
+     *
+     * @var list<string>
+     */
+    public const RESTRICTED_RELATIONS = [
+        'auditLogs' => 'log aktivitas',
+        'stockOpnames' => 'stock opname',
+        'procurements' => 'pengadaan',
+        'procurementRequests' => 'usulan pengadaan',
+    ];
+
+    /**
+     * Nama relasi transaksional yang masih memiliki data untuk akun ini.
+     *
+     * @return array<int, string>
+     */
+    public function blockingRelations(): array
+    {
+        $blocking = [];
+
+        foreach (self::RESTRICTED_RELATIONS as $relation => $label) {
+            if ($this->{$relation}()->exists()) {
+                $blocking[] = $label;
+            }
+        }
+
+        return $blocking;
     }
 
     public function requests(): HasMany

@@ -1,0 +1,91 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\UserRole;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
+
+class UserSeeder extends Seeder
+{
+    /**
+     * Akun awal sistem. Sistem ini tertutup, tidak ada pendaftaran mandiri,
+     * sehingga akun pertama harus dibuat lewat seeder.
+     */
+    public function run(): void
+    {
+        $password = $this->resolvePassword();
+
+        $accounts = [
+            [
+                'username' => 'admin',
+                'email' => 'admin@bpk.go.id',
+                'fullname' => 'Administrator Sistem',
+                'unit' => 'Sekretariat Perwakilan',
+                'role' => UserRole::Admin,
+            ],
+            [
+                'username' => 'gudang',
+                'email' => 'gudang@bpk.go.id',
+                'fullname' => 'Pengelola Gudang Persediaan',
+                'unit' => 'Subbagian Umum dan TU',
+                'role' => UserRole::PengelolaGudang,
+            ],
+            [
+                'username' => 'pengadaan',
+                'email' => 'pengadaan@bpk.go.id',
+                'fullname' => 'Pejabat Pengadaan Barang/Jasa',
+                'unit' => 'Subbagian Umum dan TU',
+                'role' => UserRole::PejabatPengadaan,
+            ],
+        ];
+
+        foreach ($accounts as $account) {
+            User::updateOrCreate(
+                ['username' => $account['username']],
+                $account + [
+                    'password' => $password,
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                ],
+            );
+        }
+
+        $this->reportCredentials($accounts, $password);
+    }
+
+    /**
+     * Kata sandi awal: dari env bila disetel, kata sandi tetap saat pengembangan
+     * lokal, dan kata sandi acak di lingkungan lain.
+     */
+    private function resolvePassword(): string
+    {
+        $configured = env('SEED_DEFAULT_PASSWORD');
+
+        if (filled($configured)) {
+            return $configured;
+        }
+
+        return app()->environment('local', 'testing')
+            ? 'Persediaan#2026'
+            : Str::password(16);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $accounts
+     */
+    private function reportCredentials(array $accounts, string $password): void
+    {
+        $this->command?->newLine();
+        $this->command?->info('Akun awal berhasil dibuat:');
+        $this->command?->table(
+            ['Nama Pengguna', 'Peran', 'Kata Sandi'],
+            array_map(
+                fn (array $account) => [$account['username'], $account['role']->label(), $password],
+                $accounts,
+            ),
+        );
+        $this->command?->warn('Segera ganti kata sandi ini setelah login pertama.');
+    }
+}
