@@ -1,8 +1,10 @@
 <?php
 
 use App\Enums\MutationType;
+use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Item;
+use App\Models\User;
 use App\Support\StockLedger;
 
 it('menambah stok untuk mutasi masuk', function () {
@@ -73,6 +75,57 @@ it('menolak jumlah nol atau negatif untuk mutasi berarah tetap', function () {
         ->toThrow(InvalidArgumentException::class);
 });
 
+it('mencatat pencatat mutasi bila diberikan', function () {
+    $item = Item::factory()->create(['stock_current' => 0]);
+    $petugas = User::factory()->role(UserRole::PengelolaGudang)->create(['fullname' => 'Siti Gudang']);
+
+    $mutation = StockLedger::record(
+        item: $item,
+        type: MutationType::SaldoAwal,
+        amount: 10,
+        recordedBy: $petugas,
+        notes: 'Stok pembuka',
+    );
+
+    expect($mutation->user_id)->toBe($petugas->user_id)
+        ->and($mutation->petugas())->toBe('Siti Gudang')
+        ->and($mutation->notes)->toBe('Stok pembuka');
+});
+
+it('menampilkan Sistem sebagai petugas bila mutasi tanpa pencatat', function () {
+    $item = Item::factory()->create(['stock_current' => 0]);
+
+    $mutation = StockLedger::record($item, MutationType::SaldoAwal, 10);
+
+    expect($mutation->user_id)->toBeNull()
+        ->and($mutation->petugas())->toBe('Sistem');
+});
+
+it('mengisi stock_after dengan saldo setelah tiap mutasi', function () {
+    $item = Item::factory()->create(['stock_current' => 0]);
+
+    $a = StockLedger::record($item, MutationType::SaldoAwal, 100);
+    $b = StockLedger::record($item, MutationType::Keluar, 30);
+    $c = StockLedger::record($item, MutationType::HibahMasuk, 12);
+
+    expect($a->stock_after)->toBe(100)
+        ->and($b->stock_after)->toBe(70)
+        ->and($c->stock_after)->toBe(82)
+        ->and($item->refresh()->stock_current)->toBe(82);
+});
+
+it('menentukan arah dari jenis mutasi manual', function () {
+    $item = Item::factory()->create(['stock_current' => 50]);
+
+    // Jenis manual berarah keluar tetap dikirim sebagai angka positif.
+    expect(StockLedger::record($item, MutationType::BarangRusak, 5)->amount)->toBe(-5)
+        ->and(StockLedger::record($item, MutationType::BarangHilang, 3)->amount)->toBe(-3)
+        ->and(StockLedger::record($item, MutationType::HibahMasuk, 8)->amount)->toBe(8)
+        ->and(StockLedger::record($item, MutationType::ReturDariUnit, 2)->amount)->toBe(2);
+
+    expect($item->refresh()->stock_current)->toBe(52);
+});
+
 it('menjaga stock_current selalu sama dengan jumlah seluruh mutasi', function () {
     $item = Item::factory()->create(['stock_current' => 0]);
 
@@ -89,10 +142,20 @@ it('menjaga stock_current selalu sama dengan jumlah seluruh mutasi', function ()
 it('menyimpan referensi transaksi asal', function () {
     $item = Item::factory()->create(['stock_current' => 0]);
 
-    $mutation = StockLedger::record($item, MutationType::Masuk, 5, 'ref-123', 'pengadaan');
+    $procurement = Item::factory()->create(); // berperan sebagai model dokumen sumber
 
-    expect($mutation->reference)->toBe('ref-123')
-        ->and($mutation->reference_type)->toBe('pengadaan');
+    $mutation = StockLedger::record(
+        item: $item,
+        type: MutationType::Masuk,
+        amount: 5,
+        reference: $procurement,
+        referenceType: 'pengadaan',
+        referenceNumber: 'PG01001',
+    );
+
+    expect($mutation->reference)->toBe($procurement->getKey())
+        ->and($mutation->reference_type)->toBe('pengadaan')
+        ->and($mutation->reference_number)->toBe('PG01001');
 });
 
 it('memperbarui instance yang dipegang pemanggil tanpa perlu refresh', function () {

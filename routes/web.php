@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gudang\ItemController;
+use App\Http\Controllers\Gudang\StockMutationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,6 +48,17 @@ Route::middleware('auth')->group(function () {
 
         Route::patch('barang/{item}/status', [ItemController::class, 'toggleStatus'])
             ->name('items.toggle-status');
+
+        Route::get('barang/{item}/kartu-persediaan', [StockMutationController::class, 'kartuPersediaan'])
+            ->name('items.kartu-persediaan');
+
+        // Riwayat mutasi bersifat immutable: tidak ada rute ubah maupun hapus.
+        // Rute cetak didaftarkan lebih dulu agar tidak tertangkap rute berparameter.
+        Route::get('mutasi/cetak/pdf', [StockMutationController::class, 'exportPdf'])->name('mutations.pdf');
+        Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');
+        Route::get('mutasi/create', [StockMutationController::class, 'create'])->name('mutations.create');
+        Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
+        Route::post('mutasi', [StockMutationController::class, 'store'])->name('mutations.store');
     });
 
     /*

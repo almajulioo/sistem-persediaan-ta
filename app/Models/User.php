@@ -115,6 +115,7 @@ class User extends Authenticatable
      */
     public const RESTRICTED_RELATIONS = [
         'auditLogs' => 'log aktivitas',
+        'stockMutations' => 'riwayat mutasi stok',
         'stockOpnames' => 'stock opname',
         'procurements' => 'pengadaan',
         'procurementRequests' => 'usulan pengadaan',
@@ -141,6 +142,11 @@ class User extends Authenticatable
     public function requests(): HasMany
     {
         return $this->hasMany(Request::class, 'user_id', 'user_id');
+    }
+
+    public function stockMutations(): HasMany
+    {
+        return $this->hasMany(StockMutation::class, 'user_id', 'user_id');
     }
 
     public function stockOpnames(): HasMany

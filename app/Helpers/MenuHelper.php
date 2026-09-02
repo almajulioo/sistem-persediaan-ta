@@ -41,7 +41,7 @@ class MenuHelper
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
-                    ['name' => 'Mutasi Stok', 'path' => '#'],
+                    ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stock Opname', 'path' => '#'],
                 ],
             ],

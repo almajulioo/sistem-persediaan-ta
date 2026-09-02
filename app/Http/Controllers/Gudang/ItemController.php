@@ -74,14 +74,21 @@ class ItemController extends Controller
         $data = $request->validated();
         $stokAwal = (int) $data['stock_awal'];
         unset($data['stock_awal']);
+        $actor = $request->user();
 
-        $item = DB::transaction(function () use ($data, $stokAwal) {
+        $item = DB::transaction(function () use ($data, $stokAwal, $actor) {
             $item = Item::create($data);
 
             // Stok awal masuk sebagai mutasi supaya buku mutasi cocok dengan
             // stock_current sejak hari pertama.
             if ($stokAwal > 0) {
-                StockLedger::record($item, MutationType::SaldoAwal, $stokAwal);
+                StockLedger::record(
+                    item: $item,
+                    type: MutationType::SaldoAwal,
+                    amount: $stokAwal,
+                    recordedBy: $actor,
+                    notes: 'Stok pembuka saat barang didaftarkan.',
+                );
             }
 
             return $item;
@@ -100,7 +107,7 @@ class ItemController extends Controller
             'title' => $item->item_name,
             'item' => $item,
             'mutations' => $item->stockMutations()
-                ->latest('mutation_date')
+                ->with('user')
                 ->latest('created_at')
                 ->paginate(self::MUTATION_PER_PAGE),
         ]);

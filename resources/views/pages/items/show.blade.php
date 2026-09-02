@@ -29,10 +29,16 @@
             </nav>
         </div>
 
-        <a href="{{ route('items.edit', $item) }}"
-            class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-            Ubah Barang
-        </a>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('items.kartu-persediaan', $item) }}" target="_blank" rel="noopener"
+                class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                Cetak Kartu Persediaan
+            </a>
+            <a href="{{ route('items.edit', $item) }}"
+                class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                Ubah Barang
+            </a>
+        </div>
     </div>
 
     <x-ui.flash />

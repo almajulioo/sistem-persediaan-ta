@@ -26,6 +26,7 @@
             'name' => 'Manajemen Gudang',
             'description' => 'Stok, mutasi barang, dan stock opname persediaan.',
             'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+            'route' => 'mutations.index',
         ],
         [
             'name' => 'Master Data Barang',

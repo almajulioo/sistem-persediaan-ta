@@ -50,7 +50,13 @@ class ItemSeeder extends Seeder
 
             // Hanya isi saldo awal untuk barang yang baru dibuat.
             if ($item->wasRecentlyCreated && $stokAwal > 0) {
-                StockLedger::record($item, MutationType::SaldoAwal, $stokAwal);
+                StockLedger::record(
+                    item: $item,
+                    type: MutationType::SaldoAwal,
+                    amount: $stokAwal,
+                    notes: 'Stok pembuka data contoh.',
+                    date: now()->subDays(60),
+                );
             }
         }
 

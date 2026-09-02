@@ -1,3 +1,63 @@
+# Sistem Informasi Persediaan — BPK Perwakilan Provinsi Lampung
+
+> Dikerjakan dua orang: **sub sistem pengadaan & manajemen gudang** dan
+> **sub sistem permintaan barang**. Baca bagian di bawah sebelum menyentuh stok.
+
+## ⚠️ Aturan wajib: seluruh perubahan stok lewat `StockLedger`
+
+`items.stock_current` **tidak boleh** ditulis langsung — kolom itu sengaja
+dikeluarkan dari `$fillable` pada `app/Models/Item.php`. Satu-satunya jalur sah
+adalah `App\Support\StockLedger::record()`, yang menulis baris `stock_mutations`
+dan menyesuaikan stok dalam satu transaksi berkunci.
+
+Menulis `stock_current` langsung membuat buku mutasi dan kartu persediaan
+menampilkan angka yang tidak sesuai stok sebenarnya — fatal untuk sistem di
+lembaga audit.
+
+**Contoh: penyerahan barang atas permintaan unit kerja**
+
+```php
+use App\Enums\MutationType;
+use App\Support\StockLedger;
+
+StockLedger::record(
+    item: $item,
+    type: MutationType::Keluar,
+    amount: $jumlahDiserahkan,          // selalu positif; arah dari jenis mutasi
+    recordedBy: $request->user(),
+    reference: $permintaan,             // model dokumen sumber
+    referenceType: 'permintaan',
+    referenceNumber: $permintaan->nd_number,
+);
+```
+
+Catatan penting:
+
+- Stok kurang melempar `App\Exceptions\InsufficientStockException`. Tangkap dan
+  terjemahkan menjadi galat validasi, jangan biarkan menjadi 500.
+- Seluruh argumen bersifat *named*, jadi penambahan parameter tidak merusak
+  pemanggil yang sudah ada. Jangan mengubah urutan atau menghapus parameter
+  tanpa mengabari pengembang sub sistem lainnya.
+- Baris `stock_mutations` **immutable**: tidak pernah diubah atau dihapus.
+  Kesalahan dikoreksi dengan mutasi lawan berjenis `KoreksiPencatatan`.
+- Tabel bersama (`items`, `stock_mutations`, `users`, `audit_logs`) hanya diubah
+  lewat kesepakatan, karena migrasi dari dua orang pada tabel yang sama rawan
+  bentrok saat merge.
+
+## Menjalankan proyek
+
+```bash
+composer install && npm install
+cp .env.example .env && php artisan key:generate
+php artisan migrate --seed      # akun awal + 15 barang + mutasi contoh
+composer run dev
+```
+
+Akun awal (lingkungan lokal, kata sandi `Persediaan#2026`): `admin`,
+`gudang`, `pengadaan`.
+
+---
+
 # TailAdmin Laravel - Tailwind CSS Free Laravel Dashboard
 
 **TailAdmin Laravel** is a modern, production-ready admin dashboard template powered by **Laravel 12**, **Tailwind CSS v4**, **Alpine.js**, and a clean, modular architecture. TailAdmin is one of the most popular Tailwind CSS dashboard now also available for Larvael. It’s designed for building fast, scalable admin panels, CRM dashboards, SaaS backends, and any data-driven application where clarity and performance matter.
