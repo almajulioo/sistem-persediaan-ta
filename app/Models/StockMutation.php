@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
  * Satu baris buku mutasi stok.
@@ -26,7 +27,7 @@ class StockMutation extends Model
 
     protected $fillable = [
         'item_id', 'user_id', 'mutation_type', 'amount', 'stock_after',
-        'mutation_date', 'reference', 'reference_type', 'reference_number', 'notes',
+        'mutation_date', 'reference_id', 'reference_type', 'reference_number', 'notes',
     ];
 
     protected function casts(): array
@@ -56,12 +57,48 @@ class StockMutation extends Model
     }
 
     /**
-     * Nomor dokumen sumber untuk ditampilkan; UUID `reference` sengaja tidak
+     * Nomor dokumen sumber untuk ditampilkan; UUID `reference_id` sengaja tidak
      * pernah ditampilkan ke pengguna.
      */
     public function referensi(): string
     {
         return $this->reference_number ?? '—';
+    }
+
+    /**
+     * Asal mutasi ini: otomatis dari dokumen, atau dicatat tangan.
+     *
+     * Nilai turunan, bukan kolom database. Membuat pembaca riwayat langsung tahu
+     * mana baris yang lahir dari proses sistem dan mana yang perlu diperiksa
+     * karena tidak punya dokumen sumber.
+     */
+    public function sumber(): string
+    {
+        return match (true) {
+            $this->reference_type === 'pengadaan' => 'Pengadaan',
+            $this->reference_type === 'permintaan' => 'Permintaan',
+            $this->reference_type === 'opname' => 'Stock Opname',
+            $this->mutation_type === MutationType::Penyesuaian => 'Stock Opname',
+            $this->mutation_type === MutationType::SaldoAwal => 'Saldo Awal',
+            $this->mutation_type->isManual() => 'Manual',
+            // Cadangan bila dokumen sumber belum tertaut: jenis mutasinya sendiri
+            // sudah menyatakan asalnya.
+            $this->mutation_type === MutationType::Masuk => 'Pengadaan',
+            $this->mutation_type === MutationType::Keluar => 'Permintaan',
+            default => 'Sistem',
+        };
+    }
+
+    /**
+     * Kelas badge TailAdmin untuk kolom Sumber.
+     */
+    public function sumberBadgeClass(): string
+    {
+        return match ($this->sumber()) {
+            'Manual' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+            'Saldo Awal' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
+            default => 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+        };
     }
 
     /**
@@ -90,6 +127,17 @@ class StockMutation extends Model
                 filled($filters['to'] ?? null),
                 fn (Builder $query) => $query->whereDate('mutation_date', '<=', $filters['to']),
             );
+    }
+
+    /**
+     * Dokumen sumber mutasi: Pengadaan, Permintaan, atau Stock Opname.
+     *
+     * Alias jenis dokumen terdaftar pada morph map di AppServiceProvider.
+     * Bernilai null untuk mutasi manual dan saldo awal — itu memang wajar.
+     */
+    public function reference(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     public function item(): BelongsTo

@@ -3,7 +3,12 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\Procurement;
+// Model permintaan barang bernama Request, bentrok dengan Illuminate\Http\Request.
+use App\Models\Request as PermintaanBarang;
+use App\Models\StockOpname;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -37,7 +42,23 @@ class AppServiceProvider extends ServiceProvider
             return $this->app->isProduction() ? $rule->uncompromised() : $rule;
         });
 
+        $this->registerMorphMap();
         $this->registerGates();
+    }
+
+    /**
+     * Alias untuk relasi polimorfik `stock_mutations.reference_*`.
+     *
+     * Memakai morphMap (bukan enforceMorphMap) supaya relasi polimorfik yang
+     * nanti dibuat pengembang sub sistem permintaan tidak wajib terdaftar di sini.
+     */
+    private function registerMorphMap(): void
+    {
+        Relation::morphMap([
+            'pengadaan' => Procurement::class,
+            'permintaan' => PermintaanBarang::class,
+            'opname' => StockOpname::class,
+        ]);
     }
 
     /**

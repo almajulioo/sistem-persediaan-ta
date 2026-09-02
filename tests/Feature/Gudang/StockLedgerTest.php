@@ -4,6 +4,7 @@ use App\Enums\MutationType;
 use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Item;
+use App\Models\StockOpname;
 use App\Models\User;
 use App\Support\StockLedger;
 
@@ -139,23 +140,51 @@ it('menjaga stock_current selalu sama dengan jumlah seluruh mutasi', function ()
         ->toBe((int) $item->stockMutations()->sum('amount'));
 });
 
-it('menyimpan referensi transaksi asal', function () {
+it('menurunkan jenis dokumen dari morph map, bukan dari argumen', function () {
     $item = Item::factory()->create(['stock_current' => 0]);
-
-    $procurement = Item::factory()->create(); // berperan sebagai model dokumen sumber
+    $opname = StockOpname::create([
+        'opname_date' => now(),
+        'user_id' => User::factory()->role(UserRole::PengelolaGudang)->create()->user_id,
+    ]);
 
     $mutation = StockLedger::record(
         item: $item,
         type: MutationType::Masuk,
         amount: 5,
-        reference: $procurement,
-        referenceType: 'pengadaan',
-        referenceNumber: 'PG01001',
+        reference: $opname,
+        referenceNumber: '001/PPBJ/2026',
     );
 
-    expect($mutation->reference)->toBe($procurement->getKey())
-        ->and($mutation->reference_type)->toBe('pengadaan')
-        ->and($mutation->reference_number)->toBe('PG01001');
+    expect($mutation->reference_id)->toBe($opname->getKey())
+        // Alias berasal dari morph map di AppServiceProvider, jadi tidak mungkin
+        // tidak cocok dengan model yang ditunjuk.
+        ->and($mutation->reference_type)->toBe('opname')
+        ->and($mutation->reference_number)->toBe('001/PPBJ/2026');
+});
+
+it('mengembalikan model dokumen lewat relasi polimorfik', function () {
+    $item = Item::factory()->create(['stock_current' => 0]);
+    $opname = StockOpname::create([
+        'opname_date' => now(),
+        'user_id' => User::factory()->role(UserRole::PengelolaGudang)->create()->user_id,
+    ]);
+
+    $mutation = StockLedger::record($item, MutationType::SaldoAwal, 5, reference: $opname);
+
+    expect($mutation->fresh()->reference)->toBeInstanceOf(StockOpname::class)
+        ->and($mutation->fresh()->reference->opname_id)->toBe($opname->opname_id);
+});
+
+it('membiarkan referensi kosong untuk mutasi tanpa dokumen', function () {
+    $item = Item::factory()->create(['stock_current' => 50]);
+
+    $mutation = StockLedger::record($item, MutationType::BarangRusak, 5);
+
+    expect($mutation->reference_id)->toBeNull()
+        ->and($mutation->reference_type)->toBeNull()
+        ->and($mutation->reference_number)->toBeNull()
+        ->and($mutation->fresh()->reference)->toBeNull()
+        ->and($mutation->sumber())->toBe('Manual');
 });
 
 it('memperbarui instance yang dipegang pemanggil tanpa perlu refresh', function () {

@@ -73,12 +73,13 @@
                 <th style="width: 4%">No</th>
                 <th style="width: 9%">Tanggal</th>
                 <th style="width: 9%">Kode</th>
-                <th style="width: 20%">Nama Barang</th>
+                <th style="width: 17%">Nama Barang</th>
                 <th style="width: 12%">Jenis Mutasi</th>
+                <th style="width: 8%">Sumber</th>
                 <th style="width: 8%" class="num">Jumlah</th>
-                <th style="width: 9%" class="num">Stok Setelah</th>
+                <th style="width: 8%" class="num">Stok Setelah</th>
                 <th style="width: 9%">Referensi</th>
-                <th style="width: 20%">Keterangan</th>
+                <th style="width: 15%">Keterangan</th>
             </tr>
         </thead>
         <tbody>
@@ -89,6 +90,7 @@
                     <td>{{ $mutation->item->item_code }}</td>
                     <td>{{ $mutation->item->item_name }}</td>
                     <td>{{ $mutation->mutation_type->label() }}</td>
+                    <td>{{ $mutation->sumber() }}</td>
                     <td class="num {{ $mutation->amount > 0 ? 'masuk' : 'keluar' }}">
                         {{ $mutation->signedAmount() }} {{ $mutation->item->unit->label() }}
                     </td>
@@ -98,7 +100,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="kosong">Tidak ada mutasi pada periode dan penyaring yang dipilih.</td>
+                    <td colspan="10" class="kosong">Tidak ada mutasi pada periode dan penyaring yang dipilih.</td>
                 </tr>
             @endforelse
         </tbody>

@@ -106,7 +106,7 @@ class StockMutationController extends Controller
 
             fputcsv($handle, [
                 'Tanggal', 'Kode Barang', 'Nama Barang', 'Satuan', 'Jenis Mutasi',
-                'Jumlah', 'Stok Setelah', 'Referensi', 'Petugas', 'Keterangan',
+                'Sumber', 'Jumlah', 'Stok Setelah', 'Referensi', 'Petugas', 'Keterangan',
             ], ';');
 
             $query->reorder()->orderBy('created_at')
@@ -118,6 +118,7 @@ class StockMutationController extends Controller
                             $row->item->item_name,
                             $row->item->unit->label(),
                             $row->mutation_type->label(),
+                            $row->sumber(),
                             $row->amount,
                             $row->stock_after,
                             $row->referensi(),

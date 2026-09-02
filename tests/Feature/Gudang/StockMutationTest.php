@@ -173,6 +173,40 @@ describe('mencatat mutasi manual', function () {
     });
 });
 
+describe('kolom sumber', function () {
+    it('membedakan mutasi dokumen, manual, opname, dan saldo awal', function () {
+        $item = Item::factory()->create(['stock_current' => 100]);
+
+        $saldoAwal = StockLedger::record($item, MutationType::SaldoAwal, 10);
+        $manual = StockLedger::record($item, MutationType::BarangRusak, 5);
+        $opname = StockLedger::record($item, MutationType::Penyesuaian, -2);
+
+        // Mutasi dokumen: jenis sumber diturunkan dari reference_type.
+        $pengadaan = StockLedger::record($item, MutationType::Masuk, 20);
+        $pengadaan->forceFill(['reference_type' => 'pengadaan'])->save();
+
+        $permintaan = StockLedger::record($item, MutationType::Keluar, 3);
+        $permintaan->forceFill(['reference_type' => 'permintaan'])->save();
+
+        expect($saldoAwal->sumber())->toBe('Saldo Awal')
+            ->and($manual->sumber())->toBe('Manual')
+            ->and($opname->sumber())->toBe('Stock Opname')
+            ->and($pengadaan->fresh()->sumber())->toBe('Pengadaan')
+            ->and($permintaan->fresh()->sumber())->toBe('Permintaan');
+    });
+
+    it('menampilkan kolom Sumber pada layar riwayat', function () {
+        $item = Item::factory()->create(['stock_current' => 50]);
+        StockLedger::record($item, MutationType::BarangRusak, 5);
+
+        $this->actingAs(gudang())
+            ->get('/mutasi')
+            ->assertOk()
+            ->assertSee('Sumber')
+            ->assertSee('Manual');
+    });
+});
+
 describe('immutability', function () {
     // Baris mutasi adalah jejak audit: tidak ada rute ubah maupun hapus sama
     // sekali, sehingga permintaan ke URL-nya berujung 404.

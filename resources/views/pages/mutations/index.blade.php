@@ -84,18 +84,19 @@
 
         {{-- Tabel --}}
         <div class="custom-scrollbar max-w-full overflow-x-auto">
-            <table class="w-full min-w-[1080px]">
+            <table class="w-full min-w-[1220px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
                         @foreach ([
                             ['label' => 'Kode Barang', 'hint' => null],
                             ['label' => 'Nama Barang', 'hint' => null],
                             ['label' => 'Jenis Mutasi', 'hint' => null],
+                            ['label' => 'Sumber', 'hint' => 'Otomatis dari dokumen, atau dicatat manual'],
                             ['label' => 'Jumlah', 'hint' => null],
                             ['label' => 'Stok Setelah', 'hint' => 'Sisa stok pada saat mutasi ini dicatat'],
                             ['label' => 'Tanggal', 'hint' => 'Tanggal transaksi, dapat berbeda dari waktu pencatatan'],
                             ['label' => 'Referensi', 'hint' => null],
-                            ['label' => 'Petugas', 'hint' => null],
+                            ['label' => 'Petugas', 'hint' => 'Orang yang mengeksekusi transaksi ini'],
                         ] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
                                 <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
@@ -129,6 +130,11 @@
                                 </span>
                             </td>
                             <td class="px-5 py-4 sm:px-6">
+                                <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $mutation->sumberBadgeClass() }}">
+                                    {{ $mutation->sumber() }}
+                                </span>
+                            </td>
+                            <td class="px-5 py-4 sm:px-6">
                                 <span @class([
                                     'text-theme-sm font-semibold',
                                     'text-success-600 dark:text-success-500' => $mutation->amount > 0,
@@ -157,7 +163,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-5 py-10 text-center sm:px-6">
+                            <td colspan="9" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                     Tidak ada mutasi yang cocok dengan penyaring saat ini.
                                 </p>

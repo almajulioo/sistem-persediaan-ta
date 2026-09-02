@@ -61,6 +61,8 @@ describe('ekspor CSV', function () {
         expect($csv)->toStartWith("\xEF\xBB\xBF")          // BOM UTF-8 untuk Excel
             // fputcsv mengutip field yang memuat spasi, jadi judul kolom berkutip.
             ->and($csv)->toContain('Tanggal;"Kode Barang";"Nama Barang"')
+            ->and($csv)->toContain('"Jenis Mutasi";Sumber')
+            ->and($csv)->toContain('Manual')
             ->and($csv)->toContain('Kertas HVS A4')
             ->and($csv)->toContain('Tinta Printer')
             ->and($csv)->toContain('Siti Pengelola')

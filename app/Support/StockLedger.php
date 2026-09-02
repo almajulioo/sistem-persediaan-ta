@@ -34,9 +34,13 @@ use InvalidArgumentException;
  *             amount: $jumlahDiserahkan,
  *             recordedBy: $request->user(),
  *             reference: $permintaan,              // model App\Models\Request
- *             referenceType: 'permintaan',
  *             referenceNumber: $permintaan->nd_number,
+ *             notes: "Penyerahan ke {$permintaan->user->unit} sesuai ND {$permintaan->nd_number}",
  *         );
+ *
+ *     `reference_type` diturunkan sendiri dari morph map, jadi tidak perlu
+ *     dikirim. Keterangan sebaiknya dirakit dari data dokumen yang nyata, bukan
+ *     kalimat tetap yang mengandung asumsi proses bisnis.
  *
  *  3. Stok yang tidak mencukupi melempar InsufficientStockException. Pemanggil
  *     bertanggung jawab menerjemahkannya menjadi galat validasi yang ramah,
@@ -45,6 +49,13 @@ use InvalidArgumentException;
  *  4. Seluruh argumen bersifat *named*. Penambahan parameter di kemudian hari
  *     tidak akan merusak pemanggil yang sudah ada — jangan mengubah urutan atau
  *     menghapus parameter tanpa mengabari pengembang sub sistem lainnya.
+ *
+ *  5. PENAMBAHAN STOK DARI PENGADAAN. Menyelesaikan realisasi pengadaan TIDAK
+ *     menambah stok. Pengadaan berpindah ke status "Menunggu Penerimaan", lalu
+ *     stok baru bertambah ketika Pengelola Gudang mengonfirmasi barang fisik
+ *     diterima — dan mutasi Masuk diatribusikan kepadanya, bukan kepada Pejabat
+ *     Pengadaan. Ini penerapan pemisahan tugas: pihak yang mengadakan barang
+ *     tidak boleh sekaligus menyatakan barang itu masuk gudang. Lihat ADR 0008.
  * ==========================================================================
  */
 class StockLedger
@@ -57,8 +68,11 @@ class StockLedger
      *                       jenis dua arah (Penyesuaian, KoreksiPencatatan),
      *                       tanda nilai menentukan arah.
      * @param  Model|null  $reference  Dokumen sumber, mis. Procurement atau Request.
-     * @param  string|null  $referenceType  Label jenis dokumen, mis. 'pengadaan'.
-     * @param  string|null  $referenceNumber  Nomor dokumen terbaca, mis. 'PG01001'.
+     *                                 `reference_type` diturunkan dari morph map.
+     * @param  string|null  $referenceNumber  Nomor dokumen resmi, mis. '045/ND/2026'.
+     *                                        Disalin permanen supaya laporan lama
+     *                                        tetap menampilkan nomor yang sama
+     *                                        meski dokumennya kelak berubah.
      *
      * @throws InsufficientStockException bila stok akhir menjadi negatif
      * @throws InvalidArgumentException bila jumlah tidak masuk akal
@@ -70,7 +84,6 @@ class StockLedger
         ?User $recordedBy = null,
         ?string $notes = null,
         ?Model $reference = null,
-        ?string $referenceType = null,
         ?string $referenceNumber = null,
         ?CarbonInterface $date = null,
     ): StockMutation {
@@ -78,7 +91,7 @@ class StockLedger
 
         return DB::transaction(function () use (
             $item, $type, $signed, $recordedBy, $notes,
-            $reference, $referenceType, $referenceNumber, $date
+            $reference, $referenceNumber, $date
         ) {
             // Kunci baris barang supaya dua transaksi bersamaan tidak saling
             // menimpa hasil perhitungan stok.
@@ -97,8 +110,10 @@ class StockLedger
                 'amount' => $signed,
                 'stock_after' => $newStock,
                 'mutation_date' => $date ?? now(),
-                'reference' => $reference?->getKey(),
-                'reference_type' => $referenceType,
+                'reference_id' => $reference?->getKey(),
+                // Alias jenis dokumen diambil dari morph map, bukan dikirim
+                // pemanggil, supaya tidak mungkin tidak cocok dengan modelnya.
+                'reference_type' => $reference?->getMorphClass(),
                 'reference_number' => $referenceNumber,
                 'notes' => $notes,
             ]);
