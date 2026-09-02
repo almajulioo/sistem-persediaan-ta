@@ -40,16 +40,10 @@ class MenuHelper
                 'name' => 'Manajemen Gudang',
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
                 'subItems' => [
-                    ['name' => 'Stok Barang', 'path' => '#'],
+                    ['name' => 'Master Barang', 'path' => '/barang'],
                     ['name' => 'Mutasi Stok', 'path' => '#'],
                     ['name' => 'Stock Opname', 'path' => '#'],
                 ],
-            ],
-            [
-                'icon' => 'ui-elements',
-                'name' => 'Master Data Barang',
-                'path' => '#',
-                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
             ],
         ];
     }

@@ -31,6 +31,7 @@
             'name' => 'Master Data Barang',
             'description' => 'Data induk barang beserta batas stok minimum dan maksimum.',
             'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+            'route' => 'items.index',
         ],
         [
             'name' => 'Manajemen Pengguna',
@@ -104,9 +105,11 @@
                 <span class="text-sm text-gray-500 dark:text-gray-400">{{ $metric['label'] }}</span>
                 <div class="mt-3 flex items-end justify-between">
                     <h4 class="text-title-sm font-bold text-gray-800 dark:text-white/90">{{ $metric['value'] }}</h4>
-                    <span class="text-theme-xs rounded-full px-2.5 py-1 font-medium {{ $toneClasses[$metric['tone']] }}">
-                        dummy
-                    </span>
+                    @if ($metric['dummy'])
+                        <span class="text-theme-xs rounded-full px-2.5 py-1 font-medium {{ $toneClasses[$metric['tone']] }}">
+                            dummy
+                        </span>
+                    @endif
                 </div>
                 <p class="text-theme-xs mt-2 text-gray-500 dark:text-gray-400">{{ $metric['caption'] }}</p>
             </div>

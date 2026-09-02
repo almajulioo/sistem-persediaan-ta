@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\StockStatus;
+use App\Models\Item;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -11,12 +13,37 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        // TODO: ganti dengan data nyata setelah modul persediaan tersedia.
+        // Dua metrik pertama sudah memakai data nyata dari master barang.
+        // Sisanya masih contoh sampai modul permintaan dan pengadaan tersedia.
         $metrics = [
-            ['label' => 'Total Item Persediaan', 'value' => '248', 'caption' => 'jenis barang terdaftar', 'tone' => 'brand'],
-            ['label' => 'Permintaan Menunggu', 'value' => '12', 'caption' => 'perlu ditindaklanjuti', 'tone' => 'warning'],
-            ['label' => 'Stok Menipis', 'value' => '7', 'caption' => 'di bawah stok minimum', 'tone' => 'error'],
-            ['label' => 'Pengadaan Berjalan', 'value' => '3', 'caption' => 'dalam proses realisasi', 'tone' => 'success'],
+            [
+                'label' => 'Total Item Persediaan',
+                'value' => (string) Item::aktif()->count(),
+                'caption' => 'jenis barang aktif',
+                'tone' => 'brand',
+                'dummy' => false,
+            ],
+            [
+                'label' => 'Stok Menipis',
+                'value' => (string) Item::aktif()->stockStatus(StockStatus::Menipis)->count(),
+                'caption' => 'di bawah atau sama dengan stok minimum',
+                'tone' => 'error',
+                'dummy' => false,
+            ],
+            [
+                'label' => 'Permintaan Menunggu',
+                'value' => '12',
+                'caption' => 'perlu ditindaklanjuti',
+                'tone' => 'warning',
+                'dummy' => true,
+            ],
+            [
+                'label' => 'Pengadaan Berjalan',
+                'value' => '3',
+                'caption' => 'dalam proses realisasi',
+                'tone' => 'success',
+                'dummy' => true,
+            ],
         ];
 
         return view('pages.dashboard.index', [

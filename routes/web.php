@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Gudang\ItemController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,23 @@ Route::middleware('auth')->group(function () {
     Route::get('/profil', function () {
         return view('pages.profile', ['title' => 'Profil']);
     })->name('profile');
+
+    /*
+    |----------------------------------------------------------------------
+    | Manajemen gudang (Pengelola Gudang, dan Admin)
+    |----------------------------------------------------------------------
+    | Memakai gate `kelola-gudang`, bukan middleware `role:`, karena gate sudah
+    | meloloskan Admin lewat Gate::before sedangkan `role:` memeriksa peran
+    | secara harfiah dan akan menolak Admin.
+    */
+    Route::middleware('can:kelola-gudang')->group(function () {
+        Route::resource('barang', ItemController::class)
+            ->parameters(['barang' => 'item'])
+            ->names('items');
+
+        Route::patch('barang/{item}/status', [ItemController::class, 'toggleStatus'])
+            ->name('items.toggle-status');
+    });
 
     /*
     |----------------------------------------------------------------------
