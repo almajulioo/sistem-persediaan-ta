@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
+use App\Http\Controllers\Gudang\StockOpnameController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -59,6 +60,12 @@ Route::middleware('auth')->group(function () {
         Route::get('mutasi/create', [StockMutationController::class, 'create'])->name('mutations.create');
         Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
         Route::post('mutasi', [StockMutationController::class, 'store'])->name('mutations.store');
+
+        // Stok opname. Opname yang sudah diposting bersifat final: rute ubah dan
+        // hapus menolaknya di controller, bukan disembunyikan dari daftar rute.
+        Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
+        Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
+        Route::resource('opname', StockOpnameController::class)->names('opname');
     });
 
     /*

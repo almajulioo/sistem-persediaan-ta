@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MutationType;
+use App\Enums\PeriodeOpname;
 use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Item;
@@ -145,6 +146,8 @@ it('menurunkan jenis dokumen dari morph map, bukan dari argumen', function () {
     $opname = StockOpname::create([
         'opname_date' => now(),
         'user_id' => User::factory()->role(UserRole::PengelolaGudang)->create()->user_id,
+        'period_type' => PeriodeOpname::TriwulanIII,
+        'period_year' => now()->year,
     ]);
 
     $mutation = StockLedger::record(
@@ -167,6 +170,8 @@ it('mengembalikan model dokumen lewat relasi polimorfik', function () {
     $opname = StockOpname::create([
         'opname_date' => now(),
         'user_id' => User::factory()->role(UserRole::PengelolaGudang)->create()->user_id,
+        'period_type' => PeriodeOpname::TriwulanIII,
+        'period_year' => now()->year,
     ]);
 
     $mutation = StockLedger::record($item, MutationType::SaldoAwal, 5, reference: $opname);

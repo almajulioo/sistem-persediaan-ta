@@ -42,7 +42,7 @@ class MenuHelper
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
-                    ['name' => 'Stock Opname', 'path' => '#'],
+                    ['name' => 'Stok Opname', 'path' => '/opname'],
                 ],
             ],
         ];

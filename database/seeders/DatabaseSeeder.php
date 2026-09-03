@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             ItemSeeder::class,
             StockMutationSeeder::class,
+            StockOpnameSeeder::class,
         ]);
     }
 }
