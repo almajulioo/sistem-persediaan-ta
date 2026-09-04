@@ -5,6 +5,89 @@ perubahan.
 
 ---
 
+## 4 September 2026 — Modul Stok Opname
+
+Modul terakhir sub sistem manajemen gudang. Dibangun dari activity diagram yang
+sudah dibuat, dengan empat perbaikan: dokumen laporan dibuat **setelah** posting
+(pada diagram ia bercabang paralel sehingga jadi sebelum alasan dimasukkan),
+tambahan keadaan **draf** karena pencacahan tidak selesai dalam satu duduk,
+**periode terstruktur** karena laporan diminta per triwulan, dan penanganan
+**stok yang bergerak saat opname berjalan** yang tidak disinggung diagram.
+
+**Yang dikerjakan.**
+
+- Tiga enum baru: `PeriodeOpname` (8 case), `AlasanSelisih` (6 case),
+  `OpnameStatus`.
+- Dua migrasi: kolom alur dan periode pada `stock_opnames`; kolom alasan dan
+  jejak posting pada `opname_details`, sekaligus melonggarkan `stock_real` dan
+  `difference` menjadi nullable agar draf dapat menyimpan barang yang belum
+  dicacah.
+- `app/Support/OpnamePoster.php` — penerapan hasil opname dalam satu transaksi
+  berkunci, mendampingi `StockLedger` dan `AuditLogger`.
+- Alur draf → selesai: draf boleh sebagian, posting wajib lengkap dan setiap
+  selisih wajib beralasan, opname selesai bersifat final
+  ([ADR 0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md)).
+- Alasan selisih memakai enum baku **berpasangan** keterangan bebas, keduanya
+  wajib ([ADR 0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md)).
+- Periode disimpan sebagai enum jenis + tahun, terpisah dari `opname_date`
+  ([ADR 0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md)).
+- Empat halaman (`index`, `create`, `edit`, `show`) dan Laporan Stok Opname PDF
+  lanskap, memakai ulang infrastruktur laporan modul mutasi.
+
+**Temuan penting — rancangan yang sempat disetujui ternyata salah.** Rencana
+awal menetapkan penyesuaian sebagai `stock_real − stock_at_posting`, yaitu
+memaksa stok akhir sama dengan hasil cacah. Verifikasi manual lewat HTTP
+membuktikannya keliru:
+
+| Langkah | Stok |
+|---|---|
+| Stok tercatat saat draf dibuat | 132 |
+| Hasil cacah — cocok, tidak ada kesalahan pencatatan | 132 |
+| Setelah pencacahan, 20 unit dicatat rusak lewat mutasi manual | 112 |
+| Posting dengan rumus lama: `132 − 112 = +20` | **132** |
+
+Posting **membatalkan kerusakan yang sah tercatat**. Rumus itu memperlakukan
+seluruh jarak antara hasil cacah dan stok terkini sebagai kesalahan pencatatan,
+padahal sebagian di antaranya justru transaksi yang benar.
+
+Diperbaiki menjadi: yang diterapkan adalah **`difference`**, selisih yang
+ditemukan saat mencacah. Stok akhir = `stock_at_posting + difference`, sehingga
+transaksi setelah pencacahan tidak ikut dibatalkan. `OpnamePoster`, controller,
+`show.blade.php`, templat PDF, dan uji ikut disesuaikan; satu uji baru
+ditambahkan khusus untuk kasus "pencatatan cocok tetapi stok berubah setelahnya".
+
+**Bug lain yang ditemukan dan diperbaiki dalam sesi ini.**
+
+- `UpdateOpnameCountRequest` memvalidasi sebelum penjaga "sudah diposting" di
+  controller, sehingga opname selesai memunculkan pesan selisih yang menyesatkan.
+  Diperbaiki dengan keluar lebih awal di `withValidator`.
+- `StockOpnameSeeder` berbagi koleksi barang yang sudah basi antara dua
+  methodnya, sehingga `stock_stored` pada draf tidak sama dengan stok
+  sebenarnya. Tiap method kini mengambil barang segar.
+- Dua uji bergantung pada urutan yang tidak deterministik
+  (`details->first()` dan `latest('created_at')` pada baris sedetik) — diganti
+  `keyBy('item_id')` dan pembacaan URL redirect.
+
+**Verifikasi.** 142 test lulus (443 asersi). Pint bersih pada 31 berkas dalam
+cakupan sempit. Uji HTTP: draf berisi seluruh 15 barang aktif dengan stok
+tercatat yang benar; posting ditolak selama masih ada yang belum dicacah;
+selisih tanpa alasan ditolak; PDF diawali `%PDF`; `pengadaan` menerima 403 dan
+`admin` menerima 200.
+
+**Catatan.** `stock_opnames` dan `opname_details` **bukan tabel bersama**,
+sehingga seluruh perubahan skema di sesi ini tidak perlu kesepakatan dengan
+Alma — cukup dicatat di
+[penyelarasan-erd.md](erd/penyelarasan-erd.md) agar gambar ERD naskah Naren
+diperbarui.
+
+**Berikutnya.** Sub sistem manajemen gudang selesai. Modul Pengadaan
+**wajib menyelaraskan tabel perbatasan lebih dulu bersama Alma**, dan wajib
+menerapkan [ADR 0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md):
+realisasi berhenti di status *Menunggu Penerimaan*, dan Pengelola Gudang yang
+mengonfirmasi penerimaan sehingga stok bertambah.
+
+---
+
 ## 3 September 2026 — Dokumentasi dipisah per pengembang
 
 **Latar belakang.** Narendra dan Alma menulis **skripsi terpisah dengan judul

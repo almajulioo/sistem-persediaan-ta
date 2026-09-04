@@ -38,6 +38,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0007](keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) | Kolom audit tambahan dan referensi dokumen polimorfik | Diterima |
 | [0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md) | Penerimaan barang dikonfirmasi Pengelola Gudang | Diterima |
 | [0009](keputusan/0009-laporan-pdf-dan-csv.md) | Laporan PDF lewat dompdf dan CSV tanpa paket tambahan | Diterima |
+| [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Diterima |
+| [0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) | Alasan selisih: enum baku berpasangan keterangan wajib | Diterima |
+| [0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) | Periode opname sebagai enum jenis + tahun | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

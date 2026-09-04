@@ -88,6 +88,27 @@ dikabarkan ke Alma dan tercermin di kedua naskah:
 | `stock_mutations` | Tambah `user_id`, `stock_after`, `reference_number`, `notes` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 | `stock_mutations` | `reference` diganti nama menjadi `reference_id` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 
+## Penyimpangan pada tabel milik Naren
+
+**Tidak perlu kesepakatan dengan Alma** — `stock_opnames` dan `opname_details`
+hanya dipakai sub sistem gudang. Dicatat di sini semata agar gambar ERD pada
+naskah Naren diperbarui:
+
+| Tabel | Perubahan | ADR |
+|---|---|---|
+| `stock_opnames` | Tambah `status`, `posted_at` | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
+| `stock_opnames` | Tambah `period_type`, `period_year`, beserta indeks gabungannya | [0012](../keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) |
+| `stock_opnames` | Tambah `notes` | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
+| `opname_details` | `stock_real` dan `difference` menjadi **nullable** — draf menyimpan barang yang belum dicacah | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
+| `opname_details` | Tambah `counted_at`, `stock_at_posting`, `adjustment_amount` | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
+| `opname_details` | Tambah `adjustment_reason` | [0011](../keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) |
+
+Mutasi penyesuaian hasil opname menunjuk `stock_opnames` lewat
+`reference_type`/`reference_id` dengan alias morph `opname`. `stock_mutations`
+adalah **tabel bersama**, tetapi relasi ini tidak menambah kolom apa pun di
+sana — hanya mengisi kolom yang sudah disepakati pada
+[ADR 0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md).
+
 ## Butir yang perlu dikonfirmasi ke lapangan
 
 1. **Format nomor dokumen resmi BPK** untuk Nota Dinas, BAST, dan dokumen

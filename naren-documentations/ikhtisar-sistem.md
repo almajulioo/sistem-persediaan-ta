@@ -74,20 +74,24 @@ syarat, bukan preferensi:
 
 ```
 app/
-├── Enums/              UserRole, SatuanBarang, MutationType, StockStatus
-├── Support/            StockLedger (kontrak lintas sub sistem), AuditLogger
-├── Exceptions/         InsufficientStockException
+├── Enums/              UserRole, SatuanBarang, MutationType, StockStatus,
+│                       PeriodeOpname, AlasanSelisih, OpnameStatus
+├── Support/            StockLedger (kontrak lintas sub sistem), AuditLogger,
+│                       OpnamePoster
+├── Exceptions/         InsufficientStockException, OpnameTidakSiapException
 ├── Http/
 │   ├── Controllers/
 │   │   ├── Auth/       AuthenticatedSessionController
 │   │   ├── Admin/      UserController
-│   │   └── Gudang/     ItemController, StockMutationController
+│   │   └── Gudang/     ItemController, StockMutationController,
+│   │                   StockOpnameController
 │   ├── Middleware/     EnsureUserIsActive, EnsureUserHasRole
 │   └── Requests/       Auth/, Admin/, Gudang/
-└── Models/             User, Item, StockMutation, dan model warisan ERD
+└── Models/             User, Item, StockMutation, StockOpname, OpnameDetail,
+                        dan model warisan ERD
 
 resources/views/
-├── pages/              auth, dashboard, users, items, mutations
+├── pages/              auth, dashboard, users, items, mutations, opname
 ├── components/         form/, ui/ (dipakai ulang seluruh modul)
 ├── pdf/                templat laporan cetak
 └── vendor/pagination/  paginasi bergaya TailAdmin
