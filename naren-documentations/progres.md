@@ -5,6 +5,89 @@ perubahan.
 
 ---
 
+## 5 September 2026 — Perbaikan skema Pengadaan sebelum modulnya dibangun
+
+Sebelum menulis satu baris controller pun untuk modul Pengadaan, migrasi
+warisan ERD-nya (`procurements`, `procurement_details`, `procurement_requests`,
+`request_details`) dibaca ulang untuk memastikan tidak ada yang perlu
+disepakati dengan Alma lebih dulu — CLAUDE.md mencatatnya sebagai syarat wajib.
+
+**Yang tadinya dikira tiga "perbatasan" ternyata bukan perbatasan sama
+sekali.** Pembacaan literal terhadap migrasi menyimpulkan tiga hal perlu
+dibahas dengan Alma: kontrak `procurement_requests.request_id → requests`,
+kepemilikan `basts`/`nota_dinas`, dan sumber nomor dokumen. Setelah
+diklarifikasi langsung, ketiganya bubar sekaligus:
+
+- `procurement_requests.request_id` **bukan foreign key yang disengaja** —
+  sisa kebingungan penamaan primary key (`procurement_request_id` yang
+  sekarang sudah benar sejak awal). Bukan relasi apa pun.
+- `request_details` **ternyata bukan rincian permintaan unit milik Alma**,
+  melainkan rincian usulan pengadaan milik sub sistem ini sejak awal — salah
+  nama dan salah arah FK.
+- `basts`/`nota_dinas` **sepenuhnya milik Alma**. BAST penerimaan barang dari
+  penyedia ke gudang (sisi Pengadaan) memang belum pernah punya tempat di
+  skema — desain awal cuma bermaksud menyimpannya sebagai berkas hasil pindai
+  lewat kolom string bebas (`procurements.bast_scan`), dan itu sekarang
+  dinilai desain yang kurang baik.
+
+Sekaligus, narasumber lapangan (Kasubbag Umum dan TI) mengonfirmasi usulan
+pengadaan lahir dari **tiga jalur berbeda**: permintaan unit yang stoknya
+kurang, pemantauan stok otomatis (notifikasi Stok Habis/Menipis yang sudah
+dibangun), dan diajukan manual oleh Pengelola Gudang.
+
+**Hasilnya: tidak ada lagi satu pun butir yang menunggu kesepakatan dengan
+Alma sebelum modul Pengadaan dibangun.** Lihat
+[ADR 0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) untuk
+keputusan skema lengkap.
+
+**Yang dikerjakan.**
+
+- Tiga enum baru: `ProcurementRequestSource` (tiga asal-usul usulan),
+  `ProcurementRequestStatus` (Diajukan/Disetujui/Ditolak, status usulan),
+  `ProcurementStatus` (MenungguPenerimaan/Diterima/Dibatalkan, status
+  realisasi — nama case `MenungguPenerimaan` sengaja memakai istilah persis
+  dari ADR 0008). Status dipecah jadi dua enum, bukan satu enum lima-tahap
+  tunggal, karena usulan dan realisasi adalah dua dokumen berbeda.
+- Empat migrasi susulan: `procurement_requests` (hapus `request_id`/
+  `request_type`, tambah `source`/`reference_type`/`reference_id`/`status`),
+  rename `request_details` → `procurement_request_details` (PK dan FK
+  diperbaiki menunjuk `procurement_requests`), `procurements` (tambah
+  `procurement_request_id` wajib+unik, hapus `bast_scan`), dan tabel baru
+  `procurement_receipts` (BAST penerimaan, `received_by` sengaja terpisah
+  dari pengaju realisasi — pemisahan tugas ADR 0008 tercermin di skema, bukan
+  cuma alur aplikasi).
+- `reference_type`/`reference_id` polimorfik nullable pada
+  `procurement_requests`, pola yang sama dengan `stock_mutations.reference_*`
+  (ADR 0007), lewat alias morph map `permintaan` yang sudah terdaftar. Diisi
+  hanya untuk sumber `DariPermintaan` — **bukan kewajiban**, sub sistem
+  Pengadaan berfungsi penuh tanpa sub sistem Permintaan ada.
+- Model diperbarui: `ProcurementRequest`, `Procurement`; model baru
+  `ProcurementReceipt`; `RequestDetail` dihapus, diganti
+  `ProcurementRequestDetail`.
+- Perbaikan tak terhindarkan pada dua model warisan bersama:
+  `App\Models\Request::details()`/`procurementRequests()` dihapus (dibangun
+  di atas premis yang keliru — `requests` milik Alma belum punya tabel
+  rincian barangnya sendiri sama sekali), dan `Item::requestDetails()`
+  diganti nama `procurementRequestDetails()` beserta label pada
+  `RESTRICTED_RELATIONS`.
+- `naren-documentations/erd/penyelarasan-erd.md` ditulis ulang total: bagian
+  "Perbatasan" dihapus, riwayat kesalahan desain dicatat eksplisit, dan
+  atribusi Temuan #4 yang dulu keliru (sempat menuduh gambar ERD Alma yang
+  salah, padahal migrasi Naren sendiri yang keliru) diperbaiki.
+
+**Verifikasi.** 161 test tetap lulus (500 asersi) — tidak ada regresi. Pint
+bersih pada 13 berkas dalam cakupan sempit. Keempat migrasi dijalankan di
+MySQL setelah dipastikan seluruh tabel terkait kosong (tidak ada seeder untuk
+Procurement/Request/Bast/NotaDinas, tidak ada controller yang pernah menulis
+ke sana) — tidak perlu migrasi data.
+
+**Berikutnya.** Modul Pengadaan sesungguhnya: controller, form request, view,
+dan uji 4-kasus hak akses per aksi — mengikuti pola modul gudang. Kandidat
+notifikasi untuk modul ini sudah dicatat di
+[modul/notifikasi.md](modul/notifikasi.md).
+
+---
+
 ## 4–5 September 2026 — Modul Notifikasi
 
 Fitur kecil yang disisipkan sebelum modul Pengadaan, sekaligus menyiapkan

@@ -1,6 +1,6 @@
 # Penyelarasan Tabel Bersama
 
-> **Bahas bersama Alma sebelum modul Pengadaan dimulai.**
+> **Bahas bersama Alma bila ada perubahan pada tabel bersama.**
 
 ## ERD yang berbeda itu wajar
 
@@ -20,7 +20,7 @@ kebenarannya adalah migrasi yang benar-benar berjalan di
 | Tabel | Peran |
 |---|---|
 | `users` | Autentikasi dan peran, dipakai kedua sub sistem |
-| `items` | Master barang; dirujuk `request_details` (Alma) dan `procurement_details` (Naren) |
+| `items` | Master barang; dirujuk `procurement_details`/`procurement_request_details` (Naren) — Alma belum punya tabel rincian barangnya sendiri, lihat catatan di bawah |
 | `stock_mutations` | Buku besar stok; dibangun Naren, ditulis Alma lewat `StockLedger` |
 | `audit_logs` | Jejak aktivitas, dipakai kedua sub sistem |
 
@@ -29,52 +29,63 @@ orang pada tabel yang sama rawan bentrok saat merge.
 
 ### Milik Narendra — bebas diubah sendiri
 
-`procurements`, `procurement_details`, `procurement_requests`, `stock_opnames`,
+`procurements`, `procurement_details`, `procurement_requests`,
+`procurement_request_details`, `procurement_receipts`, `stock_opnames`,
 `opname_details`
 
 ### Milik Alma — bebas diubah sendiri
 
-`requests`, `request_details`
+`requests`, `basts`, `nota_dinas`
 
-### Perbatasan — perlu kesepakatan
+Tidak ada lagi kategori "perbatasan". Sampai 4 September 2026 dokumen ini
+mencatat tiga butir perbatasan yang perlu disepakati bersama Alma; ketiganya
+gugur setelah ditelusuri ke sumber aslinya — lihat riwayat di bawah.
 
-| Tabel / kolom | Mengapa jadi perbatasan |
-|---|---|
-| `procurement_requests.request_id` → `requests` | Usulan pengadaan (Naren) lahir dari permintaan (Alma) yang stoknya tidak mencukupi. Foreign key melintasi kepemilikan |
-| `basts`, `nota_dinas` | Belum jelas milik siapa. BAST muncul di dua konteks: penerimaan barang dari pengadaan, dan penyerahan barang atas permintaan |
-| `requests.bast_number`, `requests.nd_number` | Nomor dokumen tersimpan di `requests` **sekaligus** di tabel `basts`/`nota_dinas` |
+## Riwayat: kesalahan desain awal yang sudah diperbaiki (5 September 2026)
 
-## Temuan, dikelompokkan menurut pemiliknya
+Desain ERD awal (satu commit, 25 Agustus 2026, tidak pernah disentuh lagi
+sampai sesi ini) sempat terbaca seolah menghubungkan sub sistem Pengadaan
+dengan sub sistem Permintaan lewat beberapa foreign key. Setelah ditelusuri
+langsung ke sumber aslinya, ternyata itu kesalahan penamaan akibat kurangnya
+komunikasi saat desain awal — bukan relasi yang disengaja.
 
-| # | Temuan | Pemilik | Tindakan |
-|---|---|---|---|
-| 1 | ERD `ProcurementRequest` memiliki `request_date`; migrasi `procurement_requests` tidak | **Naren** | Diperbaiki sendiri saat modul Pengadaan dibangun |
-| 2 | `requests` menjadi induk `request_details` **sekaligus** `procurement_requests` | **Perbatasan** | Sepakati bentuk keterkaitan usulan pengadaan dengan permintaan |
-| 3 | `requests` menyimpan `bast_number`/`nd_number`, sementara tabel `basts`/`nota_dinas` juga ada | **Perbatasan** | Tetapkan satu sumber nomor dokumen |
-| 4 | `RequestDetail` digambar di bawah `ProcurementRequest`, tetapi foreign key-nya menunjuk `requests` | **Alma** | Perbaiki gambar ERD agar sesuai migrasi |
+| Yang dulu dikira | Kenyataannya | Perbaikan |
+|---|---|---|
+| `procurement_requests.request_id` adalah FK ke `requests` | Sisa kebingungan penamaan primary key; bukan relasi apa pun | Kolom dihapus |
+| `request_details` adalah rincian permintaan unit, milik Alma | Rincian usulan pengadaan, milik Narendra sejak awal | Tabel + model diganti nama menjadi `procurement_request_details` / `ProcurementRequestDetail`, FK diperbaiki menunjuk `procurement_requests` |
+| BAST pengadaan cukup kolom string bebas (`procurements.bast_scan`) | Desain yang kurang baik — tanpa nomor dokumen maupun siapa yang mengonfirmasi | Tabel baru `procurement_receipts` |
 
-Temuan #3 **bertaut langsung** dengan `stock_mutations.reference_number` pada
-[ADR 0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md): buku
-mutasi menyalin nomor dokumen resmi secara permanen, sehingga sumber nomor itu
-harus tunggal dan pasti.
+Konsekuensinya, `App\Models\Request::details()` dan `Request::procurementRequests()`
+dihapus — keduanya dibangun di atas premis yang keliru. **`requests` milik Alma
+belum punya tabel rincian barangnya sendiri** sama sekali; itu keputusan yang
+menyusul saat sub sistem Permintaan dirancang, bukan sesuatu yang sudah ada dan
+salah tempat.
 
-## Saran untuk dibahas
+Rincian keputusan skema lengkap ada di
+[ADR 0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md).
 
-1. **Satu sumber kebenaran untuk nomor dokumen.** Pindahkan `bast_number` dan
-   `nd_number` dari `requests` ke tabel `basts` dan `nota_dinas`, lalu tautkan
-   lewat foreign key. Hapus kolom string kembarannya agar tidak ada dua versi
-   nomor yang sama.
-2. **Tetapkan pemilik `basts` dan `nota_dinas`.** Bila BAST dipakai di dua
-   konteks, pertimbangkan kolom penanda jenis, atau dua tabel terpisah dengan
-   kepemilikan yang jelas.
-3. **Sepakati kontrak `procurement_requests` → `requests`.** Naren perlu membaca
-   permintaan yang stoknya kurang; Alma perlu tahu permintaannya telah menjadi
-   usulan pengadaan.
-4. **Kunci bentuk keempat tabel bersama sekarang**, sebelum kedua sub sistem
-   berkembang lebih jauh. Perubahan setelah itu jauh lebih mahal.
-5. **Gambar ERD masing-masing hanya memuat tabel yang relevan** dengan sub sistem
-   yang ditulis, ditambah tabel bersama yang dirujuk. Tabel bersama digambar sama
-   persis di kedua naskah.
+## Titik integrasi yang tersedia — bukan kewajiban
+
+`procurement_requests` punya kolom `source` (enum `ProcurementRequestSource`)
+yang membedakan tiga asal-usul usulan pengadaan, dikonfirmasi narasumber
+lapangan (Kasubbag Umum dan TI):
+
+1. **`DariPermintaan`** — permintaan unit tidak bisa dipenuhi karena stok
+   kurang atau habis.
+2. **`PemantauanStok`** — dari notifikasi Stok Habis/Menipis.
+3. **`Manual`** — diajukan langsung Pengelola Gudang.
+
+Hanya jenis pertama yang menunjuk dokumen asal, lewat `reference_type`/
+`reference_id` polimorfik — pola yang sama dengan `stock_mutations.reference_*`
+([ADR 0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md)) —
+mengarah ke baris `requests` lewat alias morph map `'permintaan'` yang sudah
+terdaftar di `AppServiceProvider`.
+
+Ini **bukan foreign key basis data** dan **bukan kewajiban**: sub sistem
+Pengadaan berfungsi penuh tanpa sub sistem Permintaan ada, lewat dua sumber
+lainnya. Begitu Alma membangun alurnya, baris `requests` yang menandai stok
+kurang tinggal dipakai mengisi kolom ini; sebelum itu, kolomnya dibiarkan
+kosong.
 
 ## Penyimpangan dari ERD yang sudah diterapkan Naren
 
@@ -90,9 +101,8 @@ dikabarkan ke Alma dan tercermin di kedua naskah:
 
 ## Penyimpangan pada tabel milik Naren
 
-**Tidak perlu kesepakatan dengan Alma** — `stock_opnames` dan `opname_details`
-hanya dipakai sub sistem gudang. Dicatat di sini semata agar gambar ERD pada
-naskah Naren diperbarui:
+**Tidak perlu kesepakatan dengan Alma** — dicatat di sini semata agar gambar
+ERD pada naskah Naren diperbarui.
 
 | Tabel | Perubahan | ADR |
 |---|---|---|
@@ -102,19 +112,17 @@ naskah Naren diperbarui:
 | `opname_details` | `stock_real` dan `difference` menjadi **nullable** — draf menyimpan barang yang belum dicacah | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
 | `opname_details` | Tambah `counted_at`, `stock_at_posting`, `adjustment_amount` | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
 | `opname_details` | Tambah `adjustment_reason` | [0011](../keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) |
-
-Mutasi penyesuaian hasil opname menunjuk `stock_opnames` lewat
-`reference_type`/`reference_id` dengan alias morph `opname`. `stock_mutations`
-adalah **tabel bersama**, tetapi relasi ini tidak menambah kolom apa pun di
-sana — hanya mengisi kolom yang sudah disepakati pada
-[ADR 0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md).
+| `procurement_requests` | Hapus `request_id`, `request_type`; tambah `source`, `reference_type`, `reference_id`, `status` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
+| `request_details` → `procurement_request_details` | Rename tabel + PK; FK diperbaiki menunjuk `procurement_requests` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
+| `procurements` | Tambah `procurement_request_id`; hapus `bast_scan` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
+| `procurement_receipts` | Tabel baru — BAST penerimaan dari penyedia ke gudang | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 
-1. **Format nomor dokumen resmi BPK** untuk Nota Dinas, BAST, dan dokumen
-   pengadaan. Sampai ini pasti, nomor pada data contoh hanya perkiraan.
-2. **Apakah ada peran penerima barang terpisah**, misalnya Pejabat atau Panitia
-   Penerima Hasil Pekerjaan, di luar tiga peran yang sudah ada. Bila ada,
-   `UserRole` perlu bertambah — dan `users` adalah tabel bersama, sehingga harus
-   disepakati bersama Alma. Lihat
-   [ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md).
+1. **Format nomor dokumen resmi BPK** untuk Nota Dinas dan BAST Permintaan
+   (milik Alma), maupun BAST Pengadaan (`procurement_receipts.bast_number`,
+   milik Narendra). Belum ada satu pun yang dikonfirmasi. Nomor pada data
+   contoh masih perkiraan.
+
+Butir soal peran penerima barang terpisah sudah terjawab: **tidak ada**, hanya
+Pengelola Gudang dan Admin — lihat [ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md).

@@ -52,7 +52,7 @@ class Item extends Model
         'stockMutations' => 'riwayat mutasi stok',
         'opnameDetails' => 'catatan stock opname',
         'procurementDetails' => 'rincian pengadaan',
-        'requestDetails' => 'rincian permintaan barang',
+        'procurementRequestDetails' => 'rincian usulan pengadaan',
     ];
 
     /**
@@ -135,9 +135,9 @@ class Item extends Model
         return $this->hasMany(ProcurementDetail::class, 'item_id', 'item_id');
     }
 
-    public function requestDetails(): HasMany
+    public function procurementRequestDetails(): HasMany
     {
-        return $this->hasMany(RequestDetail::class, 'item_id', 'item_id');
+        return $this->hasMany(ProcurementRequestDetail::class, 'item_id', 'item_id');
     }
 
     public function stockMutations(): HasMany

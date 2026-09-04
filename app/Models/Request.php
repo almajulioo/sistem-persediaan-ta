@@ -68,15 +68,13 @@ class Request extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
-    public function details(): HasMany
-    {
-        return $this->hasMany(RequestDetail::class, 'request_id', 'request_id');
-    }
-
-    public function procurementRequests(): HasMany
-    {
-        return $this->hasMany(ProcurementRequest::class, 'request_id', 'request_id');
-    }
+    // `details()` dan `procurementRequests()` dibuang 5 September 2026: keduanya
+    // dibangun di atas premis yang keliru. `RequestDetail` ternyata bukan
+    // rincian permintaan unit — ia salah nama dan salah arah FK sejak desain
+    // ERD awal, dan sudah dipindah sepenuhnya ke sisi Pengadaan sebagai
+    // App\Models\ProcurementRequestDetail (lihat ADR 0015). `requests` di sini
+    // belum punya tabel rincian barangnya sendiri; itu keputusan yang perlu
+    // diambil saat sub sistem Permintaan dirancang.
 
     public function notaDinas(): HasMany
     {
