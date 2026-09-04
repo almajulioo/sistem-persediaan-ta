@@ -19,6 +19,8 @@
 /storage/*.key
 /storage/pail
 /vendor
+# Konteks Claude Code milik masing-masing pengembang, tidak dibagi lewat repo.
+/CLAUDE.md
 Homestead.json
 Homestead.yaml
 Thumbs.db
