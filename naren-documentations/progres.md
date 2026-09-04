@@ -5,6 +5,114 @@ perubahan.
 
 ---
 
+## 4–5 September 2026 — Modul Notifikasi
+
+Fitur kecil yang disisipkan sebelum modul Pengadaan, sekaligus menyiapkan
+lahannya: modul Pengadaan tinggal menambah case enum untuk ikut memakainya.
+
+**Keputusan inti — notifikasi stok bukan peristiwa, melainkan keadaan.**
+Permintaan awalnya sederhana ("beri tahu kalau stok habis atau menipis"), tetapi
+bentuk datanya tidak. "Stok kertas habis" tidak *terjadi* pada satu titik waktu;
+ia **sedang benar**, dan bisa berhenti benar tanpa siapa pun menekan tombol.
+
+Dua jalan buntu yang dihindari:
+
+| Pendekatan | Akibatnya |
+|---|---|
+| Satu notifikasi per mutasi | Barang yang sudah habis tetap dimutasi. Lonceng terisi puluhan baris berbunyi sama dalam hitungan hari, lalu diabaikan orang |
+| Satu notifikasi yang tak pernah ditutup | "Stok kertas habis" tetap terpampang setelah diisi kemarin — **menyesatkan**, dan itu lebih mahal daripada tidak ada |
+
+Jadi tiap jenis menyatakan dirinya keadaan atau peristiwa lewat
+`NotificationType::bersifatKeadaan()`. Keadaan menutup dirinya sendiri
+(`resolved_at`) begitu pulih; peristiwa tidak pernah ditutup dan hilang setelah
+dibaca ([ADR 0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md)).
+
+Penopangnya satu hal teknis: indeks unik `(user_id, dedup_key)`, sehingga
+seluruh pemeriksaan **idempoten**. `Notifier::terapkanKeadaan()` menerima sebuah
+boolean, bukan perintah "kirim" — pemanggil tidak pernah perlu tahu apakah
+notifikasinya sudah ada.
+
+**Temuan teknis yang menentukan arah — `DB::afterCommit()` tidak pernah jalan di
+bawah `RefreshDatabase`.** Rencana awal memasang hook otomatis di dalam
+`StockLedger::record()` supaya semua pemanggil termasuk sub sistem Alma ikut
+terlayani tanpa perlu ingat memanggil apa pun. Sebelum dipakai, mekanismenya
+diperiksa langsung ke kode kerangka kerja:
+
+- `DatabaseTransactionsManager::afterCommitCallbacksShouldBeExecuted()`
+  mengembalikan `$level === 0` — callback hanya jalan saat transaksi terluar
+  benar-benar commit.
+- `RefreshDatabase::beginDatabaseTransaction()` membungkus **setiap uji** dalam
+  transaksi yang di-rollback, tidak pernah di-commit.
+
+Artinya level tidak pernah kembali ke nol di dalam uji, dan callback-nya tidak
+pernah jalan sama sekali. Memilih mekanisme itu berarti membangun fitur yang
+tidak dapat diuji. Diganti pemanggilan eksplisit seperti pola `AuditLogger`
+([ADR 0014](keputusan/0014-pemeriksaan-notifikasi-dipanggil-eksplisit.md)).
+
+Yang menyelamatkan keputusan itu dari kerapuhannya adalah idempotensi tadi:
+**pemeriksaan reaktif hanyalah percepatan, bukan syarat kebenaran.** Jalur yang
+lupa memanggilnya tetap tertangkap pemeriksaan terjadwal; yang hilang cuma
+kesegeraan, bukan datanya.
+
+**Katalog disaring dengan dua ujian** — penerimanya belum tahu, dan ada yang bisa
+dilakukan. Sepuluh jenis lolos: empat keadaan stok, tiga keadaan opname, tiga
+peristiwa. Yang dibuang antara lain "Anda mencatat mutasi" (gagal ujian pertama)
+dan "akun Anda dinonaktifkan" (gagal ujian kedua — penerimanya sudah ditendang
+keluar sesi).
+
+Tiga jenis yang tidak terpikir di permintaan awal tetapi bernilai tinggi:
+
+- **Mutasi Manual Sensitif** — Rusak/Hilang/Kadaluarsa/Koreksi mengurangi stok
+  **tanpa dokumen sumber**. Pada instansi pemeriksa, justru inilah yang paling
+  layak diketahui Admin. Pelakunya sendiri tidak diberi tahu.
+- **Stok Bergerak Setelah Dicacah** — `OpnameDetail::stokBerubahSejakDicacah()`
+  sudah ada sejak modul opname tetapi **tidak pernah ditampilkan kepada siapa
+  pun**.
+- **Periode Belum Diopname** — memanfaatkan enum `PeriodeOpname` yang sudah ada.
+
+**Yang dikerjakan.**
+
+- Dua enum: `NotificationType` (10 case), `NotificationLevel` (Mendesak /
+  Perhatian / Info, dengan `bobot()` untuk pengurutan).
+- Migrasi `user_notifications` — **bukan** `notifications`, karena `User` sudah
+  memakai trait `Notifiable` yang mengklaim nama itu beserta bentuk kolomnya.
+- `app/Support/Notifier.php` dan `app/Support/NotificationScanner.php`,
+  mendampingi `StockLedger`, `AuditLogger`, dan `OpnamePoster`. Keduanya menelan
+  kegagalannya sendiri ke log, meniru `AuditLogger`.
+- **Penjadwal pertama di proyek ini**: `php artisan notifikasi:periksa`,
+  dijadwalkan harian 06.00 di `routes/console.php`.
+- Lonceng header dirombak dari dummy TailAdmin ("Terry Franci",
+  `console.log`) menjadi data nyata: badge berangka, dua bagian "Perlu Tindakan"
+  dan "Aktivitas Terbaru", tombol tandai semua dibaca.
+- Halaman `/notifikasi` dengan tiga penyaring dan kartu rekap. Disajikan sebagai
+  **daftar, bukan tabel** — isi notifikasi berupa kalimat utuh yang tidak
+  terbaca dalam sel sempit.
+- Pemicu reaktif di `StockMutationController`, `ItemController` (4 titik), dan
+  `OpnamePoster::post()`.
+- Ikon `bell` dan entri menu "Notifikasi" di `MenuHelper`, tanpa kunci `roles`.
+
+**Verifikasi.** 161 uji lulus (500 asersi), naik dari 142 — 19 uji baru. Pint
+bersih pada 16 berkas dalam cakupan sempit. Migrasi berjalan di MySQL. Siklus
+penuh diuji pada data nyata: `ATK-001` dikuras → 2 notifikasi (admin + gudang)
+dengan kalimat tindak lanjut; diperiksa 2× lagi → **tetap 2 baris**; diisi ulang
+→ **0 aktif, 2 baris tetap ada** (ditutup, bukan dihapus). Perintah terjadwal
+pada data contoh menghasilkan tepat satu keadaan yang benar: Triwulan I 2026
+belum diopname, sedangkan Triwulan II dan III sudah punya dokumen dan Triwulan
+IV belum mendekati akhir.
+
+**Catatan.** Verifikasi manual itu menulis 2 mutasi nyata berketerangan "Uji
+coba" pada `ATK-001` di basis data pengembangan (stok 132 → 0 → 40). Baris
+mutasi immutable sehingga tidak dihapus; `php artisan migrate:fresh --seed`
+mengembalikan data contoh bila diperlukan.
+
+**Berikutnya.** Modul Pengadaan, dengan syarat yang tidak berubah:
+**penyelarasan tabel perbatasan bersama Alma lebih dulu**, dan wajib menerapkan
+[ADR 0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md). Notifikasi
+untuk modul itu cukup menambah case enum — kandidatnya sudah dicatat di
+[modul/notifikasi.md](modul/notifikasi.md).
+
+---
+
 ## 4 September 2026 — Modul Stok Opname
 
 Modul terakhir sub sistem manajemen gudang. Dibangun dari activity diagram yang
