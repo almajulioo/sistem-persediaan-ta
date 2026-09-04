@@ -8,6 +8,7 @@ use App\Http\Requests\Gudang\StoreMutationRequest;
 use App\Models\Item;
 use App\Models\StockMutation;
 use App\Support\AuditLogger;
+use App\Support\NotificationScanner;
 use App\Support\StockLedger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -63,7 +64,7 @@ class StockMutationController extends Controller
         $type = $request->mutationType();
 
         try {
-            StockLedger::record(
+            $mutation = StockLedger::record(
                 item: $item,
                 type: $type,
                 amount: $request->signedAmount(),
@@ -81,6 +82,11 @@ class StockMutationController extends Controller
             $request->user(),
             "Mencatat mutasi manual {$type->label()} untuk barang {$item->item_code}",
         );
+
+        // Stok baru saja berubah: peringatan stok diselaraskan seketika, dan
+        // mutasi manual yang mengurangi stok tanpa dokumen dilaporkan ke Admin.
+        NotificationScanner::periksaBarang($item);
+        NotificationScanner::catatMutasiManual($mutation, $request->user());
 
         return redirect()
             ->route('mutations.index')

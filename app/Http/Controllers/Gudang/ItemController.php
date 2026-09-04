@@ -10,6 +10,8 @@ use App\Http\Requests\Gudang\StoreItemRequest;
 use App\Http\Requests\Gudang\UpdateItemRequest;
 use App\Models\Item;
 use App\Support\AuditLogger;
+use App\Support\NotificationScanner;
+use App\Support\Notifier;
 use App\Support\StockLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,6 +98,9 @@ class ItemController extends Controller
 
         AuditLogger::record($request->user(), "Menambah barang: {$item->item_code} - {$item->item_name}");
 
+        // Barang baru bisa langsung lahir dalam keadaan habis atau menipis.
+        NotificationScanner::periksaBarang($item);
+
         return redirect()
             ->route('items.index')
             ->with('status', "Barang {$item->item_code} berhasil ditambahkan.");
@@ -128,6 +133,10 @@ class ItemController extends Controller
 
         AuditLogger::record($request->user(), "Mengubah barang: {$item->item_code} - {$item->item_name}");
 
+        // Ambang batas ikut menentukan status stok, jadi mengubahnya bisa
+        // memunculkan maupun menghilangkan peringatan tanpa stok bergerak.
+        NotificationScanner::periksaBarang($item);
+
         return redirect()
             ->route('items.index')
             ->with('status', "Barang {$item->item_code} berhasil diperbarui.");
@@ -144,6 +153,9 @@ class ItemController extends Controller
 
         AuditLogger::record($request->user(), ucfirst($state)." barang: {$item->item_code}");
 
+        // Barang yang diarsipkan tidak lagi dilayani; peringatan stoknya ditutup.
+        NotificationScanner::periksaBarang($item);
+
         return back()->with('status', "Barang {$item->item_code} berhasil di{$state}.");
     }
 
@@ -159,6 +171,11 @@ class ItemController extends Controller
         }
 
         $code = $item->item_code;
+
+        // Notifikasi yang menunjuk barang ini hanya akan mengantar penggunanya
+        // ke halaman yang sudah tidak ada.
+        Notifier::hapusUntukSubjek($item);
+
         $item->delete();
 
         AuditLogger::record($request->user(), "Menghapus barang: {$code}");

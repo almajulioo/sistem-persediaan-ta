@@ -51,6 +51,11 @@ class OpnamePoster
         });
 
         AuditLogger::record($actor, "Memposting {$opname->judul()}");
+
+        // Di luar transaksi, sejajar dengan AuditLogger: notifikasi tidak boleh
+        // ikut tertulis bila posting batal, dan kegagalannya tidak boleh
+        // menggagalkan posting yang sudah sah.
+        NotificationScanner::catatOpnameDiposting($opname, $actor);
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,6 +34,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/profil', function () {
         return view('pages.profile', ['title' => 'Profil']);
     })->name('profile');
+
+    /*
+    |----------------------------------------------------------------------
+    | Notifikasi
+    |----------------------------------------------------------------------
+    | Tanpa gate peran: setiap pengguna berhak atas notifikasinya sendiri.
+    | Kepemilikan dijaga di controller, per baris, bukan lewat otorisasi rute.
+    */
+    Route::get('notifikasi', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('notifikasi/baca-semua', [NotificationController::class, 'readAll'])->name('notifications.read-all');
+    Route::patch('notifikasi/{notification}/baca', [NotificationController::class, 'read'])->name('notifications.read');
 
     /*
     |----------------------------------------------------------------------
