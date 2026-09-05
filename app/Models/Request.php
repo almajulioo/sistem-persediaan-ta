@@ -43,10 +43,9 @@ class Request extends Model
         'date',
         'type',
         'status',
+        'request_number',
         'bast_number',
         'nd_number',
-        'request_amount',
-        'accept_amount',
     ];
 
     /**
@@ -84,5 +83,10 @@ class Request extends Model
     public function basts(): HasMany
     {
         return $this->hasMany(Bast::class, 'request_id', 'request_id');
+    }
+
+    public function item(): HasMany
+    {
+        return $this->hasMany(RequestDetail::class, 'request_id', 'request_id');
     }
 }

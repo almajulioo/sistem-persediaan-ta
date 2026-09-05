@@ -7,6 +7,7 @@ use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Request\RequestController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -94,6 +95,11 @@ Route::middleware('auth')->group(function () {
         Route::patch('pengguna/{user}/status', [UserController::class, 'toggleStatus'])
             ->name('users.toggle-status');
     });
+
+    Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
+    Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
+    Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
+    Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
 
     /*
     |----------------------------------------------------------------------

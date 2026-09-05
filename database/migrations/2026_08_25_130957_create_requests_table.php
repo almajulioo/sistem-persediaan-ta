@@ -17,12 +17,11 @@ return new class extends Migration
                 ->constrained('users', 'user_id')
                 ->cascadeOnDelete();
             $table->date('date');
+            $table->string('request_number')->unique();
             $table->string('type');
             $table->string('status');
             $table->string('bast_number')->nullable();
             $table->string('nd_number')->nullable();
-            $table->unsignedInteger('request_amount');
-            $table->unsignedInteger('accept_amount')->nullable();
             $table->timestamps();
         });
     }

@@ -28,6 +28,10 @@ class MenuHelper
                 'name' => 'Permintaan Barang',
                 'path' => '#',
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                'subItems' => [
+                    ['name' => 'Buat Permintaan', 'path' => '/permintaan/create'],
+                    ['name' => 'Daftar Permintaan', 'path' => '/permintaan'],
+                ],
             ],
             [
                 'icon' => 'pages',
