@@ -1,8 +1,23 @@
+@php
+    $isEdit = $isEdit ?? false;
+    $existingItems = $isEdit && isset($request)
+        ? $request->item->map(fn ($detail) => [
+            'item_id' => $detail->item_id,
+            'item_name' => $detail->item?->item_name ?? 'Barang',
+            'qty' => (int) $detail->quantity_requested,
+        ])->values()->all()
+        : [];
+
+@endphp
+
 <form action="{{ $action }}" method="POST" x-data="requestForm()">
     @csrf
-    @if ($isEdit ?? false)
+    @if ($isEdit)
         @method('PUT')
     @endif
+    <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">
+        {{ $isEdit ? 'Ubah Kuantitas Permintaan Barang' : 'Tambah Barang' }}
+    </h2>
 
     <div class="space-y-6">
         <!-- Input Form Section -->
@@ -144,6 +159,7 @@
             searchQuery: '',
             inputQty: '',
             requestedList: [],
+            requestedList: @json($existingItems),
 
             get filteredItems() {
                 if (!this.searchQuery) return this.items;

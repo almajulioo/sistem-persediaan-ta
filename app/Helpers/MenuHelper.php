@@ -27,7 +27,7 @@ class MenuHelper
                 'icon' => 'forms',
                 'name' => 'Permintaan Barang',
                 'path' => '#',
-                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KepalaUnit, UserRole::StaffUmum],
                 'subItems' => [
                     ['name' => 'Buat Permintaan', 'path' => '/permintaan/create'],
                     ['name' => 'Daftar Permintaan', 'path' => '/permintaan'],

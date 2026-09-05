@@ -13,6 +13,8 @@ enum UserRole: string
     case Admin = 'admin';
     case PengelolaGudang = 'pengelola_gudang';
     case PejabatPengadaan = 'pejabat_pengadaan';
+    case KepalaUnit = 'kepala_unit';
+    case StaffUmum = 'staff_umum';
 
     public function label(): string
     {
@@ -20,6 +22,8 @@ enum UserRole: string
             self::Admin => 'Admin',
             self::PengelolaGudang => 'Pengelola Gudang',
             self::PejabatPengadaan => 'Pejabat Pengadaan',
+            self::KepalaUnit => 'Kepala Unit',
+            self::StaffUmum => 'Staff Umum',
         };
     }
 
@@ -29,6 +33,8 @@ enum UserRole: string
             self::Admin => 'Akses penuh: manajemen pengguna, master data, dan seluruh modul.',
             self::PengelolaGudang => 'Mengelola stok, permintaan barang, mutasi, dan stock opname.',
             self::PejabatPengadaan => 'Mengelola usulan dan realisasi pengadaan barang.',
+            self::KepalaUnit => 'Menyetujui permintaan barang dari unit kerja.',
+            self::StaffUmum => 'Mengubah kuantitas barang permintaan barang.',
         };
     }
 
@@ -41,6 +47,8 @@ enum UserRole: string
             self::Admin => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
             self::PengelolaGudang => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
             self::PejabatPengadaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+            self::KepalaUnit => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
+            self::StaffUmum => 'bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
         };
     }
 

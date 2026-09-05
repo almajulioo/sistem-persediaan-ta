@@ -36,6 +36,18 @@ Route::middleware('auth')->group(function () {
         return view('pages.profile', ['title' => 'Profil']);
     })->name('profile');
 
+
+    Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
+    Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
+    Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
+    Route::get('/permintaan/{request}/edit', [RequestController::class, 'edit'])->name('request.edit');
+    Route::put('/permintaan/{request}', [RequestController::class, 'update'])->name('request.update');
+    Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
+    
+
+    Route::middleware('role:kepala_unit,staff_umum,admin')->post('/permintaan/{request}/respond', [RequestController::class, 'respondByRole'])->name('request.respond');
+
+
     /*
     |----------------------------------------------------------------------
     | Notifikasi
@@ -96,11 +108,7 @@ Route::middleware('auth')->group(function () {
             ->name('users.toggle-status');
     });
 
-    Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
-    Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
-    Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
-    Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
-
+   
     /*
     |----------------------------------------------------------------------
     | Halaman referensi komponen TailAdmin

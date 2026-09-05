@@ -9,7 +9,9 @@ class StorePermintaanBarangRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('kelola-gudang') ?? false;
+        $user = $this->user();
+
+        return $user !== null;
     }
 
     /**

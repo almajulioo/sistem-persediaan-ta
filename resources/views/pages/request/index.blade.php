@@ -22,7 +22,7 @@
 
     <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
         @foreach ([
-            ['label' => 'Permintaan Pending', 'value' => $summary['pending'], 'class' => 'text-warning-600 dark:text-orange-400'],
+            ['label' => 'Permintaan Diproses', 'value' => $summary['pending'], 'class' => 'text-warning-600 dark:text-orange-400'],
             ['label' => 'Permintaan Bulan Ini', 'value' => $summary['bulan_ini'], 'class' => 'text-gray-800 dark:text-white/90'],
             ['label' => 'Permintaan Selesai Bulan Ini', 'value' => $summary['selesai_bulan_ini'], 'class' => 'text-success-600 dark:text-success-500'],
         ] as $card)
@@ -43,9 +43,11 @@
 
             <x-form.select-field name="status" label="Status"
                 :options="[
-                    'pending' => 'Pending',
-                    'approved' => 'Disetujui',
-                    'rejected' => 'Ditolak',
+                    'submitted' => 'Submitted',
+                    'approved_by_head' => 'Disetujui Kepala Unit',
+                    'processed_by_staff' => 'Disetujui Staff Umum',
+                    'completed' => 'Completed',
+                    'rejected' => 'Rejected',
                 ]" :selected="$status" placeholder="Semua status" />
 
             <x-form.date-picker name="date_from" label="Tanggal Mulai" placeholder="Pilih tanggal mulai"
@@ -98,15 +100,59 @@
                                     <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ ucfirst($row->type) }}</span>
                                 </td>
                                 <td class="px-5 py-4 sm:px-6">
-                                    <span class="text-theme-xs inline-block rounded-full bg-warning-50 px-2.5 py-1 font-medium text-warning-600 dark:bg-warning-500/15 dark:text-warning-500">
-                                        {{ ucfirst($row->status) }}
+                                    <span @class([
+                                        'text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium',
+                                        'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500' => in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff'], true),
+                                        'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500' => $row->status === 'rejected',
+                                        'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' => $row->status === 'completed',
+                                    ])>
+                                        {{ [
+                                            'submitted' => 'Terkirim',
+                                            'approved_by_head' => 'Disetujui Kepala Unit',
+                                            'processed_by_staff' => 'Disetujui Staff Umum',
+                                            'completed' => 'Selesai',
+                                            'rejected' => 'Ditolak',
+                                        ][$row->status] ?? ucfirst(str_replace('_', ' ', $row->status)) }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-4 sm:px-6">
+                                <td class="px-5 py-4 flex gap-3 sm:px-6">
                                     <a href="{{ route('request.show', $row) }}"
                                         class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                                         Detail
                                     </a>
+
+                                    @if ($row->status === 'approved_by_head' && $isStaffUmum)
+                                        <a href="{{ route('request.edit', $row) }}"
+                                            class="text-theme-xs text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                            Ubah Kuantitas
+                                        </a>
+                                    @endif
+
+                                    @php
+                                        $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
+                                                    ($row->status === 'approved_by_head' && $isStaffUmum) ||
+                                                    ($row->status === 'processed_by_staff' && $isAdmin);
+                                    @endphp
+
+                                    @if ($canRespond)
+                                        <!-- Tombol Setujui -->
+                                        <form action="{{ route('request.respond', ['request' => $row, 'action' => 'approve']) }}" method="POST" class="inline">
+                                            @csrf
+                                            <button type="submit" 
+                                                class="text-theme-xs text-success-600 dark:text-success-500 ring-success-200 dark:ring-success-500/30 hover:bg-success-50 dark:hover:bg-success-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                                Setujui
+                                            </button>
+                                        </form>
+
+                                        <!-- Tombol Tolak -->
+                                        <form action="{{ route('request.respond', ['request' => $row, 'action' => 'reject']) }}" method="POST" class="inline">
+                                            @csrf
+                                            <button type="submit" 
+                                                class="text-theme-xs text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                                Tolak
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
