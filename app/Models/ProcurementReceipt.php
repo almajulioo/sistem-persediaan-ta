@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `received_by` sengaja terpisah dari `Procurement::user_id` (pengaju
  * realisasi) — siapa yang mengadakan bukan siapa yang mengonfirmasi diterima,
  * sesuai pemisahan tugas pada ADR 0008. Lihat ADR 0015.
+ *
+ * Mencatat **peristiwa** penerimaannya saja: siapa, kapan, nomor BAST berapa.
+ * Berkas BAST bertanda tangan hidup di `procurement_documents` dan boleh
+ * menyusul — penerimaan tidak menunggunya. Lihat ADR 0018.
  */
 class ProcurementReceipt extends Model
 {
@@ -23,8 +27,11 @@ class ProcurementReceipt extends Model
 
     protected $keyType = 'string';
 
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
-        'procurement_id', 'bast_number', 'file_url', 'received_by', 'received_at', 'notes',
+        'procurement_id', 'bast_number', 'received_by', 'received_at', 'notes',
     ];
 
     protected function casts(): array

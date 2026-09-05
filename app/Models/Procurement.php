@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProcurementDocumentType;
 use App\Enums\ProcurementStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -27,7 +28,7 @@ class Procurement extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'procurement_request_id', 'procurement_date', 'status', 'additional_doc', 'user_id', 'supplier',
+        'procurement_request_id', 'supplier_id', 'procurement_date', 'status', 'user_id',
     ];
 
     protected function casts(): array
@@ -48,9 +49,47 @@ class Procurement extends Model
         return $this->status === ProcurementStatus::Diterima;
     }
 
+    /**
+     * Nilai seluruh barang yang dipesan, dalam rupiah bulat.
+     */
+    public function nilaiTotal(): int
+    {
+        return $this->details->sum(fn (ProcurementDetail $detail) => $detail->subtotal());
+    }
+
+    /**
+     * Apakah ada barang yang datang kurang dari yang dipesan.
+     *
+     * Bukan status tersendiri: pertanyaannya dijawab dari rincian, supaya tidak
+     * ada dua sumber kebenaran. Lihat ADR 0017.
+     */
+    public function diterimaSebagian(): bool
+    {
+        return $this->details->contains(fn (ProcurementDetail $detail) => $detail->kurangKirim() > 0);
+    }
+
+    /**
+     * Apakah berkas BAST bertanda tangan sudah diunggah.
+     *
+     * Penerimaan sengaja tidak menunggu berkas ini — lihat ADR 0018 — sehingga
+     * keadaan "sudah diterima tetapi BAST belum diunggah" memang sah dan perlu
+     * bisa ditanyakan.
+     */
+    public function bastSudahDiunggah(): bool
+    {
+        return $this->documents()
+            ->where('type', ProcurementDocumentType::Bast)
+            ->exists();
+    }
+
     public function procurementRequest(): BelongsTo
     {
         return $this->belongsTo(ProcurementRequest::class, 'procurement_request_id', 'procurement_request_id');
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id', 'supplier_id');
     }
 
     public function user(): BelongsTo
@@ -66,5 +105,10 @@ class Procurement extends Model
     public function receipt(): HasOne
     {
         return $this->hasOne(ProcurementReceipt::class, 'procurement_id', 'procurement_id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ProcurementDocument::class, 'procurement_id', 'procurement_id');
     }
 }

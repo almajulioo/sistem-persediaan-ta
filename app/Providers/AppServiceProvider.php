@@ -76,5 +76,14 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('kelola-pengadaan', fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan));
 
         Gate::define('kelola-permintaan', fn (User $user) => $user->hasRole(UserRole::PengelolaGudang));
+
+        // Dokumen pengadaan dibaca kedua peran sekaligus: Pejabat Pengadaan
+        // yang merealisasi, Pengelola Gudang yang mengusulkan dan menerima
+        // barangnya. Perlu gate tersendiri karena middleware `can:` yang
+        // ditumpuk bersifat DAN, bukan ATAU.
+        Gate::define(
+            'akses-pengadaan',
+            fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::PengelolaGudang),
+        );
     }
 }

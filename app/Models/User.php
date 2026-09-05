@@ -119,6 +119,7 @@ class User extends Authenticatable
         'stockOpnames' => 'stock opname',
         'procurements' => 'pengadaan',
         'procurementRequests' => 'usulan pengadaan',
+        'procurementReceipts' => 'penerimaan barang pengadaan',
     ];
 
     /**
@@ -162,6 +163,15 @@ class User extends Authenticatable
     public function procurementRequests(): HasMany
     {
         return $this->hasMany(ProcurementRequest::class, 'user_id', 'user_id');
+    }
+
+    /**
+     * Penerimaan barang yang dikonfirmasi akun ini. Berbeda dari
+     * `procurements()` (realisasi yang diajukannya) — pemisahan tugas ADR 0008.
+     */
+    public function procurementReceipts(): HasMany
+    {
+        return $this->hasMany(ProcurementReceipt::class, 'received_by', 'user_id');
     }
 
     public function auditLogs(): HasMany

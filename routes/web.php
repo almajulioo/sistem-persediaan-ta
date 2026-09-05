@@ -7,6 +7,7 @@ use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\SupplierController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -78,6 +79,22 @@ Route::middleware('auth')->group(function () {
         Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
         Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
         Route::resource('opname', StockOpnameController::class)->names('opname');
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Pengadaan (Pejabat Pengadaan, dan Admin)
+    |----------------------------------------------------------------------
+    | Sama seperti gudang: memakai gate, bukan middleware `role:`, supaya
+    | Admin ikut lolos lewat Gate::before.
+    */
+    Route::middleware('can:kelola-pengadaan')->group(function () {
+        Route::resource('penyedia', SupplierController::class)
+            ->parameters(['penyedia' => 'supplier'])
+            ->names('suppliers');
+
+        Route::patch('penyedia/{supplier}/status', [SupplierController::class, 'toggleStatus'])
+            ->name('suppliers.toggle-status');
     });
 
     /*
