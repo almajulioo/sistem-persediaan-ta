@@ -30,7 +30,11 @@ class MenuHelper
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KepalaUnit, UserRole::StaffUmum],
                 'subItems' => [
                     ['name' => 'Buat Permintaan', 'path' => '/permintaan/create'],
-                    ['name' => 'Daftar Permintaan', 'path' => '/permintaan'],
+                    [
+                        'name' => 'Daftar Permintaan', 
+                        'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KepalaUnit, UserRole::StaffUmum], 
+                        'path' => '/permintaan'
+                    ],
                 ],
             ],
             [
@@ -145,11 +149,25 @@ class MenuHelper
      */
     private static function filterByRole(array $items, ?User $user): array
     {
-        return array_values(array_filter(
+        return array_values(array_filter(array_map(
+            function (array $item) use ($user): ?array {
+                if (isset($item['roles'])
+                    && ($user === null || ! $user->hasRole(...$item['roles']))) {
+                    return null;
+                }
+
+                if (isset($item['subItems'])) {
+                    $item['subItems'] = self::filterByRole($item['subItems'], $user);
+
+                    if ($item['subItems'] === []) {
+                        return null;
+                    }
+                }
+
+                return $item;
+            },
             $items,
-            fn (array $item) => ! isset($item['roles'])
-                || ($user !== null && $user->hasRole(...$item['roles'])),
-        ));
+        )));
     }
 
     public static function isActive($path)
