@@ -40,8 +40,10 @@ class MenuHelper
             [
                 'icon' => 'pages',
                 'name' => 'Pengadaan',
-                'path' => '#',
                 'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
+                'subItems' => [
+                    ['name' => 'Penyedia Barang', 'path' => '/penyedia'],
+                ],
             ],
             [
                 'icon' => 'tables',

@@ -23,7 +23,10 @@ class ProcurementRequestDetail extends Model
 
     protected $keyType = 'string';
 
-    protected $fillable = ['procurement_request_id', 'item_id', 'amount_request', 'status', 'amount_granted'];
+    /**
+     * @var list<string>
+     */
+    protected $fillable = ['procurement_request_id', 'item_id', 'amount_request', 'amount_granted'];
 
     protected function casts(): array
     {
@@ -31,6 +34,23 @@ class ProcurementRequestDetail extends Model
             'amount_request' => 'integer',
             'amount_granted' => 'integer',
         ];
+    }
+
+    /**
+     * Sudah diputuskan berapa banyak yang disetujui untuk barang ini.
+     *
+     * `amount_granted` merangkap keputusan per barang — null berarti belum
+     * diputuskan, 0 berarti barang ini tidak disetujui. Kolom `status`
+     * terpisah yang dulu ada dihapus karena menyatakan hal yang sama.
+     */
+    public function sudahDiputuskan(): bool
+    {
+        return $this->amount_granted !== null;
+    }
+
+    public function disetujui(): bool
+    {
+        return ($this->amount_granted ?? 0) > 0;
     }
 
     public function procurementRequest(): BelongsTo

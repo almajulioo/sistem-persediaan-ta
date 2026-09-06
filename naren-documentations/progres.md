@@ -5,6 +5,76 @@ perubahan.
 
 ---
 
+## 6 September 2026 — Pengadaan Tahap 1: rancangan alur, skema, dan Penyedia
+
+Sesi perancangan modul Pengadaan, dilanjutkan pengerjaan tahap pertamanya.
+Modul ini dipecah **empat tahap** karena jauh lebih besar dari modul mana pun
+sebelumnya; ini tahap pertama.
+
+**Batas cakupan yang disepakati.** Sistem hanya menangkap proses pengadaan di
+dalam kantor: usulan → realisasi → penerimaan. Pembelian barangnya sendiri
+terjadi di luar sistem, di antara realisasi dan penerimaan.
+
+**Temuan utama diskusi: penerimaan harus boleh jujur.**
+`procurement_details` cuma punya satu kolom jumlah (`amount`), sehingga stok
+akan bertambah sebanyak yang *dipesan*. Padahal penyedia sering mengirim
+kurang. Tanpa tempat mencatat "pesan 100, datang 80", petugas hanya punya tiga
+pilihan yang semuanya buruk: tidak mengonfirmasi (stok sistem tertinggal dari
+fisik), mengonfirmasi angka palsu (opname berikutnya memunculkan selisih
+misterius), atau menambal lewat mutasi `KoreksiPencatatan` yang namanya
+berbohong — kekurangan kiriman bukan kesalahan pencatatan. Kolom
+`amount_received` menutup ketiganya sekaligus. Ini perubahan tunggal paling
+menentukan di modul ini ([ADR 0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
+
+**Kesalahan urutan yang ikut ketahuan.**
+`procurement_receipts.file_url` bersifat **NOT NULL**, artinya penerimaan tidak
+dapat dikonfirmasi sebelum berkas BAST ada. Padahal urutan fisiknya justru
+sebaliknya: cetak → tanda tangan → pindai. Skema lama memblokir pencatatan stok
+di belakang alur pemindaian. Sekarang berkasnya boleh menyusul, ditagih
+notifikasi keadaan yang menutup diri sendiri
+([ADR 0018](keputusan/0018-berkas-unggahan-di-disk-privat.md)).
+
+**Butir terbuka ADR 0015 ditutup.** Kolom `status` pada
+`procurement_request_details` dihapus — ia duplikat `amount_granted` (null =
+belum diputuskan, 0 = ditolak, N = disetujui sejumlah N), tanpa enum maupun
+cast, dan menyimpan keduanya berarti dua sumber kebenaran.
+
+**Yang dikerjakan.**
+
+- Enam migrasi: `suppliers` (baru), `procurement_documents` (baru),
+  `procurements` ditautkan ke penyedia, `unit_price` + `amount_received` pada
+  rincian realisasi, penghapusan `status` pada rincian usulan, dan penghapusan
+  `file_url` pada penerimaan.
+- Enum `ProcurementDocumentType`; model `Supplier` dan `ProcurementDocument`;
+  pemutakhiran `Procurement`, `ProcurementDetail`, `ProcurementRequestDetail`,
+  dan `ProcurementReceipt`.
+- Gate baru `akses-pengadaan` — kedua peran perlu membaca dokumen pengadaan
+  yang sama, sedangkan `can:` yang ditumpuk bersifat DAN, bukan ATAU.
+- Modul **Penyedia Barang** lengkap: controller, trio form request, empat
+  halaman, rute, factory, seeder, menu.
+- Empat ADR: [0016](keputusan/0016-alur-pengadaan-tiga-dokumen.md) (alur tiga
+  dokumen dan pemisahan tugas), [0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md),
+  [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md), dan
+  [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md)
+  (harga dicatat, penilaian persediaan di luar cakupan).
+
+**Celah yang sekalian ditutup.** `User` tidak punya relasi
+`procurementReceipts()` maupun entrinya di `User::RESTRICTED_RELATIONS`,
+padahal FK `received_by` sudah `restrictOnDelete()` — pengarsipan akun bisa
+salah hitung.
+
+**Catatan.** `CLAUDE.md` mulai sesi ini ditulis dalam bahasa Inggris atas
+permintaan Narendra. Dokumentasi di folder ini tetap bahasa Indonesia.
+
+**Verifikasi.** 179 test lulus (161 dasar + 18 baru), tanpa regresi. Pint bersih
+pada 29 berkas cakupan sempit. `migrate:fresh --seed` membuktikan seluruh 34
+migrasi berjalan dari basis data kosong, termasuk penambahan kolom NOT NULL
+tanpa default pada tabel yang sudah ada.
+
+**Berikutnya.** Tahap 2 — Usulan Pengadaan beserta notifikasinya.
+
+---
+
 ## 5 September 2026 — Perbaikan skema Pengadaan sebelum modulnya dibangun
 
 Sebelum menulis satu baris controller pun untuk modul Pengadaan, migrasi

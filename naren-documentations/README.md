@@ -44,6 +44,10 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md) | Notifikasi memisahkan keadaan dari peristiwa | Diterima |
 | [0014](keputusan/0014-pemeriksaan-notifikasi-dipanggil-eksplisit.md) | Pemeriksaan notifikasi dipanggil eksplisit, bukan lewat hook di `StockLedger` | Diterima |
 | [0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) | Usulan pengadaan dan penerimaan barang: skema diperbaiki dan dipisah tegas dari sub sistem Permintaan | Diterima |
+| [0016](keputusan/0016-alur-pengadaan-tiga-dokumen.md) | Alur pengadaan tiga dokumen dan pemisahan tugas | Diterima |
+| [0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md) | Jumlah diterima dicatat terpisah dari jumlah dipesan | Diterima |
+| [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Diterima |
+| [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) | Harga dicatat di realisasi pengadaan; penilaian persediaan di luar cakupan | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

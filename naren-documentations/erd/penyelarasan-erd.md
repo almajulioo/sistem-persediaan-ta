@@ -30,8 +30,8 @@ orang pada tabel yang sama rawan bentrok saat merge.
 ### Milik Narendra — bebas diubah sendiri
 
 `procurements`, `procurement_details`, `procurement_requests`,
-`procurement_request_details`, `procurement_receipts`, `stock_opnames`,
-`opname_details`
+`procurement_request_details`, `procurement_receipts`, `procurement_documents`,
+`suppliers`, `stock_opnames`, `opname_details`
 
 ### Milik Alma — bebas diubah sendiri
 
@@ -116,6 +116,13 @@ ERD pada naskah Naren diperbarui.
 | `request_details` → `procurement_request_details` | Rename tabel + PK; FK diperbaiki menunjuk `procurement_requests` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
 | `procurements` | Tambah `procurement_request_id`; hapus `bast_scan` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
 | `procurement_receipts` | Tabel baru — BAST penerimaan dari penyedia ke gudang | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
+| `suppliers` | Tabel baru — data induk penyedia; alasan utamanya BAST butuh identitas penyedia | [0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md) |
+| `procurements` | Tambah `supplier_id` (FK); hapus `supplier` (teks bebas) dan `additional_doc` | [0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md), [0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md) |
+| `procurement_details` | Tambah `amount_received` (nullable) — stok bertambah sebanyak yang datang, bukan yang dipesan | [0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md) |
+| `procurement_details` | Tambah `unit_price` (rupiah bulat, integer) | [0019](../keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) |
+| `procurement_request_details` | Hapus `status` — duplikat `amount_granted`; menutup butir terbuka ADR 0015 | [0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md) |
+| `procurement_documents` | Tabel baru — berkas BAST pindai dan SPK/kontrak, di disk privat | [0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md) |
+| `procurement_receipts` | Hapus `file_url` — berkas pindah ke `procurement_documents`, dan NOT NULL-nya memblokir stok di belakang alur pemindaian | [0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 
