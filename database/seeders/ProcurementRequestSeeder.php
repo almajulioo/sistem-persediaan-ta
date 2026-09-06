@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ProcurementRequest;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class ProcurementRequestSeeder extends Seeder
 {
@@ -15,6 +16,16 @@ class ProcurementRequestSeeder extends Seeder
      * Contoh usulan pengadaan pada tiga status berbeda, supaya modul dapat
      * langsung dicoba (daftar, detail, persetujuan) tanpa harus mengajukan
      * usulan baru lebih dulu.
+     *
+     * Setiap baris diberi UUID acak eksplisit alih-alih dibiarkan
+     * `HasUuids` membangkitkannya sendiri. `HasUuids` memakai UUID v7
+     * berurut waktu — kelima baris di sini lahir dalam milidetik yang
+     * sama saat seeding, sehingga 8 karakter pertama `judul()` akan
+     * identik dan seluruh usulan tampil dengan nama yang sama persis di
+     * daftar. Bukan bug pada UUID sungguhan (lihat gotcha di CLAUDE.md),
+     * tetapi tetap membingungkan untuk data contoh yang justru dibuat
+     * supaya modul mudah dicoba. UUID acak (bukan berurut) menghilangkan
+     * kemiripan itu tanpa mengubah perilaku `HasUuids` di luar seeder ini.
      */
     public function run(): void
     {
@@ -39,6 +50,7 @@ class ProcurementRequestSeeder extends Seeder
     private function diajukan(User $pengaju): void
     {
         $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Diajukan,
@@ -56,6 +68,7 @@ class ProcurementRequestSeeder extends Seeder
     private function disetujuiSebagian(User $pengaju): void
     {
         $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::Disetujui,
@@ -85,6 +98,7 @@ class ProcurementRequestSeeder extends Seeder
     private function ditolak(User $pengaju): void
     {
         $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::Ditolak,
@@ -108,6 +122,7 @@ class ProcurementRequestSeeder extends Seeder
     private function disetujuiPenuh(User $pengaju): void
     {
         $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Disetujui,
@@ -138,6 +153,7 @@ class ProcurementRequestSeeder extends Seeder
     private function disetujuiMenganggur(User $pengaju): void
     {
         $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::Disetujui,
