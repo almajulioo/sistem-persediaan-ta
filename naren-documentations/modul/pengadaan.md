@@ -32,6 +32,7 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Mengusulkan | Pengelola Gudang | `procurement_requests.user_id` |
 | Menyetujui / menolak | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
+| Membatalkan realisasi | Pejabat Pengadaan | `procurements.cancelled_by` |
 | Mengonfirmasi diterima | Pengelola Gudang | `procurement_receipts.received_by` |
 
 Admin lolos seluruhnya lewat `Gate::before`.
@@ -46,6 +47,9 @@ Admin lolos seluruhnya lewat `Gate::before`.
    ([ADR 0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
 6. `MutationType::Masuk` ber-`isManual() === false`, sehingga penerimaan
    pengadaan adalah satu-satunya sumber sah stok masuk.
+7. Realisasi hanya dapat dibatalkan selama masih `MenungguPenerimaan`, sehingga
+   pembatalan tidak pernah perlu membalik mutasi stok
+   ([ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md)).
 
 ## Tabel
 
@@ -192,7 +196,9 @@ Gudang + Admin) dan `PenerimaanDikonfirmasi` (peristiwa, ke Pejabat Pengadaan
 yang merealisasi).
 
 **Belum dikerjakan di tahap ini**: status `ProcurementStatus::Dibatalkan`
-masih tanpa pemicu — belum ada kebutuhan lapangan yang mengonfirmasinya.
+masih tanpa pemicu. Diselesaikan 7 September 2026 — lihat
+[Pembatalan realisasi](#pembatalan-realisasi) di bawah dan
+[ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md).
 
 ## Tahap 4 — Dokumen, BAST, dan laporan ✅
 
@@ -285,9 +291,58 @@ imbangan dari kelonggaran ADR 0018 — penerimaan sengaja tidak menunggu berkas
 supaya stok tidak tertahan, dan justru karena itu ketiadaan berkas perlu
 ditagih.
 
+## Pembatalan realisasi
+
+Ditambahkan 7 September 2026, setelah pemeriksaan menyeluruh menemukan bahwa
+alur ini punya jalan buntu: pembelian barangnya terjadi **di luar sistem**, dan
+ketika penyedia gagal mengirim, realisasinya terkunci `MenungguPenerimaan`
+selamanya. Satu-satunya jalan keluar yang tersedia dulu adalah mengonfirmasi
+penerimaan barang yang tidak pernah datang. Rincian keputusan:
+[ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md).
+
+| Metode | URL | Nama | Gate |
+|---|---|---|---|
+| PATCH | `/pengadaan/{procurement}/batal` | `procurements.cancel` | `kelola-pengadaan` |
+
+**Aturan.**
+
+- Hanya dari status `MenungguPenerimaan`. Begitu barang diterima, stoknya sudah
+  bertambah lewat mutasi yang immutable dan tidak ada lagi yang boleh
+  dibatalkan — sehingga **tidak ada satu pun mutasi yang perlu dibalik**, dan
+  `StockLedger` tidak tersentuh sama sekali oleh fitur ini.
+- `cancel_reason` memakai enum `AlasanPembatalan` (`PenyediaGagalKirim`,
+  `PenyediaMembatalkan`, `KebutuhanBerubah`, `KesalahanPencatatan`, `Lainnya`)
+  dan `cancel_note` **wajib diisi** apa pun alasannya, pola yang sama dengan
+  alasan selisih opname (ADR 0011). `cancelled_at` dan `cancelled_by`
+  melengkapinya, sejajar `received_by` pada penerimaan.
+- Dokumennya **tidak dihapus**: realisasi yang batal tetap tersimpan sebagai
+  bukti bahwa pengadaan itu pernah berjalan.
+- **Usulan asalnya ikut selesai riwayatnya.** Indeks unik
+  `procurements.procurement_request_id` dipertahankan, sehingga usulan yang
+  realisasinya dibatalkan tidak dapat direalisasikan ulang; barang yang masih
+  dibutuhkan diajukan lewat usulan baru. Halaman usulan menjelaskan hal ini,
+  supaya status `Disetujui` tanpa tombol **Realisasikan** tidak terbaca seperti
+  bug.
+- `KesalahanPencatatan` sekaligus menjadi jalur koreksi bagi realisasi yang
+  salah ketik — salah penyedia, salah harga, salah jumlah — yang selama ini
+  tidak punya jalan keluar apa pun.
+
+**Notifikasi baru**: `RealisasiDibatalkan` (peristiwa, ke Pengelola Gudang +
+Admin kecuali pelaku) dan `UsulanBelumDirealisasi` (keadaan, ke Pejabat
+Pengadaan + Admin, ambang 7 hari). Yang kedua menutup satu-satunya serah terima
+di seluruh alur yang dulu tidak punya penagih: jarak antara "disetujui" dan
+"direalisasi".
+
 ## Butir yang masih menunggu lapangan
 
 **Format nomor dokumen resmi BPK** untuk `procurement_receipts.bast_number`
 belum dikonfirmasi. Formulir konfirmasi penerimaan sudah menyediakan saran
 nomor berurut (`{urutan}/BAST/{tahun}`) yang boleh ditimpa bebas, tanpa
-validasi format yang dipaksakan.
+validasi format yang dipaksakan. Urutannya dihitung ulang tiap tahun.
+
+**Menutup usulan yang sudah disetujui tetapi barangnya tidak lagi dibutuhkan**
+belum ada jalannya — usulan itu hanya akan ditagih terus oleh
+`UsulanBelumDirealisasi`. Belum diputuskan karena belum ada kebutuhan lapangan
+yang mengonfirmasinya, dan kali ini catatan itu ditulis dengan kesadaran bahwa
+catatan serupa untuk `Dibatalkan` ternyata menyembunyikan jalan buntu selama
+satu tahap penuh.

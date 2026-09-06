@@ -10,6 +10,10 @@ namespace App\Enums;
  * `MenungguPenerimaan` sengaja memakai istilah yang sama persis dengan
  * ADR 0008: realisasi berhenti di situ sampai Pengelola Gudang mengonfirmasi
  * barang fisik diterima, dan baru saat itu stok bertambah.
+ *
+ * `Dibatalkan` hanya dapat dicapai dari `MenungguPenerimaan` — begitu barang
+ * diterima, stoknya sudah bertambah lewat mutasi yang immutable dan tidak ada
+ * lagi yang boleh dibatalkan. Lihat ADR 0024.
  */
 enum ProcurementStatus: string
 {
@@ -31,7 +35,7 @@ enum ProcurementStatus: string
         return match ($this) {
             self::MenungguPenerimaan => 'Realisasi berjalan, barang belum dikonfirmasi diterima gudang.',
             self::Diterima => 'Barang telah dikonfirmasi diterima Pengelola Gudang; stok sudah bertambah.',
-            self::Dibatalkan => 'Realisasi tidak dilanjutkan.',
+            self::Dibatalkan => 'Realisasi tidak dilanjutkan; alasan dan keterangannya tercatat pada dokumen.',
         };
     }
 

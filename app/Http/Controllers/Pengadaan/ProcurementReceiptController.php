@@ -36,7 +36,11 @@ class ProcurementReceiptController extends Controller
             // Saran nomor berurut yang boleh ditimpa — format resmi BPK belum
             // dikonfirmasi lapangan, jadi tidak ada validasi format yang
             // dipaksakan. Lihat modul/pengadaan.md.
-            'saranNomorBast' => sprintf('%03d/BAST/%d', ProcurementReceipt::count() + 1, now()->year),
+            //
+            // Cacahnya dibatasi tahun berjalan, bukan sepanjang masa: penomoran
+            // dokumen resmi dimulai ulang tiap tahun, dan saran yang keliru
+            // justru berbahaya karena petugas mempercayainya.
+            'saranNomorBast' => sprintf('%03d/BAST/%d', $this->urutanBastTahunIni(), now()->year),
         ]);
     }
 
@@ -60,5 +64,19 @@ class ProcurementReceiptController extends Controller
         return redirect()
             ->route('procurements.show', $procurement)
             ->with('status', "Penerimaan {$procurement->judul()} berhasil dikonfirmasi. Stok sudah bertambah.");
+    }
+
+    /**
+     * Nomor urut BAST berikutnya dalam tahun berjalan.
+     *
+     * Memakai `received_at` (tanggal bisnis penerimaan), bukan `created_at`,
+     * supaya penerimaan yang dicatat mundur tetap masuk hitungan tahun yang
+     * benar.
+     */
+    private function urutanBastTahunIni(): int
+    {
+        return ProcurementReceipt::query()
+            ->whereYear('received_at', now()->year)
+            ->count() + 1;
     }
 }

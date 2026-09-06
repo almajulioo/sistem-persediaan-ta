@@ -43,6 +43,24 @@
 
     <x-ui.flash />
 
+    {{-- Tanpa keterangan ini, usulan berstatus Disetujui yang tidak punya
+         tombol "Realisasikan" terbaca seperti bug, padahal itu justru
+         konsekuensi yang disengaja dari ADR 0024. --}}
+    @if ($procurementRequest->procurement?->isDibatalkan())
+        <div class="border-error-200 dark:border-error-500/30 bg-error-50 dark:bg-error-500/10 mb-6 rounded-2xl border p-5">
+            <h3 class="text-theme-sm text-error-700 dark:text-error-400 font-medium">
+                Realisasi usulan ini dibatalkan
+            </h3>
+            <p class="text-theme-sm text-error-600 dark:text-error-400/90 mt-1.5">
+                {{ $procurementRequest->procurement->judul() }} dibatalkan dengan alasan
+                {{ strtolower($procurementRequest->procurement->cancel_reason?->label() ?? 'yang tidak dicatat') }},
+                sehingga barangnya tidak jadi datang. Usulan ini sudah selesai riwayatnya dan tidak dapat
+                direalisasikan ulang &mdash; bila barangnya masih dibutuhkan, Pengelola Gudang mengajukan usulan
+                pengadaan yang baru.
+            </p>
+        </div>
+    @endif
+
     <div class="grid grid-cols-12 gap-4 md:gap-6">
         {{-- Identitas usulan --}}
         <div class="col-span-12 xl:col-span-4">

@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\Pengadaan;
 
+use App\Models\Procurement;
+use App\Models\ProcurementDetail;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -11,6 +14,12 @@ use Illuminate\Foundation\Http\FormRequest;
  * yang mengirim lebih banyak dari pesanan bukan kasus yang dicegah ADR 0017,
  * yang mengatur kekurangan kiriman. Hanya kiriman kurang yang jadi perhatian
  * di sana, dan itu sudah tertangkap lewat `ProcurementDetail::kurangKirim()`.
+ *
+ * Sebaliknya, **kelengkapan barisnya wajib**: setiap rincian realisasi harus
+ * punya angka. Alasannya sama persis dengan alasan ADR 0021 mewajibkan
+ * formulir realisasi mencakup seluruh rincian usulan yang disetujui —
+ * penerimaan adalah peristiwa sekali jadi tanpa rute ubah, sehingga baris yang
+ * hilang dari kiriman akan terbaca sebagai "nol diterima" secara permanen.
  */
 class ConfirmProcurementReceiptRequest extends FormRequest
 {
@@ -31,6 +40,32 @@ class ConfirmProcurementReceiptRequest extends FormRequest
             'received.*' => ['required', 'integer', 'min:0', 'max:999999'],
             'notes' => ['nullable', 'string', 'max:500'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $procurement = $this->route('procurement');
+
+            if (! $procurement instanceof Procurement) {
+                return;
+            }
+
+            $dikirim = array_keys((array) $this->input('received', []));
+
+            $hilang = $procurement->details
+                ->reject(fn (ProcurementDetail $detail) => in_array($detail->procurement_detail_id, $dikirim, true));
+
+            if ($hilang->isEmpty()) {
+                return;
+            }
+
+            $validator->errors()->add('received', sprintf(
+                'Jumlah diterima wajib diisi untuk seluruh barang. Belum terisi: %s.',
+                $hilang->map(fn (ProcurementDetail $detail) => $detail->item?->item_name ?? 'barang tidak dikenal')
+                    ->implode(', '),
+            ));
+        });
     }
 
     /**

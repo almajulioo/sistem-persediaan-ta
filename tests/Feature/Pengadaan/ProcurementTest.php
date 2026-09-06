@@ -290,4 +290,74 @@ describe('konfirmasi penerimaan', function () {
 
         expect($detail->item->refresh()->stock_current)->toBe(10);
     });
+
+    it('menolak konfirmasi yang tidak mencakup seluruh baris barang', function () {
+        // Penerimaan adalah peristiwa sekali jadi tanpa rute ubah, jadi baris
+        // yang hilang dari kiriman akan terbaca "nol diterima" secara permanen.
+        // Aturannya sama dengan formulir realisasi pada ADR 0021.
+        $pejabat = pejabatPengadaan();
+        $gudang = pengelolaGudang();
+        $kertas = Item::factory()->create(['item_name' => 'Kertas HVS A4', 'stock_current' => 0]);
+        $tinta = Item::factory()->create(['item_name' => 'Tinta Printer', 'stock_current' => 0]);
+
+        $usulan = setujuiUsulan($pejabat, buatUsulan($gudang, [
+            ['item_id' => $kertas->item_id, 'amount_request' => 10],
+            ['item_id' => $tinta->item_id, 'amount_request' => 5],
+        ]));
+        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+
+        $this->actingAs($gudang)
+            ->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
+                'bast_number' => '009/BAST/2026',
+                'received_at' => now()->toDateString(),
+                // Hanya satu dari dua barang yang diisi.
+                'received' => [$procurement->details->first()->procurement_detail_id => 10],
+            ])
+            ->assertSessionHasErrors('received');
+
+        expect($procurement->fresh()->isMenungguPenerimaan())->toBeTrue()
+            ->and($kertas->refresh()->stock_current)->toBe(0)
+            ->and($tinta->refresh()->stock_current)->toBe(0);
+    });
+});
+
+describe('saran nomor BAST', function () {
+    it('menomori berurut dalam tahun yang sama', function () {
+        $pejabat = pejabatPengadaan();
+        $gudang = pengelolaGudang();
+
+        // Realisasinya dibangun lebih dulu: pembantunya sendiri memakai
+        // actingAs($pejabat), sehingga membangunnya di dalam rantai
+        // actingAs($gudang)->get(...) justru menukar penggunanya dan menghasilkan 403.
+        $pertama = realisasiMenunggu($pejabat, $gudang);
+
+        $this->actingAs($gudang)
+            ->get("/pengadaan/{$pertama->procurement_id}/penerimaan/create")
+            ->assertOk()
+            ->assertSee('001/BAST/'.now()->year);
+
+        realisasiDiterima($pejabat, $gudang);
+        $kedua = realisasiMenunggu($pejabat, $gudang);
+
+        $this->actingAs($gudang)
+            ->get("/pengadaan/{$kedua->procurement_id}/penerimaan/create")
+            ->assertOk()
+            ->assertSee('002/BAST/'.now()->year);
+    });
+
+    it('mengulang dari satu pada tahun berikutnya', function () {
+        // Penomoran dokumen resmi dimulai ulang tiap tahun; saran yang keliru
+        // berbahaya justru karena petugas mempercayainya.
+        $pejabat = pejabatPengadaan();
+        $gudang = pengelolaGudang();
+        realisasiDiterima($pejabat, $gudang);
+
+        $this->travel(1)->years();
+        $berikutnya = realisasiMenunggu($pejabat, $gudang);
+
+        $this->actingAs($gudang)
+            ->get("/pengadaan/{$berikutnya->procurement_id}/penerimaan/create")
+            ->assertOk()
+            ->assertSee('001/BAST/'.now()->year);
+    });
 });

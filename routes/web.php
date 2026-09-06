@@ -183,6 +183,13 @@ Route::middleware('auth')->group(function () {
             ->name('procurements.create');
         Route::post('pengadaan', [ProcurementController::class, 'store'])
             ->name('procurements.store');
+
+        // Membatalkan realisasi yang tidak akan pernah sampai ke penerimaan —
+        // dokumen milik Pejabat Pengadaan, jadi dialah yang membatalkannya
+        // (ADR 0024). Tidak ada rute ubah maupun hapus: realisasi yang batal
+        // tetap tersimpan sebagai bukti bahwa pengadaan itu pernah berjalan.
+        Route::patch('pengadaan/{procurement}/batal', [ProcurementController::class, 'cancel'])
+            ->name('procurements.cancel');
     });
 
     Route::middleware('can:akses-pengadaan')->group(function () {

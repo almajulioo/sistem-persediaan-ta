@@ -52,6 +52,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md) | Realisasi dan penerimaan pengadaan: batas cakupan Tahap 3 | Diterima |
 | [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Diterima |
 | [0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md) | Laporan pengadaan berbutir barang, dan BAST mencetak jumlah diterima | Diterima |
+| [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

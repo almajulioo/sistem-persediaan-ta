@@ -50,6 +50,14 @@ class NotificationScanner
     private const HARI_USULAN_MENGGANTUNG = 7;
 
     /**
+     * Usulan yang sudah disetujui dianggap menganggur setelah sekian hari
+     * belum ditindaklanjuti menjadi realisasi. Disamakan dengan ambang usulan
+     * menggantung: keduanya menagih hal yang sama — dokumen yang berhenti di
+     * meja seseorang.
+     */
+    private const HARI_USULAN_BELUM_DIREALISASI = 7;
+
+    /**
      * Jeda wajar antara barang diterima dan BAST bertanda tangan diunggah.
      *
      * Sengaja tidak nol: urutan fisiknya cetak → tanda tangan → pindai →
@@ -308,14 +316,17 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan satu usulan pengadaan: menunggu persetujuan, atau sudah
-     * menggantung terlalu lama tanpa diputuskan. Dipanggil setelah usulan
-     * diajukan atau diputuskan supaya notifikasinya muncul dan menghilang
-     * seketika.
+     * Keadaan satu usulan pengadaan sepanjang hidupnya: menunggu persetujuan,
+     * menggantung terlalu lama tanpa diputuskan, atau sudah disetujui tetapi
+     * belum ditindaklanjuti menjadi realisasi. Dipanggil setelah usulan
+     * diajukan, diputuskan, atau direalisasi supaya notifikasinya muncul dan
+     * menghilang seketika.
      *
-     * Kedua keadaan dibuat saling eksklusif seperti pasangan
+     * Dua keadaan pertama dibuat saling eksklusif seperti pasangan
      * OpnameSiapDiposting/OpnameDrafMenggantung: usulan yang sama tidak perlu
-     * dua notifikasi berbeda tentang dokumen yang belum diputuskan.
+     * dua notifikasi berbeda tentang dokumen yang belum diputuskan. Keadaan
+     * ketiga tidak mungkin bertabrakan dengan keduanya karena menuntut usulan
+     * sudah `Disetujui`.
      *
      * @param  EloquentCollection<int, User>|null  $penerima
      */
@@ -365,6 +376,56 @@ class NotificationScanner
             actionUrl: $tautan,
             subject: $procurementRequest,
         );
+
+        self::periksaUsulanBelumDirealisasi($procurementRequest, $penerima, $judul, $tautan);
+    }
+
+    /**
+     * Keadaan: usulan sudah disetujui tetapi belum ditindaklanjuti menjadi
+     * realisasi.
+     *
+     * Menutup satu-satunya serah terima di seluruh alur pengadaan yang dulu
+     * tidak punya penagih. Perpindahan 1&rarr;2 dijaga UsulanMenungguPersetujuan
+     * dan UsulanMenggantung, 2&rarr;3 dijaga RealisasiMenungguPenerimaan, dan
+     * 3&rarr;berkas dijaga BastBelumDiunggah — sementara jarak antara
+     * "disetujui" dan "direalisasi" sunyi, padahal justru di situ barang yang
+     * sudah disetujui dapat terlupakan tanpa jejak.
+     *
+     * Usulan yang realisasinya **dibatalkan** tidak ikut ditagih: menurut
+     * ADR 0024 riwayat usulan itu memang sudah selesai, dan barang yang masih
+     * dibutuhkan diajukan lewat usulan baru.
+     *
+     * @param  EloquentCollection<int, User>  $penerima
+     */
+    private static function periksaUsulanBelumDirealisasi(
+        ProcurementRequest $procurementRequest,
+        EloquentCollection $penerima,
+        string $judul,
+        string $tautan,
+    ): void {
+        $procurementRequest->loadMissing('procurement');
+
+        // Ambangnya dihitung dari kapan usulan diputuskan. `updated_at` cukup
+        // mewakilinya: satu-satunya hal yang mengubah baris usulan setelah
+        // dibuat adalah keputusan setujui/tolak itu sendiri.
+        $menganggur = $procurementRequest->isDisetujui()
+            && $procurementRequest->procurement === null
+            && $procurementRequest->updated_at->lt(now()->subDays(self::HARI_USULAN_BELUM_DIREALISASI));
+
+        Notifier::terapkanKeadaan(
+            berlaku: $menganggur,
+            penerima: $penerima,
+            type: NotificationType::UsulanBelumDirealisasi,
+            dedupKey: NotificationType::UsulanBelumDirealisasi->dedupKey($procurementRequest->procurement_request_id),
+            title: "Belum direalisasi: {$judul}",
+            body: sprintf(
+                '%s sudah disetujui %s tetapi belum ditindaklanjuti menjadi realisasi pengadaan. Buka usulannya lalu tekan Realisasikan, atau tinjau kembali bila barangnya sudah tidak diperlukan.',
+                $judul,
+                $procurementRequest->updated_at->diffForHumans(),
+            ),
+            actionUrl: $tautan,
+            subject: $procurementRequest,
+        );
     }
 
     /**
@@ -376,7 +437,7 @@ class NotificationScanner
     {
         $penerima = self::pejabatPengadaan();
 
-        ProcurementRequest::query()->with('user')->chunk(100, function ($usulan) use ($penerima) {
+        ProcurementRequest::query()->with('user', 'procurement')->chunk(100, function ($usulan) use ($penerima) {
             foreach ($usulan as $procurementRequest) {
                 self::periksaUsulan($procurementRequest, $penerima);
             }
@@ -506,6 +567,46 @@ class NotificationScanner
                 $pelaku->fullname,
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia',
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
+    }
+
+    /**
+     * Peristiwa: realisasi pengadaan dibatalkan, sehingga barangnya tidak akan
+     * datang.
+     *
+     * Penerimanya Pengelola Gudang beserta Admin — merekalah yang sebelumnya
+     * diberi tahu untuk menunggu barang lewat RealisasiMenungguPenerimaan.
+     * Notifikasi keadaan itu memang menutup dirinya sendiri di sini (statusnya
+     * tidak lagi MenungguPenerimaan), tetapi menghilang diam-diam saja tidak
+     * cukup: yang perlu diketahui gudang bukan "tidak ada lagi yang ditunggu",
+     * melainkan bahwa barangnya tidak jadi datang, dan mengapa.
+     *
+     * Pelakunya sendiri tidak diberi tahu — ia baru saja melakukannya.
+     */
+    public static function catatRealisasiDibatalkan(Procurement $procurement, User $pelaku): void
+    {
+        self::periksaRealisasi($procurement);
+
+        $procurement->loadMissing('supplier');
+        $judul = $procurement->judul();
+
+        Notifier::catatPeristiwa(
+            penerima: self::pengawasGudang()->reject(
+                fn (User $user) => $user->user_id === $pelaku->user_id,
+            ),
+            type: NotificationType::RealisasiDibatalkan,
+            dedupKey: NotificationType::RealisasiDibatalkan->dedupKey($procurement->procurement_id),
+            title: "Dibatalkan: {$judul}",
+            body: sprintf(
+                '%s membatalkan %s dari %s. Alasan: %s. Keterangan: %s',
+                $pelaku->fullname,
+                $judul,
+                $procurement->supplier?->supplier_name ?? 'penyedia',
+                $procurement->cancel_reason?->label() ?? 'tidak dicatat',
+                $procurement->cancel_note ?: 'tidak diisi',
             ),
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,

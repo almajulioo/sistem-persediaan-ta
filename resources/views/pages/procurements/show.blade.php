@@ -27,7 +27,10 @@
 
     <x-ui.flash />
 
-    <div class="grid grid-cols-12 gap-4 md:gap-6">
+    {{-- Dialog pembatalan dibuka kembali sendiri bila validasinya gagal,
+         supaya pesan galatnya tidak tersembunyi di balik dialog tertutup. --}}
+    <div class="grid grid-cols-12 gap-4 md:gap-6"
+        x-data="{ batalTerbuka: @js($errors->hasAny(['cancel_reason', 'cancel_note'])) }">
         {{-- Identitas realisasi --}}
         <div class="col-span-12 space-y-4 md:space-y-6 xl:col-span-4">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -53,8 +56,48 @@
                             Konfirmasi Penerimaan
                         </a>
                     @endcan
+
+                    {{-- Jalan keluar bagi pengadaan yang tidak akan pernah
+                         sampai ke penerimaan, mis. penyedia gagal kirim.
+                         Tanpa ini realisasinya terkunci selamanya (ADR 0024). --}}
+                    @can('kelola-pengadaan')
+                        <button type="button" @click="batalTerbuka = true"
+                            class="text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
+                            Batalkan Realisasi
+                        </button>
+                    @endcan
                 @endif
             </div>
+
+            @if ($procurement->isDibatalkan())
+                <div class="border-error-200 dark:border-error-500/30 rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6">
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Pembatalan</h3>
+
+                    <dl class="mt-3 space-y-3">
+                        @foreach ([
+                            'Alasan' => $procurement->cancel_reason?->label() ?? '—',
+                            'Dibatalkan Oleh' => $procurement->cancelledBy?->fullname ?? '—',
+                            'Tanggal' => $procurement->cancelled_at?->translatedFormat('d F Y H:i') ?? '—',
+                        ] as $label => $value)
+                            <div class="flex items-start justify-between gap-4">
+                                <dt class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                                <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">{{ $value }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+
+                    @if ($procurement->cancel_note)
+                        <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                            {{ $procurement->cancel_note }}
+                        </p>
+                    @endif
+
+                    <p class="text-theme-xs bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400 mt-4 rounded-lg p-3">
+                        Barang tidak jadi datang dan stok tidak bertambah. Usulan asalnya sudah selesai riwayatnya —
+                        bila barangnya masih dibutuhkan, ajukan usulan pengadaan yang baru.
+                    </p>
+                </div>
+            @endif
 
             @if ($procurement->isDiterima() && $procurement->receipt)
                 <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -266,5 +309,59 @@
                 </form>
             </div>
         </div>
+
+        {{-- Konfirmasi pembatalan. Alasan baku berpasangan keterangan wajib,
+             pola yang sama dengan penyesuaian selisih opname (ADR 0011). --}}
+        @if ($procurement->isMenungguPenerimaan())
+            @can('kelola-pengadaan')
+                <div x-show="batalTerbuka" x-cloak @keydown.escape.window="batalTerbuka = false"
+                    class="fixed inset-0 z-99999 flex items-center justify-center p-5">
+                    <div @click="batalTerbuka = false" class="fixed inset-0 bg-gray-900/50"></div>
+
+                    <div @click.stop class="relative w-full max-w-lg rounded-2xl bg-white p-6 dark:bg-gray-900">
+                        <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
+                            Batalkan {{ $procurement->judul() }}?
+                        </h3>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Realisasi ini tidak akan dilanjutkan ke penerimaan barang dan stok tidak akan bertambah.
+                            Dokumennya tetap tersimpan sebagai bukti bahwa pengadaan ini pernah berjalan, dan
+                            <strong class="font-medium text-gray-700 dark:text-gray-300">usulan asalnya tidak dapat
+                            direalisasikan ulang</strong> &mdash; barang yang masih dibutuhkan diajukan lewat usulan baru.
+                        </p>
+
+                        <form method="POST" action="{{ route('procurements.cancel', $procurement) }}" class="mt-5">
+                            @csrf
+                            @method('PATCH')
+
+                            <x-form.select-field name="cancel_reason" label="Alasan Pembatalan" required
+                                :options="\App\Enums\AlasanPembatalan::options()" placeholder="Pilih alasan" />
+
+                            <div class="mt-4">
+                                <label for="cancel_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                    Keterangan<span class="text-error-500">*</span>
+                                </label>
+                                <textarea id="cancel_note" name="cancel_note" rows="3" required
+                                    placeholder="Mis. penyedia menyatakan stok kosong dan tidak sanggup mengirim sampai akhir bulan"
+                                    class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('cancel_note') }}</textarea>
+                                @error('cancel_note')
+                                    <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="mt-6 flex justify-end gap-3">
+                                <button type="button" @click="batalTerbuka = false"
+                                    class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                    Tutup
+                                </button>
+                                <button type="submit"
+                                    class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                                    Ya, batalkan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endcan
+        @endif
     </div>
 @endsection

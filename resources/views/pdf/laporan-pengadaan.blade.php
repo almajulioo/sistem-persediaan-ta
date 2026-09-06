@@ -136,9 +136,10 @@
 
     @if ($summary['nilai_diterima'] < $summary['nilai'])
         <p style="font-size: 8.5px; color: #475467; margin-top: 8px;">
-            Catatan: nilai diterima lebih kecil daripada nilai dipesan karena sebagian barang datang kurang
-            dari pesanan. Stok bertambah sebanyak yang benar-benar diterima, bukan sebanyak yang dipesan,
-            sehingga selisih di atas adalah kekurangan kiriman penyedia yang belum diserahkan.
+            Catatan: nilai diterima lebih kecil daripada nilai dipesan. Selisihnya berasal dari pengadaan yang
+            barangnya datang kurang dari pesanan, dari pengadaan yang masih menunggu penerimaan, dan dari
+            pengadaan yang dibatalkan sehingga barangnya tidak jadi datang. Stok bertambah sebanyak yang
+            benar-benar diterima, bukan sebanyak yang dipesan.
         </p>
     @endif
 

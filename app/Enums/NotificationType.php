@@ -40,6 +40,7 @@ enum NotificationType: string
     // --- Keadaan usulan pengadaan ---
     case UsulanMenungguPersetujuan = 'usulan_menunggu_persetujuan';
     case UsulanMenggantung = 'usulan_menggantung';
+    case UsulanBelumDirealisasi = 'usulan_belum_direalisasi';
 
     // --- Keadaan realisasi pengadaan ---
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
@@ -52,6 +53,7 @@ enum NotificationType: string
     case UsulanDisetujui = 'usulan_disetujui';
     case UsulanDitolak = 'usulan_ditolak';
     case PenerimaanDikonfirmasi = 'penerimaan_dikonfirmasi';
+    case RealisasiDibatalkan = 'realisasi_dibatalkan';
 
     public function label(): string
     {
@@ -65,6 +67,7 @@ enum NotificationType: string
             self::PeriodeBelumDiopname => 'Periode Belum Diopname',
             self::UsulanMenungguPersetujuan => 'Usulan Menunggu Persetujuan',
             self::UsulanMenggantung => 'Usulan Pengadaan Menggantung',
+            self::UsulanBelumDirealisasi => 'Usulan Disetujui Belum Direalisasi',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
             self::BastBelumDiunggah => 'BAST Belum Diunggah',
             self::OpnameDiposting => 'Opname Diposting',
@@ -73,6 +76,7 @@ enum NotificationType: string
             self::UsulanDisetujui => 'Usulan Pengadaan Disetujui',
             self::UsulanDitolak => 'Usulan Pengadaan Ditolak',
             self::PenerimaanDikonfirmasi => 'Penerimaan Barang Dikonfirmasi',
+            self::RealisasiDibatalkan => 'Realisasi Pengadaan Dibatalkan',
         };
     }
 
@@ -88,6 +92,7 @@ enum NotificationType: string
             self::PeriodeBelumDiopname => 'Periode berjalan hampir berakhir tetapi opname belum dibuat.',
             self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
             self::UsulanMenggantung => 'Usulan pengadaan sudah lama diajukan tanpa disetujui maupun ditolak.',
+            self::UsulanBelumDirealisasi => 'Usulan sudah disetujui tetapi belum ditindaklanjuti menjadi realisasi pengadaan.',
             self::RealisasiMenungguPenerimaan => 'Realisasi pengadaan menunggu konfirmasi barang diterima Pengelola Gudang.',
             self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
@@ -96,6 +101,7 @@ enum NotificationType: string
             self::UsulanDisetujui => 'Usulan pengadaan yang diajukan telah disetujui, sebagian atau seluruhnya.',
             self::UsulanDitolak => 'Usulan pengadaan yang diajukan tidak dilanjutkan ke realisasi.',
             self::PenerimaanDikonfirmasi => 'Barang pengadaan telah dikonfirmasi diterima gudang; stok sudah bertambah.',
+            self::RealisasiDibatalkan => 'Realisasi pengadaan tidak dilanjutkan, sehingga barangnya tidak akan datang.',
         };
     }
 
@@ -110,7 +116,8 @@ enum NotificationType: string
             self::MutasiManualSensitif,
             self::UsulanDisetujui,
             self::UsulanDitolak,
-            self::PenerimaanDikonfirmasi => false,
+            self::PenerimaanDikonfirmasi,
+            self::RealisasiDibatalkan => false,
             default => true,
         };
     }
@@ -127,9 +134,11 @@ enum NotificationType: string
             self::MutasiManualSensitif,
             self::UsulanMenungguPersetujuan,
             self::UsulanMenggantung,
+            self::UsulanBelumDirealisasi,
             self::RealisasiMenungguPenerimaan,
             self::BastBelumDiunggah,
-            self::UsulanDitolak => NotificationLevel::Perhatian,
+            self::UsulanDitolak,
+            self::RealisasiDibatalkan => NotificationLevel::Perhatian,
             self::StokBerlebih,
             self::BarangTidakBergerak,
             self::OpnameDiposting,

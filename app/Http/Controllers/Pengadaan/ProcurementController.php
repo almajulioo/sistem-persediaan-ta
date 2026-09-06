@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Pengadaan;
 
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Pengadaan\CancelProcurementRequest;
 use App\Http\Requests\Pengadaan\StoreProcurementRequest;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
@@ -120,6 +121,12 @@ class ProcurementController extends Controller
         AuditLogger::record($request->user(), "Membuat realisasi pengadaan: {$procurement->judul()}");
         NotificationScanner::periksaRealisasi($procurement->fresh('supplier'));
 
+        // Usulannya baru saja berhenti menganggur, jadi tagihan
+        // UsulanBelumDirealisasi ikut ditutup seketika alih-alih menunggu
+        // sapuan terjadwal — sejalan dengan catatUsulanDiputuskan() yang juga
+        // menyegarkan keadaan usulannya sendiri.
+        NotificationScanner::periksaUsulan($procurement->procurementRequest);
+
         return redirect()
             ->route('procurements.show', $procurement)
             ->with('status', "{$procurement->judul()} berhasil dibuat dan menunggu penerimaan barang.");
@@ -131,9 +138,56 @@ class ProcurementController extends Controller
             'title' => $procurement->judul(),
             'procurement' => $procurement->load([
                 'user', 'supplier', 'procurementRequest', 'details.item',
-                'receipt.receivedBy', 'documents.uploadedBy',
+                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy',
             ]),
         ]);
+    }
+
+    /**
+     * Membatalkan realisasi yang tidak akan pernah sampai ke penerimaan.
+     *
+     * Hanya mungkin selama masih `MenungguPenerimaan`. Begitu barang diterima,
+     * stoknya sudah bertambah lewat mutasi yang immutable (ADR 0005) dan tidak
+     * ada lagi yang boleh dibatalkan — karena itu tidak ada satu pun mutasi
+     * yang perlu dibalik di sini, dan `StockLedger` tidak tersentuh sama
+     * sekali. Lihat ADR 0024.
+     */
+    public function cancel(CancelProcurementRequest $request, Procurement $procurement): RedirectResponse
+    {
+        // Ditolak dengan pesan, bukan 500 — pola yang sama dengan penjaga
+        // keputusan ganda pada ProcurementRequestController::approve().
+        if (! $procurement->isMenungguPenerimaan()) {
+            return back()->with(
+                'error',
+                "{$procurement->judul()} tidak dapat dibatalkan karena sudah dikonfirmasi diterima atau sudah dibatalkan sebelumnya.",
+            );
+        }
+
+        $alasan = $request->alasan();
+
+        $procurement->forceFill([
+            'status' => ProcurementStatus::Dibatalkan,
+            'cancelled_at' => now(),
+            'cancelled_by' => $request->user()->user_id,
+            'cancel_reason' => $alasan,
+            'cancel_note' => $request->input('cancel_note'),
+        ])->save();
+
+        AuditLogger::record(
+            $request->user(),
+            "Membatalkan {$procurement->judul()} dengan alasan {$alasan->label()}",
+        );
+
+        // Menutup RealisasiMenungguPenerimaan (syaratnya tidak lagi terpenuhi)
+        // sekaligus memberi tahu gudang bahwa barangnya tidak jadi datang.
+        NotificationScanner::catatRealisasiDibatalkan(
+            $procurement->fresh(['supplier', 'receipt']),
+            $request->user(),
+        );
+
+        return redirect()
+            ->route('procurements.show', $procurement)
+            ->with('status', "{$procurement->judul()} berhasil dibatalkan.");
     }
 
     /**

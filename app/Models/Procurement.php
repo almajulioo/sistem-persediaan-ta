@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AlasanPembatalan;
 use App\Enums\ProcurementDocumentType;
 use App\Enums\ProcurementStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,6 +38,8 @@ class Procurement extends Model
         return [
             'procurement_date' => 'date',
             'status' => ProcurementStatus::class,
+            'cancelled_at' => 'datetime',
+            'cancel_reason' => AlasanPembatalan::class,
         ];
     }
 
@@ -56,6 +59,11 @@ class Procurement extends Model
     public function isDiterima(): bool
     {
         return $this->status === ProcurementStatus::Diterima;
+    }
+
+    public function isDibatalkan(): bool
+    {
+        return $this->status === ProcurementStatus::Dibatalkan;
     }
 
     /**
@@ -148,6 +156,11 @@ class Procurement extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by', 'user_id');
     }
 
     public function details(): HasMany

@@ -42,6 +42,7 @@ penerimanya sudah ditendang keluar sesi.
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
+| Usulan Disetujui Belum Direalisasi | Perhatian | Pejabat Pengadaan + Admin | Tekan Realisasikan, atau tinjau ulang kebutuhannya |
 | Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
 | BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 
@@ -55,6 +56,7 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
 | Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
 | Penerimaan Barang Dikonfirmasi | Info | Pejabat Pengadaan yang merealisasi | Tahu barang yang direalisasikannya sudah sampai |
+| Realisasi Pengadaan Dibatalkan | Perhatian | Gudang + Admin, **kecuali pelaku** | Sudah disuruh menunggu barang; harus tahu barangnya tidak jadi datang |
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -72,6 +74,7 @@ siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian
 | Barang tidak bergerak | 180 hari | `NotificationScanner::HARI_TIDAK_BERGERAK` |
 | Jelang akhir periode | 30 hari | `NotificationScanner::HARI_JELANG_AKHIR_PERIODE` |
 | Usulan pengadaan menggantung | 7 hari | `NotificationScanner::HARI_USULAN_MENGGANTUNG` |
+| Usulan disetujui belum direalisasi | 7 hari | `NotificationScanner::HARI_USULAN_BELUM_DIREALISASI` |
 | BAST belum diunggah | 3 hari | `NotificationScanner::HARI_BAST_BELUM_DIUNGGAH` |
 | Simpan notifikasi selesai | 30 hari | `Notifier::HARI_SIMPAN` |
 
@@ -125,7 +128,8 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `ItemController::toggleStatus()` | `periksaBarang()` — barang diarsipkan menutup peringatannya |
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
 | `OpnamePoster::post()` | `catatOpnameDiposting()`, di luar transaksi |
-| `ProcurementController::store()` | `periksaRealisasi()` |
+| `ProcurementController::store()` | `periksaRealisasi()` + `periksaUsulan()` — usulannya berhenti menganggur |
+| `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan |
 | `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
 | `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
 | `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
@@ -204,6 +208,15 @@ bertanda tangannya belum diunggah. Keadaannya menutup diri sendiri begitu
 berkasnya masuk, dan berlaku lagi bila berkas itu dihapus. Ambangnya sengaja
 tidak nol: urutan fisiknya cetak &rarr; tanda tangan &rarr; pindai &rarr;
 unggah, dan yang ditagih adalah kelalaian, bukan jeda yang normal.
+
+**Seluruh perpindahan tangan kini punya penagihnya.** Sejak
+[ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md), rantai
+pengadaan tertutup penuh: usulan&rarr;keputusan dijaga `UsulanMenungguPersetujuan`
+dan `UsulanMenggantung`, keputusan&rarr;realisasi oleh `UsulanBelumDirealisasi`,
+realisasi&rarr;penerimaan oleh `RealisasiMenungguPenerimaan`, dan
+penerimaan&rarr;berkas oleh `BastBelumDiunggah`. Jarak antara "disetujui" dan
+"direalisasi" adalah yang terakhir ditutup — dulu satu-satunya yang sunyi,
+padahal justru di situ barang yang sudah disetujui dapat terlupakan tanpa jejak.
 
 **Kanal lain** (surel, WhatsApp) belum dibangun. Titik ekstensinya satu:
 `Notifier::tulisSatu()`. Kanal tambahan dikirim dari sana berdasarkan

@@ -104,7 +104,7 @@ class ProcurementRequestController extends Controller
     {
         return view('pages.procurement-requests.show', [
             'title' => $procurementRequest->judul(),
-            'procurementRequest' => $procurementRequest->load(['user', 'details.item']),
+            'procurementRequest' => $procurementRequest->load(['user', 'details.item', 'procurement']),
         ]);
     }
 

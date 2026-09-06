@@ -5,6 +5,96 @@ perubahan.
 
 ---
 
+## 7 September 2026 — Menutup celah alur pengadaan
+
+Bukan tahap baru, melainkan tindak lanjut pemeriksaan menyeluruh sehari setelah
+modul Pengadaan dinyatakan selesai. Yang ditemukan bukan bug di kode yang baru
+ditulis, melainkan dua lubang di **alurnya sendiri**. Keputusan lengkap di
+[ADR 0024](keputusan/0024-pembatalan-realisasi-pengadaan.md).
+
+**Jalan buntu yang ditemukan.** `ProcurementStatus::Dibatalkan` ada di enum
+sejak Tahap 1 tetapi tidak pernah punya pemicu, dan
+[modul/pengadaan.md](modul/pengadaan.md) mencatatnya sebagai "belum ada
+kebutuhan lapangan yang mengonfirmasinya". Ternyata kebutuhannya sudah tersirat
+di ADR 0016 sendiri: pembelian barang terjadi **di luar sistem**, dan di ruang
+itulah penyedia gagal kirim. Ketika itu terjadi, realisasinya terkunci
+`MenungguPenerimaan` selamanya, notifikasi `RealisasiMenungguPenerimaan` aktif
+selamanya, dan satu-satunya jalan keluar adalah mengonfirmasi penerimaan barang
+yang tidak pernah datang — persis kebohongan yang dicegah ADR 0017.
+
+**Titik buta yang ditemukan.** `periksaUsulan()` hanya bekerja selama usulan
+`isDiajukan()`, sehingga jarak antara "disetujui" dan "direalisasi" adalah
+satu-satunya perpindahan tangan di seluruh alur yang tidak punya penagih.
+
+**Yang dikerjakan.**
+
+- Migrasi `add_cancellation_to_procurements_table` (empat kolom nullable:
+  `cancelled_at`, `cancelled_by`, `cancel_reason`, `cancel_note`) dan enum
+  `AlasanPembatalan` dengan lima case, meniru bentuk `AlasanSelisih`.
+- Rute `PATCH pengadaan/{procurement}/batal` di bawah `kelola-pengadaan`,
+  `ProcurementController::cancel()`, dan `CancelProcurementRequest` dengan
+  keterangan **wajib** apa pun alasan yang dipilih (pola ADR 0011).
+- Pembatalan **hanya dari `MenungguPenerimaan`**, sehingga tidak ada satu pun
+  mutasi stok yang perlu dibalik dan `StockLedger` tidak tersentuh sama sekali
+  — inilah yang membuat fitur ini aman.
+- Dua notifikasi baru: `RealisasiDibatalkan` (peristiwa, ke gudang beserta
+  alasan dan keterangannya — keadaan lamanya menutup diri sendiri, tetapi
+  menghilang diam-diam tidak cukup bagi orang yang sudah disuruh menunggu
+  barang) dan `UsulanBelumDirealisasi` (keadaan, ambang 7 hari, dilipat ke
+  dalam `periksaUsulan()` yang sudah ada).
+- Saran nomor BAST kini dicacah per tahun berjalan lewat `received_at`;
+  sebelumnya memakai `count()` sepanjang masa, sehingga BAST pertama Januari
+  2027 akan disarankan `015/BAST/2027`.
+- `ConfirmProcurementReceiptRequest` mewajibkan seluruh baris barang terisi.
+  Sebelumnya baris yang hilang dari kiriman terbaca `?? 0` — nol diterima,
+  **permanen**, karena penerimaan peristiwa sekali jadi tanpa rute ubah. Ini
+  alasan yang sama yang membuat ADR 0021 mewajibkan formulir realisasi mencakup
+  seluruh rincian usulan yang disetujui.
+- `ProcurementRequestSeeder` mendapat usulan kelima (`disetujuiMenganggur`,
+  ATK-007, sembilan hari) supaya `UsulanBelumDirealisasi` punya contoh nyata.
+  Umurnya sengaja sembilan hari, bukan lebih tua daripada usulan sepuluh hari
+  yang sudah ada, karena `ProcurementSeeder` memilih usulan tertua yang belum
+  direalisasi dan usulan baru ini tidak boleh merebut gilirannya.
+
+**Keputusan yang paling menentukan.** Pembatalan bersifat **terminal bagi
+usulannya**: indeks unik `procurements.procurement_request_id` dipertahankan,
+sehingga usulan yang realisasinya batal tidak dapat direalisasikan ulang.
+Alternatifnya — melepas indeks unik supaya usulan dapat direalisasi ke penyedia
+lain — ditolak karena memindahkan jaminan ADR 0016 dari basis data ke kode
+(MySQL tidak mendukung indeks unik parsial). Konsekuensinya harus terlihat di
+layar, jadi halaman usulan menjelaskan mengapa tombol "Realisasikan" tidak ada;
+tanpa itu, status `Disetujui` tanpa tombol terbaca seperti bug.
+
+**Temuan saat verifikasi.** Pemeriksaan HTTP sempat terlihat seperti menemukan
+bug — notifikasi `UsulanBelumDirealisasi` tetap 2 setelah usulan direalisasi.
+Ternyata usulan yang direalisasi dan usulan yang ditagih adalah **dua baris
+berbeda** yang delapan karakter pertama UUID-nya identik (`01A077D3`), gotcha
+UUID v7 yang sudah tercatat di `CLAUDE.md` sejak Tahap 3. Pemeriksaan ulang
+dengan UUID penuh membuktikannya benar. Meski begitu satu celah nyata memang
+ada dan ikut ditutup: `ProcurementController::store()` belum memanggil
+`periksaUsulan()`, sehingga tagihan bertahan sampai sapuan terjadwal berikutnya
+— tidak salah menurut ADR 0014, tetapi tidak sejalan dengan
+`catatUsulanDiputuskan()` yang menyegarkan keadaan usulannya seketika.
+
+**Verifikasi.** 283 test lulus (825 asersi), naik dari 258 — 25 uji baru, tanpa
+regresi. Pint bersih pada 27 berkas. `migrate:fresh --seed` berhasil dan
+`notifikasi:periksa` menghasilkan 12 notifikasi aktif, termasuk 2
+`UsulanBelumDirealisasi` dari data contoh baru.
+
+**Uji HTTP nyata.** Realisasi dibuat lalu dibatalkan lewat peramban sungguhan:
+halaman realisasi menampilkan kartu pembatalan lengkap dengan alasan dan
+keterangan, halaman usulan menampilkan penjelasan tanpa tombol "Realisasikan",
+`RealisasiMenungguPenerimaan` tertutup, dan lonceng akun `gudang` menerima
+"Dibatalkan: Realisasi #01A077D5" beserta alasan "Penyedia Gagal Kirim".
+
+**Catatan.** Masih tersisa satu keadaan tanpa jalan keluar yang setara: usulan
+`Disetujui` yang barangnya sudah tidak dibutuhkan hanya akan ditagih terus oleh
+`UsulanBelumDirealisasi`. Dicatat sebagai butir menunggu lapangan — kali ini
+dengan kesadaran bahwa catatan serupa untuk `Dibatalkan` ternyata menyembunyikan
+jalan buntu selama satu tahap penuh.
+
+---
+
 ## 6 September 2026 — Pengadaan Tahap 4: Dokumen, BAST, dan laporan
 
 Tahap penutup modul pengadaan, sekaligus penutup seluruh sub sistem. Tidak ada

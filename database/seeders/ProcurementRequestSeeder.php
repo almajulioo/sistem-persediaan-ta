@@ -28,8 +28,9 @@ class ProcurementRequestSeeder extends Seeder
         $this->disetujuiSebagian($pengaju);
         $this->ditolak($pengaju);
         $this->disetujuiPenuh($pengaju);
+        $this->disetujuiMenganggur($pengaju);
 
-        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (4 usulan).');
+        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (5 usulan).');
     }
 
     /**
@@ -118,6 +119,39 @@ class ProcurementRequestSeeder extends Seeder
                 'item_id' => $item->item_id,
                 'amount_request' => 20,
                 'amount_granted' => 20,
+            ]);
+        }
+    }
+
+    /**
+     * Disetujui sembilan hari lalu dan dibiarkan menganggur — contoh nyata
+     * bagi notifikasi keadaan `UsulanBelumDirealisasi` (ambang 7 hari).
+     *
+     * `updated_at` ikut dimundurkan karena justru kolom itulah yang mewakili
+     * kapan usulan diputuskan.
+     *
+     * Umurnya sengaja sembilan hari, bukan lebih tua daripada usulan
+     * "disetujui sebagian" yang sepuluh hari: ProcurementSeeder memilih usulan
+     * tertua yang belum direalisasi, dan usulan ini tidak boleh merebut
+     * gilirannya.
+     */
+    private function disetujuiMenganggur(User $pengaju): void
+    {
+        $usulan = ProcurementRequest::create([
+            'user_id' => $pengaju->user_id,
+            'source' => ProcurementRequestSource::Manual,
+            'status' => ProcurementRequestStatus::Disetujui,
+        ]);
+        $usulan->forceFill([
+            'created_at' => now()->subDays(9),
+            'updated_at' => now()->subDays(9),
+        ])->save();
+
+        if ($item = Item::where('item_code', 'ATK-007')->first()) {
+            $usulan->details()->create([
+                'item_id' => $item->item_id,
+                'amount_request' => 15,
+                'amount_granted' => 15,
             ]);
         }
     }
