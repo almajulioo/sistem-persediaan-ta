@@ -10,7 +10,9 @@ use Illuminate\Http\Request;
 use App\Models\Item;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
+use App\Support\RequestDocumentGenerator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class RequestController extends Controller
 {
@@ -104,34 +106,53 @@ class RequestController extends Controller
         ]);
     }
 
-    public function store(StorePermintaanBarangRequest $request)
+    public function notaDinas(ModelsRequest $request)
+    {
+        $notaDinas = $request->requestDocuments()
+            ->where('document_type', 'nota_dinas')
+            ->latest('created_at')
+            ->first();
+
+        abort_unless($notaDinas && Storage::disk('local')->exists($notaDinas->file_path), 404);
+
+        return response()->file(Storage::disk('local')->path($notaDinas->file_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$notaDinas->document_number.'.pdf"',
+        ]);
+    }
+
+    public function store(StorePermintaanBarangRequest $request, RequestDocumentGenerator $documentGenerator)
     {
         $validatedData = $request->validated();
         
-        DB::transaction(function () use ($request, $validatedData) {
-        $itemRequest = ModelsRequest::create([
-            'user_id' => $request->user()->user_id,
-            'date' => now(),
-            'type' => 'normal',
-            'status' => 'submitted',
-            'request_number' => 'REQ-' . time(),
-        ]);
+        $itemRequest = DB::transaction(function () use ($request, $validatedData) {
+            $itemRequest = ModelsRequest::create([
+                'user_id' => $request->user()->user_id,
+                'date' => now(),
+                'type' => 'normal',
+                'status' => 'submitted',
+                'request_number' => 'REQ-' . time(),
+            ]);
 
-        $details = [];
+            $details = [];
 
-        foreach ($validatedData['items'] as $item) {
-            $details[] = [
-                'request_id' => $itemRequest->request_id,
-                'item_id' => $item['item_id'],
-                'quantity_requested' => $item['qty'],
-                'quantity_approved' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
+            foreach ($validatedData['items'] as $item) {
+                $details[] = [
+                    'request_id' => $itemRequest->request_id,
+                    'item_id' => $item['item_id'],
+                    'quantity_requested' => $item['qty'],
+                    'quantity_approved' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
 
-        RequestDetail::insert($details);
-    });
+            RequestDetail::insert($details);
+
+            return $itemRequest;
+        });
+
+        $documentGenerator->generateNotaDinas($itemRequest);
 
         return redirect()->route('request.create')->with('success', 'Permintaan barang berhasil dibuat.');
     }

@@ -75,15 +75,11 @@ class Request extends Model
     // belum punya tabel rincian barangnya sendiri; itu keputusan yang perlu
     // diambil saat sub sistem Permintaan dirancang.
 
-    public function notaDinas(): HasMany
+    public function requestDocuments(): HasMany
     {
-        return $this->hasMany(NotaDinas::class, 'request_id', 'request_id');
+        return $this->hasMany(RequestDocument::class, 'request_id', 'request_id');
     }
 
-    public function basts(): HasMany
-    {
-        return $this->hasMany(Bast::class, 'request_id', 'request_id');
-    }
 
     public function item(): HasMany
     {

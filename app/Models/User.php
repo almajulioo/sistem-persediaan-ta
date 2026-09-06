@@ -120,6 +120,7 @@ class User extends Authenticatable
         'procurements' => 'pengadaan',
         'procurementRequests' => 'usulan pengadaan',
         'procurementReceipts' => 'penerimaan barang pengadaan',
+        'requestDocuments' => 'dokumen permintaan',
     ];
 
     /**
@@ -143,6 +144,11 @@ class User extends Authenticatable
     public function requests(): HasMany
     {
         return $this->hasMany(Request::class, 'user_id', 'user_id');
+    }
+
+    public function requestDocuments(): HasMany
+    {
+        return $this->hasMany(RequestDocument::class, 'user_id', 'user_id');
     }
 
     public function stockMutations(): HasMany

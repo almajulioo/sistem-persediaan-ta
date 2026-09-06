@@ -45,9 +45,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
+    Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
-    
-    
+
     Route::middleware('role:kepala_unit,staff_umum,admin')->group(function () {
         Route::get('/permintaan/{request}/edit', [RequestController::class, 'edit'])->name('request.edit');
         Route::put('/permintaan/{request}', [RequestController::class, 'update'])->name('request.update');
