@@ -48,6 +48,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md) | Jumlah diterima dicatat terpisah dari jumlah dipesan | Diterima |
 | [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Diterima |
 | [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) | Harga dicatat di realisasi pengadaan; penilaian persediaan di luar cakupan | Diterima |
+| [0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md) | Notifikasi usulan pengadaan dan persetujuan sebagian per barang | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

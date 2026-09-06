@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             SupplierSeeder::class,
             StockMutationSeeder::class,
             StockOpnameSeeder::class,
+            ProcurementRequestSeeder::class,
         ]);
     }
 }

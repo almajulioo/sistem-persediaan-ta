@@ -9,6 +9,7 @@ use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\OpnameDetail;
+use App\Models\ProcurementRequest;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\User;
@@ -44,6 +45,9 @@ class NotificationScanner
     /** Seberapa awal periode yang akan berakhir mulai diingatkan. */
     private const HARI_JELANG_AKHIR_PERIODE = 30;
 
+    /** Usulan pengadaan dianggap menggantung setelah sekian hari belum diputuskan. */
+    private const HARI_USULAN_MENGGANTUNG = 7;
+
     /**
      * Jenis mutasi manual yang mengurangi stok tanpa dokumen sumber. Pada
      * instansi pemeriksa, justru inilah yang paling layak diketahui Admin.
@@ -64,6 +68,7 @@ class NotificationScanner
         self::periksaBarangTidakBergerak();
         self::periksaOpname();
         self::periksaPeriodeOpname();
+        self::periksaSeluruhUsulan();
     }
 
     /**
@@ -291,6 +296,137 @@ class NotificationScanner
     }
 
     /**
+     * Keadaan satu usulan pengadaan: menunggu persetujuan, atau sudah
+     * menggantung terlalu lama tanpa diputuskan. Dipanggil setelah usulan
+     * diajukan atau diputuskan supaya notifikasinya muncul dan menghilang
+     * seketika.
+     *
+     * Kedua keadaan dibuat saling eksklusif seperti pasangan
+     * OpnameSiapDiposting/OpnameDrafMenggantung: usulan yang sama tidak perlu
+     * dua notifikasi berbeda tentang dokumen yang belum diputuskan.
+     *
+     * @param  EloquentCollection<int, User>|null  $penerima
+     */
+    public static function periksaUsulan(ProcurementRequest $procurementRequest, ?EloquentCollection $penerima = null): void
+    {
+        $penerima ??= self::pejabatPengadaan();
+
+        $menunggu = $procurementRequest->isDiajukan();
+        $kadaluarsa = $procurementRequest->created_at->lt(now()->subDays(self::HARI_USULAN_MENGGANTUNG));
+
+        $judul = $procurementRequest->judul();
+        $tautan = route('procurement-requests.show', $procurementRequest, false);
+        $pengaju = $procurementRequest->user;
+
+        Notifier::terapkanKeadaan(
+            berlaku: $menunggu && ! $kadaluarsa,
+            penerima: $penerima,
+            type: NotificationType::UsulanMenungguPersetujuan,
+            dedupKey: NotificationType::UsulanMenungguPersetujuan->dedupKey($procurementRequest->procurement_request_id),
+            title: "Usulan baru menunggu persetujuan: {$judul}",
+            body: sprintf(
+                '%s diajukan oleh %s dan menunggu keputusan Anda.',
+                $judul,
+                $pengaju?->fullname ?? 'pengguna yang sudah tidak aktif',
+            ),
+            actionUrl: $tautan,
+            subject: $procurementRequest,
+        );
+
+        // Pengaju ikut diberi tahu begitu usulannya sendiri menggantung —
+        // ia paling berkepentingan usulannya segera diputuskan.
+        $penerimaMenggantung = $pengaju !== null
+            ? $penerima->concat([$pengaju])->unique('user_id')
+            : $penerima;
+
+        Notifier::terapkanKeadaan(
+            berlaku: $menunggu && $kadaluarsa,
+            penerima: $penerimaMenggantung,
+            type: NotificationType::UsulanMenggantung,
+            dedupKey: NotificationType::UsulanMenggantung->dedupKey($procurementRequest->procurement_request_id),
+            title: "Usulan menggantung: {$judul}",
+            body: sprintf(
+                '%s diajukan %s dan masih belum disetujui maupun ditolak. Segera putuskan.',
+                $judul,
+                $procurementRequest->created_at->diffForHumans(),
+            ),
+            actionUrl: $tautan,
+            subject: $procurementRequest,
+        );
+    }
+
+    /**
+     * Keadaan seluruh usulan pengadaan. Menyapu seluruh baris, bukan hanya
+     * yang berstatus Diajukan, supaya usulan yang baru diputuskan tetapi
+     * pemeriksaan reaktifnya sempat gagal tetap ikut ditutup di sini.
+     */
+    public static function periksaSeluruhUsulan(): void
+    {
+        $penerima = self::pejabatPengadaan();
+
+        ProcurementRequest::query()->with('user')->chunk(100, function ($usulan) use ($penerima) {
+            foreach ($usulan as $procurementRequest) {
+                self::periksaUsulan($procurementRequest, $penerima);
+            }
+        });
+    }
+
+    /**
+     * Peristiwa: usulan pengadaan disetujui atau ditolak.
+     *
+     * Pelakunya sendiri tidak diberi tahu. Bila pengaju sudah diarsipkan
+     * (akun tidak aktif), tidak ada yang perlu diberi tahu.
+     */
+    public static function catatUsulanDiputuskan(ProcurementRequest $procurementRequest, User $pelaku): void
+    {
+        $pengaju = $procurementRequest->user;
+
+        if ($pengaju === null || $pengaju->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        $judul = $procurementRequest->judul();
+        $tautan = route('procurement-requests.show', $procurementRequest, false);
+        $ringkasan = $procurementRequest->ringkasan();
+
+        if ($procurementRequest->isDisetujui()) {
+            Notifier::catatPeristiwa(
+                penerima: new EloquentCollection([$pengaju]),
+                type: NotificationType::UsulanDisetujui,
+                dedupKey: NotificationType::UsulanDisetujui->dedupKey($procurementRequest->procurement_request_id),
+                title: "{$judul} disetujui",
+                body: sprintf(
+                    '%s menyetujui %s: %d dari %d barang disetujui, total %s dari %s unit yang diminta.',
+                    $pelaku->fullname,
+                    $judul,
+                    $ringkasan['barang_disetujui'],
+                    $ringkasan['barang'],
+                    number_format($ringkasan['disetujui'], 0, ',', '.'),
+                    number_format($ringkasan['diminta'], 0, ',', '.'),
+                ),
+                actionUrl: $tautan,
+                subject: $procurementRequest,
+            );
+        } elseif ($procurementRequest->isDitolak()) {
+            Notifier::catatPeristiwa(
+                penerima: new EloquentCollection([$pengaju]),
+                type: NotificationType::UsulanDitolak,
+                dedupKey: NotificationType::UsulanDitolak->dedupKey($procurementRequest->procurement_request_id),
+                title: "{$judul} ditolak",
+                body: sprintf(
+                    '%s menolak %s. Periksa kembali kebutuhan atau ajukan usulan baru bila masih diperlukan.',
+                    $pelaku->fullname,
+                    $judul,
+                ),
+                actionUrl: $tautan,
+                subject: $procurementRequest,
+            );
+        }
+
+        self::periksaUsulan($procurementRequest);
+    }
+
+    /**
      * Peristiwa: opname selesai diposting.
      *
      * Dipanggil sekali per posting, bukan sekali per barang, sehingga posting
@@ -431,6 +567,16 @@ class NotificationScanner
     private static function pengawasGudang(): EloquentCollection
     {
         return Notifier::penerimaBerperan(UserRole::PengelolaGudang, UserRole::Admin);
+    }
+
+    /**
+     * Pejabat Pengadaan beserta Admin — penerima baku keputusan usulan.
+     *
+     * @return EloquentCollection<int, User>
+     */
+    private static function pejabatPengadaan(): EloquentCollection
+    {
+        return Notifier::penerimaBerperan(UserRole::PejabatPengadaan, UserRole::Admin);
     }
 
     /**

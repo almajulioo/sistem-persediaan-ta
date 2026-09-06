@@ -40,6 +40,8 @@ penerimanya sudah ditendang keluar sesi.
 | Opname Siap Diposting | Perhatian | Pembuat draf | Periksa lalu posting |
 | Draf Opname Menggantung | Perhatian | Pembuat + Admin | Lanjutkan atau hapus draf |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
+| Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
+| Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
 
 ### Peristiwa
 
@@ -48,6 +50,8 @@ penerimanya sudah ditendang keluar sesi.
 | Opname Diposting | Info | Gudang + Admin, **kecuali pelaku** | Penyesuaian sudah masuk buku mutasi |
 | Stok Bergerak Setelah Dicacah | Perhatian | Pembuat opname | Satu-satunya cara mengetahuinya |
 | Mutasi Manual Sensitif | Perhatian | Admin, **kecuali pelaku** | Kontrol internal |
+| Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
+| Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -174,12 +178,17 @@ bebas seandainya notifikasi surel kelak dibangun di atas mekanisme Laravel.
 
 ## Rencana lanjutan
 
-**Modul Pengadaan** cukup menambah case enum beserta pemeriksaannya. Kandidat
-yang sudah terlihat: usulan pengadaan menunggu persetujuan (keadaan), realisasi
-berstatus *Menunggu Penerimaan* yang menunggu konfirmasi Pengelola Gudang
-(keadaan, sesuai [ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md)),
-dan penerimaan barang dikonfirmasi (peristiwa). Notifikasi Stok Habis dapat
-menautkan langsung ke formulir usulan pengadaan begitu rutenya ada.
+**Tahap 2 Pengadaan (usulan) sudah dibangun** — lihat katalog di atas dan
+[ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md).
+Tombol "Ajukan Usulan Pengadaan" ada di halaman barang yang stoknya
+Habis/Menipis, bukan langsung pada notifikasinya sendiri — notifikasi Stok
+Habis/Menipis tetap menautkan ke halaman barang seperti sebelumnya.
+
+**Tahap 3-4 Pengadaan** (realisasi dan penerimaan) akan menambah case enum
+lagi: realisasi berstatus *Menunggu Penerimaan* yang menunggu konfirmasi
+Pengelola Gudang (keadaan, sesuai
+[ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md)), dan
+penerimaan barang dikonfirmasi (peristiwa).
 
 **Kanal lain** (surel, WhatsApp) belum dibangun. Titik ekstensinya satu:
 `Notifier::tulisSatu()`. Kanal tambahan dikirim dari sana berdasarkan

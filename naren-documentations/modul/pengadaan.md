@@ -1,6 +1,6 @@
 # Modul Pengadaan
 
-> **Status: dalam pengerjaan.** Dibangun empat tahap. Tahap 1 selesai
+> **Status: dalam pengerjaan.** Dibangun empat tahap. Tahap 1 dan 2 selesai
 > 6 September 2026.
 
 Mengelola pengadaan barang persediaan dari usulan sampai barang masuk gudang.
@@ -107,10 +107,41 @@ Sudah mendarat di Tahap 1 walau fiturnya menyusul:
 
 ---
 
-## Tahap 2 — Usulan Pengadaan ⏳
+## Tahap 2 — Usulan Pengadaan ✅
 
-Belum dikerjakan. Mencakup pengajuan, persetujuan/penolakan, jalur pintas dari
-notifikasi stok, dan empat jenis notifikasi baru.
+Pengajuan, persetujuan/penolakan, jalur pintas dari halaman barang, dan empat
+jenis notifikasi baru. Rincian keputusan:
+[ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md).
+
+**Rute** — mengusulkan dan membaca dipisah gate berbeda:
+
+| Metode | URL | Nama | Gate | Keterangan |
+|---|---|---|---|---|
+| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan sumber |
+| GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan; menerima `?item_id=` dari halaman barang |
+| POST | `/usulan-pengadaan` | `procurement-requests.store` | `kelola-gudang` | |
+| GET | `/usulan-pengadaan/{procurementRequest}` | `procurement-requests.show` | `akses-pengadaan` | Detail + formulir keputusan bila masih Diajukan |
+| PATCH | `/usulan-pengadaan/{procurementRequest}/setujui` | `procurement-requests.approve` | `kelola-pengadaan` | Menerima peta `granted[]` per barang, sekali putus |
+| PATCH | `/usulan-pengadaan/{procurementRequest}/tolak` | `procurement-requests.reject` | `kelola-pengadaan` | Mengisi `amount_granted = 0` pada seluruh barang |
+
+**Aturan.**
+
+- Persetujuan **satu dokumen sekali putus**, bukan satu aksi per barang:
+  `granted[procurement_request_detail_id] => jumlah` diterapkan ke seluruh
+  rincian dalam satu transaksi. Barang dengan `granted = 0` berarti tidak
+  disetujui tanpa menolak seluruh usulan — inilah wujud "disetujui sebagian".
+- Usulan yang sudah diputuskan (`Disetujui`/`Ditolak`) tidak dapat diputuskan
+  ulang; rute `approve`/`reject` menolaknya dengan pesan, bukan 500.
+- `source` bukan field pilihan pengguna: formulir yang dibuka lewat tombol
+  "Ajukan Usulan Pengadaan" pada halaman barang (stok Habis/Menipis) otomatis
+  bersumber `PemantauanStok` dengan barang sudah terpilih; selain itu `Manual`.
+  Sumber `DariPermintaan` sengaja belum bisa dipilih lewat formulir ini —
+  integrasi ke sub sistem Permintaan belum ada titik masuknya.
+
+**Notifikasi baru** (lihat [modul/notifikasi.md](notifikasi.md)):
+`UsulanMenungguPersetujuan` dan `UsulanMenggantung` (keadaan, saling
+eksklusif dengan ambang 7 hari), `UsulanDisetujui` dan `UsulanDitolak`
+(peristiwa ke pengaju).
 
 ## Tahap 3 — Realisasi dan Penerimaan ⏳
 

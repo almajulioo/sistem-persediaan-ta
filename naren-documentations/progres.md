@@ -5,6 +5,79 @@ perubahan.
 
 ---
 
+## 6 September 2026 — Pengadaan Tahap 2: Usulan Pengadaan
+
+Modul Pengadaan sesungguhnya, menyusul rancangan skema Tahap 1. Tidak ada
+migrasi baru — seluruh kolom yang dibutuhkan (`source`, `status`,
+`amount_granted`) sudah mendarat di Tahap 1.
+
+**Keputusan yang baru diambil saat pengodean** (belum ditetapkan ADR 0016):
+bagaimana persetujuan sebagian ditangkap, dan katalog notifikasi usulan.
+Keduanya didokumentasikan di
+[ADR 0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md):
+
+- Persetujuan **satu dokumen sekali putus** lewat peta `granted[]` per barang,
+  bukan satu aksi per barang — usulan dengan banyak barang tetap satu
+  permintaan HTTP untuk satu keputusan.
+- Menolak mengisi `amount_granted = 0` eksplisit pada seluruh barang, karena
+  `null` sudah bermakna "belum diputuskan" pada model.
+- Empat notifikasi baru: `UsulanMenungguPersetujuan`/`UsulanMenggantung`
+  (keadaan, saling eksklusif dengan ambang 7 hari, meniru pola
+  `OpnameSiapDiposting`/`OpnameDrafMenggantung`), `UsulanDisetujui`/`UsulanDitolak`
+  (peristiwa ke pengaju).
+- `source` bukan field pilihan pengguna — diturunkan dari titik masuk
+  formulir (tombol pada halaman barang vs navigasi langsung). Sumber
+  `DariPermintaan` sengaja diblokir di validasi: integrasi ke sub sistem
+  Permintaan belum punya titik masuk aplikasi.
+
+**Yang dikerjakan.**
+
+- `ProcurementRequestController`: `index`/`show` di bawah gate `akses-pengadaan`
+  (kedua peran baca), `create`/`store` di bawah `kelola-gudang` (Pengelola
+  Gudang mengusulkan), `approve`/`reject` di bawah `kelola-pengadaan` (Pejabat
+  Pengadaan memutuskan) — tiga gate berbeda pada satu controller, pola baru di
+  proyek ini.
+- `StoreProcurementRequestRequest` dan `ApproveProcurementRequestRequest`;
+  yang kedua memvalidasi `granted.*` terhadap `amount_request` sesungguhnya
+  lewat `withValidator()` yang membaca model rute, pola yang sama dengan
+  `UpdateOpnameCountRequest`.
+- Tombol "Ajukan Usulan Pengadaan" pada halaman barang, muncul hanya saat
+  status stok Habis/Menipis dan pengguna punya gate `kelola-gudang`; membawa
+  `?item_id=` ke formulir usulan yang otomatis memilihkan barangnya.
+- `NotificationScanner::periksaUsulan()`/`periksaSeluruhUsulan()`/
+  `catatUsulanDiputuskan()`, mendampingi method sejenis untuk stok dan opname.
+- Tiga halaman (`index`, `create`, `show`) — pemilih barang pada `create`
+  memakai ulang pola pencarian Alpine.js yang sudah ada pada formulir
+  permintaan barang (Alma), disesuaikan nama field dan tanpa batas stok
+  (usulan pengadaan justru mengusulkan menambah stok).
+- `ProcurementRequestSeeder`: tiga usulan contoh (Diajukan, Disetujui
+  sebagian, Ditolak) supaya modul langsung bisa dicoba.
+- 22 uji baru: matriks akses tiga gate, validasi (barang kosong, duplikat,
+  jumlah nol, sumber diblokir), persetujuan sebagian, penolakan mengisi nol,
+  penjagaan usulan yang sudah diputuskan, dan jalur pintas dari halaman
+  barang.
+
+**Gotcha yang ditemukan.** Rute `usulan-pengadaan/create` (GET) harus
+terdaftar sebelum `usulan-pengadaan/{procurementRequest}` (GET) di
+`routes/web.php`, walau keduanya berada di grup gate yang berbeda — kalau
+tidak, "create" tertangkap sebagai parameter dan gagal *route model binding*.
+Diselesaikan dengan urutan pendaftaran grup, dicatat sebagai gotcha di
+`CLAUDE.md`.
+
+**Verifikasi.** 201 test lulus (608 asersi), naik dari 179 — 22 uji baru,
+tanpa regresi. Pint bersih pada seluruh berkas baru/ubahan (satu isu gaya
+pra-ada pada `MenuHelper.php` milik blok Alma sengaja tidak disentuh, sesuai
+aturan cakupan sempit). `migrate:fresh --seed` **belum diverifikasi** sesi ini
+karena MySQL (XAMPP) tidak berjalan di lingkungan pengembangan saat itu —
+tidak ada migrasi baru yang berisiko, tetapi tetap perlu dijalankan sebelum
+Tahap 3 dimulai.
+
+**Berikutnya.** Tahap 3 — Realisasi dan Penerimaan: `ProcurementReceiptPoster`
+yang menambah stok lewat `StockLedger` sebanyak `amount_received`, bukan
+`amount` (ADR 0017).
+
+---
+
 ## 6 September 2026 — Pengadaan Tahap 1: rancangan alur, skema, dan Penyedia
 
 Sesi perancangan modul Pengadaan, dilanjutkan pengerjaan tahap pertamanya.
