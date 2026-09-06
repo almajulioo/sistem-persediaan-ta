@@ -1,7 +1,7 @@
 # Modul Pengadaan
 
-> **Status: dalam pengerjaan.** Dibangun empat tahap. Tahap 1, 2, dan 3
-> selesai 6 September 2026.
+> **Status: selesai.** Dibangun empat tahap, keempatnya selesai
+> 6 September 2026.
 
 Mengelola pengadaan barang persediaan dari usulan sampai barang masuk gudang.
 
@@ -194,9 +194,96 @@ yang merealisasi).
 **Belum dikerjakan di tahap ini**: status `ProcurementStatus::Dibatalkan`
 masih tanpa pemicu — belum ada kebutuhan lapangan yang mengonfirmasinya.
 
-## Tahap 4 — Dokumen, BAST, dan laporan ⏳
+## Tahap 4 — Dokumen, BAST, dan laporan ✅
 
-Belum dikerjakan. Unggahan di disk privat, BAST PDF, ekspor PDF/CSV.
+Keluaran cetak dan berkas pendukung. Rincian keputusan:
+[ADR 0022](../keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md)
+(wewenang berkas) dan
+[ADR 0023](../keputusan/0023-laporan-pengadaan-per-baris-barang.md)
+(bentuk laporan dan isi BAST).
+
+**Rute** — seluruhnya di bawah gate `akses-pengadaan`, karena mencetak dan
+melampirkan bukti bukan bagian dari pemisahan tugas ADR 0016:
+
+| Metode | URL | Nama | Keterangan |
+|---|---|---|---|
+| GET | `/pengadaan/laporan/pdf` | `procurements.pdf` | Laporan pengadaan, mengikuti penyaring aktif |
+| GET | `/pengadaan/laporan/csv` | `procurements.csv` | Ekspor CSV, kolom identik dengan PDF |
+| GET | `/pengadaan/{procurement}/bast` | `procurements.bast` | BAST siap tanda tangan |
+| POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai atau SPK/kontrak |
+| GET | `/pengadaan/{procurement}/dokumen/{document}/unduh` | `procurement-documents.download` | Unduhan terautentikasi; tidak ada URL berkas |
+| DELETE | `/pengadaan/{procurement}/dokumen/{document}` | `procurement-documents.destroy` | Hanya pengunggah atau Admin |
+
+### Berkas pendukung
+
+`App\Support\DocumentStorage` memegang seluruh konvensi penyimpanan: path
+`pengadaan/{procurement_id}/{uuid}.{ext}` di disk **privat**
+(`storage/app/private`), pengacakan nama berkas, penghapusan, dan pemeriksaan
+keberadaan berkas. Controller tidak pernah menyebut nama disk maupun menyusun
+path sendiri.
+
+**Aturan.**
+
+- Unggahan: `mimes:pdf,jpg,jpeg,png`, maksimal 5 MB, jenis divalidasi dengan
+  `Rule::enum(ProcurementDocumentType::class)`.
+- `uploaded_by` diisi dari sesi, tidak pernah dari klien; tiap unggahan dan
+  tiap penghapusan menulis satu baris `audit_logs`.
+- Nama berkas di disk diacak; nama asli disimpan di `original_name` dan
+  dikembalikan utuh saat diunduh.
+- Berkas yang tidak menempel pada pengadaan di URL dijawab **404**, bukan 403 —
+  403 justru membenarkan bahwa berkas itu ada.
+- Berkas yang barisnya ada tetapi fisiknya hilang di disk (misalnya setelah
+  pemulihan cadangan) menghasilkan pesan ramah, bukan galat 500.
+
+### BAST
+
+Dicetak dari sistem lalu ditandatangani, dipindai, dan diunggah kembali —
+urutan yang ditetapkan [ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md).
+
+**Aturan.**
+
+- Seluruh angka pada BAST adalah `amount_received`, bukan `amount`
+  ([ADR 0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
+- Baru terbit setelah penerimaan dikonfirmasi; sebelum itu rute menolak dengan
+  redirect berpesan.
+- Kiriman kurang tetap menghasilkan BAST, dengan satu paragraf catatan yang
+  menyebut jenis dan jumlah kekurangannya — keadaan itu justru yang paling
+  membutuhkan dokumen bertanda tangan.
+- Memuat identitas penyedia (nama, alamat, NPWP, narahubung) sebagai PIHAK
+  PERTAMA dan penerimanya sebagai PIHAK KEDUA — inilah alasan `suppliers.address`
+  wajib diisi sejak Tahap 1.
+
+### Laporan pengadaan
+
+**Satu baris = satu barang pada satu realisasi**, bukan satu dokumen, sehingga
+laporan terbaca sebagai daftar barang yang diadakan. Kolom dokumen (tanggal,
+nomor realisasi, penyedia, status, nomor BAST) diulang pada tiap baris.
+
+**Aturan.**
+
+- Empat penyaring dipakai bersama layar, PDF, CSV, dan penjaga batas ekspor:
+  status, penyedia, tanggal awal, tanggal akhir — satu definisi
+  (`Procurement::scopeFilter`), empat pemakai.
+- Rentang tanggal bekerja pada `procurement_date`, dan laporan diurutkan
+  **menaik** menurut tanggal itu. Sengaja berbeda dari buku mutasi, yang
+  [ADR 0005](../keputusan/0005-buku-mutasi-immutable-dan-urutan-pencatatan.md)
+  haruskan diurutkan menurut waktu pencatatan karena `stock_after` adalah saldo
+  berjalan; pengadaan tidak punya saldo berjalan apa pun.
+- Rekap membawa **dua** nilai berdampingan — nilai dipesan dan nilai diterima —
+  dan selisihnya adalah kekurangan kiriman penyedia. Rekap di layar mengikuti
+  penyaring, bukan seluruh basis data, supaya angka di kartu selalu sama dengan
+  angka di laporan yang dicetak dari halaman yang sama.
+- Batas ekspor 2.000 realisasi, lebih ketat daripada 5.000 baris pada laporan
+  mutasi, karena satu realisasi membawa seluruh rincian barangnya.
+
+### Notifikasi baru
+
+`BastBelumDiunggah` (keadaan, ke Pengelola Gudang + Admin): muncul bila
+penerimaan sudah dikonfirmasi lebih dari **3 hari** lalu tetapi berkas BAST
+belum diunggah, dan menutup dirinya sendiri begitu berkasnya masuk. Inilah
+imbangan dari kelonggaran ADR 0018 — penerimaan sengaja tidak menunggu berkas
+supaya stok tidak tertahan, dan justru karena itu ketiadaan berkas perlu
+ditagih.
 
 ## Butir yang masih menunggu lapangan
 

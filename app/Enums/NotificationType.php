@@ -43,6 +43,7 @@ enum NotificationType: string
 
     // --- Keadaan realisasi pengadaan ---
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
+    case BastBelumDiunggah = 'bast_belum_diunggah';
 
     // --- Peristiwa ---
     case OpnameDiposting = 'opname_diposting';
@@ -65,6 +66,7 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan => 'Usulan Menunggu Persetujuan',
             self::UsulanMenggantung => 'Usulan Pengadaan Menggantung',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
+            self::BastBelumDiunggah => 'BAST Belum Diunggah',
             self::OpnameDiposting => 'Opname Diposting',
             self::StokBergerakSetelahDicacah => 'Stok Bergerak Setelah Dicacah',
             self::MutasiManualSensitif => 'Mutasi Manual Sensitif',
@@ -87,6 +89,7 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
             self::UsulanMenggantung => 'Usulan pengadaan sudah lama diajukan tanpa disetujui maupun ditolak.',
             self::RealisasiMenungguPenerimaan => 'Realisasi pengadaan menunggu konfirmasi barang diterima Pengelola Gudang.',
+            self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
             self::StokBergerakSetelahDicacah => 'Stok berubah di antara pencacahan dan posting, sehingga penyesuaian berbeda dari hasil cacah.',
             self::MutasiManualSensitif => 'Mutasi manual yang mengurangi stok tanpa dokumen sumber.',
@@ -125,6 +128,7 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan,
             self::UsulanMenggantung,
             self::RealisasiMenungguPenerimaan,
+            self::BastBelumDiunggah,
             self::UsulanDitolak => NotificationLevel::Perhatian,
             self::StokBerlebih,
             self::BarangTidakBergerak,

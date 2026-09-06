@@ -5,6 +5,102 @@ perubahan.
 
 ---
 
+## 6 September 2026 — Pengadaan Tahap 4: Dokumen, BAST, dan laporan
+
+Tahap penutup modul pengadaan, sekaligus penutup seluruh sub sistem. Tidak ada
+migrasi baru — `procurement_documents` sudah mendarat di Tahap 1, satu tahap
+sebelum fiturnya ditulis. Keputusan baru dicatat di dua ADR:
+[ADR 0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md)
+(wewenang berkas) dan
+[ADR 0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md)
+(bentuk laporan dan isi BAST).
+
+**Yang dikerjakan.**
+
+- `App\Support\DocumentStorage` sebagai satu-satunya seam penyimpanan berkas:
+  path `pengadaan/{procurement_id}/{uuid}.{ext}` di disk privat, pengacakan
+  nama, penghapusan, dan pemeriksaan keberadaan berkas. Controller tidak pernah
+  menyebut nama disk maupun menyusun path.
+- `ProcurementDocumentController` (unggah / unduh / hapus) beserta
+  `StoreProcurementDocumentRequest` — `mimes:pdf,jpg,jpeg,png`, maksimal 5 MB.
+  Ketiganya di bawah gate `akses-pengadaan`; penghapusan dipersempit lagi di
+  controller menjadi pengunggahnya sendiri atau Admin.
+- BAST PDF (`pdf/bast-pengadaan.blade.php`): dokumen naratif dua pihak, bukan
+  tabel laporan. Seluruh angkanya `amount_received`, dan kiriman kurang
+  menghasilkan paragraf catatan yang menyebut jenis serta jumlah kekurangannya.
+- Laporan pengadaan PDF + CSV (`procurements.pdf`, `procurements.csv`) berbutir
+  **satu baris per barang per realisasi**, mengikuti empat penyaring yang sama
+  dengan layar: status, penyedia, tanggal awal, tanggal akhir.
+  `Procurement::scopeFilter()` diperluas dari satu penyaring menjadi empat, dan
+  kini dipakai bersama oleh layar, PDF, CSV, dan penjaga batas ekspor.
+- Rekap di halaman daftar diubah menjadi **mengikuti penyaring** (sebelumnya
+  selalu menghitung seluruh basis data) dan ditambah dua kartu nilai: Nilai
+  Dipesan dan Nilai Diterima, dihitung lewat subkueri ke `procurement_details`.
+  `Procurement::nilaiDiterima()` melengkapi `nilaiTotal()` yang sudah ada.
+- Notifikasi keadaan `BastBelumDiunggah` (ambang 3 hari, ke Gudang + Admin),
+  dilipat ke dalam `periksaRealisasi()` yang sudah ada sehingga ikut terpicu
+  jalur reaktif maupun sapuan terjadwal `notifikasi:periksa`. Ditutup oleh
+  unggahan BAST, berlaku lagi bila berkasnya dihapus.
+- Kartu "Berkas Pendukung" pada halaman realisasi (daftar + formulir unggah +
+  unduh + hapus), tombol "Cetak BAST" pada kartu penerimaan, dan tombol
+  Ekspor CSV / Cetak PDF pada halaman daftar — pola tombol yang sama dengan
+  halaman Riwayat Mutasi.
+- `ProcurementSeeder`: tanggal penerimaan contoh dimundurkan ke 5 hari lalu
+  (dari 1 hari) supaya melewati ambang tiga hari — `BastBelumDiunggah` kini
+  punya contoh nyata di data awal, sejalan dengan alasan kiriman kurang
+  sengaja diseed di Tahap 3.
+- 42 uji baru dalam dua berkas: `ProcurementDocumentTest` (25) dan
+  `ProcurementReportTest` (17).
+
+**Keputusan yang sempat hampir diambil terbalik.** Godaan pertama adalah
+membagi izin unggah menurut jenis dokumen — BAST hanya Pengelola Gudang, SPK
+hanya Pejabat Pengadaan — supaya konsisten dengan pemisahan tugas ADR 0016.
+Ditolak setelah disadari bahwa yang dipisah ADR 0016 adalah wewenang
+**memutuskan**, bukan wewenang melampirkan bukti; sebuah pindaian tidak
+menggerakkan status apa pun dan tidak menyentuh stok. Sistem yang menolak
+lampiran yang sudah benar tidak membuat orang menunggu orang yang "berhak",
+melainkan membuat berkas itu beredar di luar sistem. Yang dibutuhkan adalah
+atribusi, dan `uploaded_by` + `audit_logs` sudah menyediakannya. Alasan lengkap
+beserta empat alternatif lain di ADR 0022.
+
+**Temuan saat menulis uji.** `$this->actingAs()` di dalam `beforeEach` membuat
+sesi uji tetap terautentikasi sepanjang test case, sehingga uji "tamu diarahkan
+ke halaman masuk" justru menerima 200. Berkas uji Tahap 2 dan 3 tidak
+terpengaruh karena membangun datanya di dalam tiap uji, bukan di `beforeEach`.
+Diperbaiki dengan `auth()->logout()` eksplisit di awal uji tamu — bukan dengan
+memindahkan pembangunan data, karena `beforeEach` yang berbagi satu realisasi
+justru yang membuat berkas uji ini terbaca.
+
+**Verifikasi.** 258 test lulus (762 asersi), naik dari 216 — 42 uji baru, tanpa
+regresi. Pint bersih pada 10 berkas baru/ubahan; `routes/web.php` tetap
+dilaporkan bermasalah, tetapi isunya pra-ada di blok `permintaan` milik Alma
+(dibuktikan dengan menjalankan Pint pada versi `HEAD` berkas itu) sehingga
+sengaja tidak disentuh. `migrate:fresh --seed` berhasil dari basis data kosong,
+dan `notifikasi:periksa` menghasilkan 2 baris `BastBelumDiunggah` — satu untuk
+Pengelola Gudang, satu untuk Admin, persis penerima yang dimaksud.
+
+**Uji HTTP nyata** (server hidup, MySQL, disk sungguhan — bukan `Storage::fake`):
+laporan PDF 1,6 MB dan BAST 880 KB keduanya diawali `%PDF-1.7`; CSV memuat
+`40;15000;600000;40;0;600000` untuk barang yang lengkap dan
+`20;25000;500000;15;5;375000` untuk yang kurang kirim, sehingga dua sisi nilai
+ADR 0017 benar-benar terlihat terpisah. Unggahan 880 KB mendarat di
+`storage/app/private/pengadaan/{id}/{uuid}.pdf` dengan nama teracak, diunduh
+kembali utuh dengan `Content-Disposition` bernama asli `BAST Ditandatangani.pdf`,
+dan `BastBelumDiunggah` turun 2 &rarr; 0 seketika. Janji keamanan ADR 0018
+diuji langsung: `/storage/{path}` menjawab 403, `/{path}` menjawab 404, dan
+rute unduh tanpa sesi mengarahkan ke `/login`. Penghapusan oleh akun
+`pengadaan` (bukan pengunggahnya) ditolak dengan pesan dan barisnya tetap ada;
+penghapusan oleh `gudang` membuang baris **dan** berkas fisiknya, lalu
+`BastBelumDiunggah` berlaku lagi.
+
+**Catatan.** Satu konsekuensi ADR 0018 belum ada yang memanggilnya: menghapus
+sebuah pengadaan harus ikut membuang berkasnya lewat `DocumentStorage`, karena
+`cascadeOnDelete` pada basis data tidak menyentuh berkas fisik. Rute hapus
+pengadaan memang belum ada, jadi tidak ada kode mati yang ditulis untuk itu —
+tetapi inilah hal pertama yang harus diingat bila rute itu kelak dibuat.
+
+---
+
 ## 6 September 2026 — Pengadaan Tahap 3: Realisasi dan Penerimaan
 
 Inti modul pengadaan: realisasi dari usulan yang disetujui, dan konfirmasi

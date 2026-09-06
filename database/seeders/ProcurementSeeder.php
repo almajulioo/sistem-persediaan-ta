@@ -22,6 +22,10 @@ class ProcurementSeeder extends Seeder
      * Usulan "Disetujui Penuh" (ATK-012) sengaja dibiarkan belum
      * direalisasikan — itulah yang mendemokan tombol "Realisasikan" pada
      * halaman usulan.
+     *
+     * Tanggal penerimaannya dimundurkan lima hari, melewati ambang tiga hari
+     * pada NotificationScanner, supaya notifikasi keadaan BastBelumDiunggah
+     * punya contoh nyata di data awal — berkas BAST-nya memang belum ada.
      */
     public function run(): void
     {
@@ -45,7 +49,7 @@ class ProcurementSeeder extends Seeder
         $procurement = Procurement::create([
             'procurement_request_id' => $usulan->procurement_request_id,
             'supplier_id' => $supplier->supplier_id,
-            'procurement_date' => now()->subDays(3),
+            'procurement_date' => now()->subDays(10),
             'status' => ProcurementStatus::MenungguPenerimaan,
             'user_id' => $pejabat->user_id,
         ]);
@@ -73,7 +77,7 @@ class ProcurementSeeder extends Seeder
             diterima: $diterima,
             actor: $petugasGudang,
             bastNumber: '001/BAST/'.now()->year,
-            receivedAt: now()->subDay(),
+            receivedAt: now()->subDays(5),
             notes: 'Tinta warna dikirim kurang 5 botol dari pesanan; penyedia akan mengirim susulan.',
         );
 

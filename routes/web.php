@@ -8,6 +8,7 @@ use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
+use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
@@ -82,6 +83,28 @@ Route::middleware('auth')->group(function () {
 
         Route::get('pengadaan', [ProcurementController::class, 'index'])
             ->name('procurements.index');
+
+        // Cetak laporan. Ruas statis "laporan" didaftarkan di grup ini yang
+        // berada paling awal, sesuai kebiasaan berkas ini, walau nyatanya
+        // "pengadaan/{procurement}" hanya satu ruas sehingga tidak menelannya.
+        Route::get('pengadaan/laporan/pdf', [ProcurementController::class, 'exportPdf'])
+            ->name('procurements.pdf');
+        Route::get('pengadaan/laporan/csv', [ProcurementController::class, 'exportCsv'])
+            ->name('procurements.csv');
+
+        // BAST dicetak dari sistem, lalu ditandatangani dan dipindai di luar
+        // sistem. Keduanya boleh dilakukan kedua peran pengadaan (ADR 0018).
+        Route::get('pengadaan/{procurement}/bast', [ProcurementController::class, 'bast'])
+            ->name('procurements.bast');
+
+        // Berkas pendukung. Tidak ada tautan langsung ke berkasnya: disknya
+        // privat, dan seluruh unduhan wajib melewati rute terjaga ini.
+        Route::post('pengadaan/{procurement}/dokumen', [ProcurementDocumentController::class, 'store'])
+            ->name('procurement-documents.store');
+        Route::get('pengadaan/{procurement}/dokumen/{document}/unduh', [ProcurementDocumentController::class, 'download'])
+            ->name('procurement-documents.download');
+        Route::delete('pengadaan/{procurement}/dokumen/{document}', [ProcurementDocumentController::class, 'destroy'])
+            ->name('procurement-documents.destroy');
     });
 
     /*

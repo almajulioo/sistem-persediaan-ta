@@ -58,12 +58,33 @@ class Procurement extends Model
         return $this->status === ProcurementStatus::Diterima;
     }
 
+    /**
+     * Penyaring daftar sekaligus penyaring laporan.
+     *
+     * Rentang tanggal memakai `procurement_date` (tanggal realisasi), bukan
+     * `created_at`: yang dilaporkan adalah kapan pengadaannya terjadi, bukan
+     * kapan barisnya diketik. Berbeda dari buku mutasi, yang justru harus
+     * dibaca menurut urutan pencatatan (ADR 0005) karena `stock_after` hanya
+     * koheren dalam urutan itu.
+     */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
             ->when(
                 ProcurementStatus::tryFrom((string) ($filters['status'] ?? '')),
                 fn (Builder $query, ProcurementStatus $status) => $query->where('status', $status),
+            )
+            ->when(
+                trim((string) ($filters['supplier'] ?? '')),
+                fn (Builder $query, string $supplier) => $query->where('supplier_id', $supplier),
+            )
+            ->when(
+                trim((string) ($filters['from'] ?? '')),
+                fn (Builder $query, string $from) => $query->whereDate('procurement_date', '>=', $from),
+            )
+            ->when(
+                trim((string) ($filters['to'] ?? '')),
+                fn (Builder $query, string $to) => $query->whereDate('procurement_date', '<=', $to),
             );
     }
 
@@ -73,6 +94,20 @@ class Procurement extends Model
     public function nilaiTotal(): int
     {
         return $this->details->sum(fn (ProcurementDetail $detail) => $detail->subtotal());
+    }
+
+    /**
+     * Nilai barang yang benar-benar diterima, dalam rupiah bulat.
+     *
+     * Dihitung dari `amount_received`, sehingga berbeda dari `nilaiTotal()`
+     * begitu penyedia mengirim kurang. Nol selama penerimaan belum
+     * dikonfirmasi. Lihat ADR 0017.
+     */
+    public function nilaiDiterima(): int
+    {
+        return $this->details->sum(
+            fn (ProcurementDetail $detail) => ($detail->amount_received ?? 0) * $detail->unit_price,
+        );
     }
 
     /**

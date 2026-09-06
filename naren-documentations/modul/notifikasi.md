@@ -43,6 +43,7 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
 | Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
+| BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 
 ### Peristiwa
 
@@ -70,6 +71,8 @@ siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian
 | Draf opname menggantung | 7 hari | `NotificationScanner::HARI_DRAF_MENGGANTUNG` |
 | Barang tidak bergerak | 180 hari | `NotificationScanner::HARI_TIDAK_BERGERAK` |
 | Jelang akhir periode | 30 hari | `NotificationScanner::HARI_JELANG_AKHIR_PERIODE` |
+| Usulan pengadaan menggantung | 7 hari | `NotificationScanner::HARI_USULAN_MENGGANTUNG` |
+| BAST belum diunggah | 3 hari | `NotificationScanner::HARI_BAST_BELUM_DIUNGGAH` |
 | Simpan notifikasi selesai | 30 hari | `Notifier::HARI_SIMPAN` |
 
 Ambang stok memakai `items.stock_min` dan `items.stock_max` yang sudah ada sejak
@@ -124,6 +127,8 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `OpnamePoster::post()` | `catatOpnameDiposting()`, di luar transaksi |
 | `ProcurementController::store()` | `periksaRealisasi()` |
 | `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
+| `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
+| `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
 
 **Terjadwal**, harian pukul 06.00 lewat `routes/console.php`:
 
@@ -192,10 +197,13 @@ Habis/Menipis, "Realisasikan" ada di halaman usulan yang sudah disetujui, dan
 Penerimaan — notifikasi keadaannya sendiri menautkan ke halaman dokumen yang
 bersangkutan, bukan langsung membuka formulir aksi.
 
-**Tahap 4 Pengadaan** (dokumen dan BAST PDF) berencana menambah notifikasi
-keadaan `BastBelumDiunggah` sesuai
-[ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md): penerimaan
-yang sudah dikonfirmasi tetapi berkas BAST bertanda tangannya belum diunggah.
+**Tahap 4 Pengadaan sudah dibangun**, beserta `BastBelumDiunggah` yang
+dijanjikan [ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md):
+penerimaan yang sudah dikonfirmasi lebih dari tiga hari lalu tetapi berkas BAST
+bertanda tangannya belum diunggah. Keadaannya menutup diri sendiri begitu
+berkasnya masuk, dan berlaku lagi bila berkas itu dihapus. Ambangnya sengaja
+tidak nol: urutan fisiknya cetak &rarr; tanda tangan &rarr; pindai &rarr;
+unggah, dan yang ditagih adalah kelalaian, bukan jeda yang normal.
 
 **Kanal lain** (surel, WhatsApp) belum dibangun. Titik ekstensinya satu:
 `Notifier::tulisSatu()`. Kanal tambahan dikirim dari sana berdasarkan

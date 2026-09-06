@@ -49,6 +49,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Diterima |
 | [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) | Harga dicatat di realisasi pengadaan; penilaian persediaan di luar cakupan | Diterima |
 | [0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md) | Notifikasi usulan pengadaan dan persetujuan sebagian per barang | Diterima |
+| [0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md) | Realisasi dan penerimaan pengadaan: batas cakupan Tahap 3 | Diterima |
+| [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Diterima |
+| [0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md) | Laporan pengadaan berbutir barang, dan BAST mencetak jumlah diterima | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

@@ -50,6 +50,16 @@ class NotificationScanner
     private const HARI_USULAN_MENGGANTUNG = 7;
 
     /**
+     * Jeda wajar antara barang diterima dan BAST bertanda tangan diunggah.
+     *
+     * Sengaja tidak nol: urutan fisiknya cetak → tanda tangan → pindai →
+     * unggah, dan ADR 0018 memang membiarkan berkasnya menyusul supaya stok
+     * tidak tertahan di belakang alur pemindaian. Yang diingatkan adalah
+     * kelalaian, bukan jeda yang normal.
+     */
+    private const HARI_BAST_BELUM_DIUNGGAH = 3;
+
+    /**
      * Jenis mutasi manual yang mengurangi stok tanpa dokumen sumber. Pada
      * instansi pemeriksa, justru inilah yang paling layak diketahui Admin.
      */
@@ -375,9 +385,13 @@ class NotificationScanner
 
     /**
      * Keadaan satu realisasi pengadaan: menunggu konfirmasi Pengelola Gudang
-     * bahwa barang sudah diterima. Dipanggil setelah realisasi dibuat atau
-     * penerimaannya dikonfirmasi supaya notifikasinya muncul dan menghilang
-     * seketika.
+     * bahwa barang sudah diterima, atau sudah diterima tetapi berkas BAST
+     * bertanda tangan belum diunggah. Dipanggil setelah realisasi dibuat,
+     * penerimaannya dikonfirmasi, atau berkasnya diunggah/dihapus supaya
+     * notifikasinya muncul dan menghilang seketika.
+     *
+     * Kedua keadaan tidak akan pernah berlaku bersamaan: yang pertama menuntut
+     * status MenungguPenerimaan, yang kedua menuntut sudah Diterima.
      *
      * @param  EloquentCollection<int, User>|null  $penerima
      */
@@ -401,6 +415,46 @@ class NotificationScanner
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,
         );
+
+        self::periksaBerkasBast($procurement, $penerima);
+    }
+
+    /**
+     * Keadaan: barang sudah diterima berhari-hari lalu, tetapi berkas BAST
+     * bertanda tangan belum juga diunggah.
+     *
+     * Inilah imbangan dari kelonggaran ADR 0018. Penerimaan sengaja tidak
+     * menunggu berkasnya supaya stok tidak tertahan — dan justru karena itu
+     * ketiadaan berkas perlu ditagih, kalau tidak kelonggaran itu berubah
+     * menjadi kelalaian yang tidak pernah ketahuan.
+     *
+     * @param  EloquentCollection<int, User>  $penerima
+     */
+    private static function periksaBerkasBast(Procurement $procurement, EloquentCollection $penerima): void
+    {
+        $procurement->loadMissing('receipt');
+        $receipt = $procurement->receipt;
+
+        $terlambat = $procurement->isDiterima()
+            && $receipt !== null
+            && $receipt->received_at->lt(now()->subDays(self::HARI_BAST_BELUM_DIUNGGAH))
+            && ! $procurement->bastSudahDiunggah();
+
+        Notifier::terapkanKeadaan(
+            berlaku: $terlambat,
+            penerima: $penerima,
+            type: NotificationType::BastBelumDiunggah,
+            dedupKey: NotificationType::BastBelumDiunggah->dedupKey($procurement->procurement_id),
+            title: "BAST belum diunggah: {$procurement->judul()}",
+            body: sprintf(
+                'Barang %s diterima %s dengan BAST %s, tetapi berkas bertanda tangannya belum diunggah. Cetak BAST dari sistem, mintakan tanda tangan, lalu unggah hasil pindaiannya.',
+                $procurement->judul(),
+                $receipt?->received_at->translatedFormat('j F Y') ?? '-',
+                $receipt?->bast_number ?? '-',
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
     }
 
     /**
@@ -413,7 +467,7 @@ class NotificationScanner
     {
         $penerima = self::pengawasGudang();
 
-        Procurement::query()->with('supplier')->chunk(100, function ($procurements) use ($penerima) {
+        Procurement::query()->with('supplier', 'receipt')->chunk(100, function ($procurements) use ($penerima) {
             foreach ($procurements as $procurement) {
                 self::periksaRealisasi($procurement, $penerima);
             }
