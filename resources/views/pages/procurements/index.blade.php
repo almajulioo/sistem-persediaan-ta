@@ -34,18 +34,24 @@
     <x-ui.flash />
 
     {{-- Rekap mengikuti penyaring, bukan seluruh basis data: angka di kartu
-         harus sama dengan angka di laporan yang dicetak dari halaman ini. --}}
+         harus sama dengan angka di laporan yang dicetak dari halaman ini.
+         Realisasi yang dibatalkan tidak ikut dihitung — ia dokumen yang pernah
+         ada tetapi tidak pernah menjadi transaksi — dan tampil sebagai angka
+         kecil tersendiri supaya tidak ada yang disembunyikan (ADR 0026). --}}
     <div class="mb-6 grid grid-cols-2 gap-4 md:gap-6 xl:grid-cols-5">
         @foreach ([
-            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90'],
-            ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400'],
-            ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500'],
-            ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90'],
-            ['label' => 'Nilai Diterima', 'value' => 'Rp' . number_format($summary['nilai_diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500'],
+            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $summary['dibatalkan'] > 0 ? number_format($summary['dibatalkan'], 0, ',', '.') . ' dibatalkan' : null],
+            ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400', 'catatan' => null],
+            ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => null],
+            ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => null],
+            ['label' => 'Nilai Diterima', 'value' => 'Rp' . number_format($summary['nilai_diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => null],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
                 <h4 class="text-title-sm mt-2 font-bold {{ $card['class'] }}">{{ $card['value'] }}</h4>
+                @if ($card['catatan'])
+                    <p class="text-theme-xs mt-1 text-gray-400 dark:text-gray-500">{{ $card['catatan'] }}</p>
+                @endif
             </div>
         @endforeach
     </div>

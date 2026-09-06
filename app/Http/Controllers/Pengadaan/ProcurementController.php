@@ -6,6 +6,7 @@ use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\CancelProcurementRequest;
 use App\Http\Requests\Pengadaan\StoreProcurementRequest;
+use App\Http\Requests\Pengadaan\UpdateProcurementRequest;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
@@ -141,6 +142,71 @@ class ProcurementController extends Controller
                 'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy',
             ]),
         ]);
+    }
+
+    /**
+     * Koreksi realisasi yang belum dikonfirmasi diterima.
+     *
+     * Selama status masih MenungguPenerimaan belum ada apa pun yang terjadi
+     * secara fisik — barang belum diterima, stok belum bertambah, tidak ada
+     * mutasi maupun BAST — sehingga dokumennya masih boleh diperbaiki. Pola
+     * yang sama dengan draf opname yang boleh diubah sampai diposting
+     * (ADR 0010). Lihat ADR 0025.
+     */
+    public function edit(Procurement $procurement): View|RedirectResponse
+    {
+        if (! $procurement->isMenungguPenerimaan()) {
+            return redirect()
+                ->route('procurements.show', $procurement)
+                ->with('error', "{$procurement->judul()} tidak dapat diubah karena sudah dikonfirmasi diterima atau dibatalkan.");
+        }
+
+        return view('pages.procurements.edit', [
+            'title' => "Ubah {$procurement->judul()}",
+            'procurement' => $procurement->load(['supplier', 'procurementRequest.details', 'details.item']),
+            'suppliers' => Supplier::aktif()->orderBy('supplier_name')->get(['supplier_id', 'supplier_name']),
+        ]);
+    }
+
+    public function update(UpdateProcurementRequest $request, Procurement $procurement): RedirectResponse
+    {
+        if (! $procurement->isMenungguPenerimaan()) {
+            return back()->with(
+                'error',
+                "{$procurement->judul()} tidak dapat diubah karena sudah dikonfirmasi diterima atau dibatalkan.",
+            );
+        }
+
+        $data = $request->validated();
+
+        DB::transaction(function () use ($procurement, $data) {
+            $procurement->forceFill([
+                'supplier_id' => $data['supplier_id'],
+                'procurement_date' => $data['procurement_date'],
+            ])->save();
+
+            // Baris diperbarui di tempat, bukan dihapus lalu dibuat ulang:
+            // susunannya tidak dapat berubah, dan `procurement_detail_id` yang
+            // stabil membuat formulir penerimaan tetap menunjuk baris yang sama.
+            foreach ($data['items'] as $baris) {
+                $procurement->details
+                    ->firstWhere('procurement_detail_id', $baris['procurement_detail_id'])
+                    ?->forceFill([
+                        'amount' => $baris['amount'],
+                        'unit_price' => $baris['unit_price'],
+                    ])->save();
+            }
+        });
+
+        AuditLogger::record($request->user(), "Mengubah realisasi pengadaan: {$procurement->judul()}");
+
+        // Isi notifikasi RealisasiMenungguPenerimaan memuat nama penyedia,
+        // sehingga ia basi begitu penyedianya diganti.
+        NotificationScanner::periksaRealisasi($procurement->fresh(['supplier', 'receipt']));
+
+        return redirect()
+            ->route('procurements.show', $procurement)
+            ->with('status', "{$procurement->judul()} berhasil diperbarui.");
     }
 
     /**
@@ -339,6 +405,12 @@ class ProcurementController extends Controller
      * adalah kekurangan kiriman penyedia, angka yang justru hilang bila
      * keduanya dilebur jadi satu. Lihat ADR 0017.
      *
+     * Realisasi yang dibatalkan **tidak ikut dihitung** pada `total` maupun
+     * `nilai`: ia dokumen yang pernah ada tetapi tidak pernah menjadi
+     * transaksi. Cacahnya berdiri sendiri di `dibatalkan`, sehingga tidak ada
+     * yang disembunyikan sekaligus menyisakan invarian yang enak dibaca —
+     * `total = menunggu + diterima`. Lihat ADR 0026.
+     *
      * @param  array<string, string>  $filters
      * @return array<string, int>
      */
@@ -350,13 +422,17 @@ class ProcurementController extends Controller
         // yang tersaring tidak dibatasi apa pun di layar daftar.
         $rincian = fn () => ProcurementDetail::query()->whereIn(
             'procurement_id',
-            Procurement::query()->filter($filters)->select('procurement_id'),
+            Procurement::query()
+                ->filter($filters)
+                ->where('status', '!=', ProcurementStatus::Dibatalkan)
+                ->select('procurement_id'),
         );
 
         return [
-            'total' => (clone $base)->count(),
+            'total' => (clone $base)->where('status', '!=', ProcurementStatus::Dibatalkan)->count(),
             'menunggu' => (clone $base)->where('status', ProcurementStatus::MenungguPenerimaan)->count(),
             'diterima' => (clone $base)->where('status', ProcurementStatus::Diterima)->count(),
+            'dibatalkan' => (clone $base)->where('status', ProcurementStatus::Dibatalkan)->count(),
             'nilai' => (int) $rincian()->sum(DB::raw('amount * unit_price')),
             'nilai_diterima' => (int) $rincian()->sum(DB::raw('COALESCE(amount_received, 0) * unit_price')),
         ];

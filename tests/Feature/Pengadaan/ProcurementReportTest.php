@@ -244,3 +244,66 @@ describe('rekap di layar', function () {
             ->assertDontSee('Rp125.000');
     });
 });
+
+describe('realisasi yang dibatalkan tidak dihitung', function () {
+    /**
+     * Satu realisasi berjalan (Rp125.000) dan satu dibatalkan (Rp900.000).
+     * Kalau yang dibatalkan ikut terhitung, rekapnya menjadi 2 dan Rp1.025.000.
+     */
+    $duaRealisasi = function (User $pejabat, User $petugas, Item $item, Supplier $supplier): Procurement {
+        realisasiLaporan($pejabat, $petugas, $item, $supplier, dipesan: 10, harga: 12500);
+
+        $lain = Item::factory()->create(['item_code' => 'ATK-888', 'item_name' => 'Tinta Printer']);
+        $batal = realisasiLaporan($pejabat, $petugas, $lain, $supplier, dipesan: 9, harga: 100000);
+
+        test()->actingAs($pejabat)
+            ->patch("/pengadaan/{$batal->procurement_id}/batal", pembatalanPayload());
+
+        return $batal->fresh();
+    };
+
+    it('mengeluarkannya dari jumlah realisasi dan nilai dipesan', function () use ($duaRealisasi) {
+        $duaRealisasi($this->pejabat, $this->petugas, $this->item, $this->supplier);
+
+        $this->actingAs($this->pejabat)
+            ->get('/pengadaan')
+            ->assertOk()
+            // Rekap hanya memuat yang berjalan…
+            ->assertSee('Rp125.000')
+            ->assertDontSee('Rp1.025.000')
+            ->assertSee('1 dibatalkan')
+            // …sementara barisnya sendiri tetap tampil apa adanya, lengkap
+            // dengan nilai dan status: ditampilkan, tidak dihitung.
+            ->assertSee('Rp900.000')
+            ->assertSee('Dibatalkan');
+    });
+
+    it('tetap menampilkan barisnya di CSV laporan', function () use ($duaRealisasi) {
+        // Ditampilkan, tidak dihitung — menyembunyikan barisnya adalah bentuk
+        // lain dari berbohong (ADR 0026).
+        $duaRealisasi($this->pejabat, $this->petugas, $this->item, $this->supplier);
+
+        $csv = bodyOf($this->actingAs($this->pejabat)->get('/pengadaan/laporan/csv'));
+
+        expect($csv)->toContain('ATK-777')
+            ->and($csv)->toContain('ATK-888')
+            ->and($csv)->toContain('Dibatalkan');
+    });
+
+    it('tetap menerbitkan laporan PDF', function () use ($duaRealisasi) {
+        $duaRealisasi($this->pejabat, $this->petugas, $this->item, $this->supplier);
+
+        $response = $this->actingAs($this->pejabat)->get('/pengadaan/laporan/pdf');
+
+        $response->assertOk();
+        expect($response->getContent())->toStartWith('%PDF');
+    });
+
+    it('masih dapat disaring sendiri lewat status', function () use ($duaRealisasi) {
+        $duaRealisasi($this->pejabat, $this->petugas, $this->item, $this->supplier);
+
+        $csv = bodyOf($this->actingAs($this->pejabat)->get('/pengadaan/laporan/csv?status=dibatalkan'));
+
+        expect($csv)->toContain('ATK-888')->and($csv)->not->toContain('ATK-777');
+    });
+});

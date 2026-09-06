@@ -184,10 +184,18 @@ Route::middleware('auth')->group(function () {
         Route::post('pengadaan', [ProcurementController::class, 'store'])
             ->name('procurements.store');
 
+        // Koreksi realisasi selama belum dikonfirmasi diterima. Salah ketik
+        // diperbaiki di sini, bukan dengan membatalkan lalu mengulang dari
+        // usulan baru (ADR 0025).
+        Route::get('pengadaan/{procurement}/edit', [ProcurementController::class, 'edit'])
+            ->name('procurements.edit');
+        Route::put('pengadaan/{procurement}', [ProcurementController::class, 'update'])
+            ->name('procurements.update');
+
         // Membatalkan realisasi yang tidak akan pernah sampai ke penerimaan —
         // dokumen milik Pejabat Pengadaan, jadi dialah yang membatalkannya
-        // (ADR 0024). Tidak ada rute ubah maupun hapus: realisasi yang batal
-        // tetap tersimpan sebagai bukti bahwa pengadaan itu pernah berjalan.
+        // (ADR 0024). Tidak ada rute hapus: realisasi yang batal tetap
+        // tersimpan sebagai bukti bahwa pengadaan itu pernah berjalan.
         Route::patch('pengadaan/{procurement}/batal', [ProcurementController::class, 'cancel'])
             ->name('procurements.cancel');
     });

@@ -57,6 +57,16 @@
                         </a>
                     @endcan
 
+                    {{-- Koreksi didahulukan atas pembatalan: salah ketik
+                         diperbaiki di sini, bukan dengan membatalkan lalu
+                         mengulang dari usulan baru (ADR 0025). --}}
+                    @can('kelola-pengadaan')
+                        <a href="{{ route('procurements.edit', $procurement) }}"
+                            class="mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                            Ubah Realisasi
+                        </a>
+                    @endcan
+
                     {{-- Jalan keluar bagi pengadaan yang tidak akan pernah
                          sampai ke penerimaan, mis. penyedia gagal kirim.
                          Tanpa ini realisasinya terkunci selamanya (ADR 0024). --}}

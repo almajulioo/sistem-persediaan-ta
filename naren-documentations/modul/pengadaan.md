@@ -279,6 +279,13 @@ nomor realisasi, penyedia, status, nomor BAST) diulang pada tiap baris.
   dan selisihnya adalah kekurangan kiriman penyedia. Rekap di layar mengikuti
   penyaring, bukan seluruh basis data, supaya angka di kartu selalu sama dengan
   angka di laporan yang dicetak dari halaman yang sama.
+- **Realisasi yang dibatalkan tidak ikut dihitung** pada `total` maupun `nilai`,
+  dan cacahnya berdiri sendiri di `dibatalkan` — ia dokumen yang pernah ada
+  tetapi tidak pernah menjadi transaksi. Barisnya **tetap ditampilkan** di tabel
+  dan ekspor, lengkap dengan status dan nilainya: ditampilkan, tidak dihitung
+  ([ADR 0026](../keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md)).
+  Aturan yang sama berlaku pada kolom "Pengadaan" di daftar penyedia. Sisanya
+  menyisakan invarian yang enak dibaca: `total = menunggu + diterima`.
 - Batas ekspor 2.000 realisasi, lebih ketat daripada 5.000 baris pada laporan
   mutasi, karena satu realisasi membawa seluruh rincian barangnya.
 
@@ -290,6 +297,37 @@ belum diunggah, dan menutup dirinya sendiri begitu berkasnya masuk. Inilah
 imbangan dari kelonggaran ADR 0018 — penerimaan sengaja tidak menunggu berkas
 supaya stok tidak tertahan, dan justru karena itu ketiadaan berkas perlu
 ditagih.
+
+## Mengubah realisasi
+
+Ditambahkan 7 September 2026. Salah ketik pada realisasi — salah penyedia, harga,
+atau jumlah — diperbaiki di sini, **bukan** dengan membatalkan lalu mengulang
+dari usulan baru. Rincian keputusan:
+[ADR 0025](../keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md).
+
+| Metode | URL | Nama | Gate |
+|---|---|---|---|
+| GET | `/pengadaan/{procurement}/edit` | `procurements.edit` | `kelola-pengadaan` |
+| PUT | `/pengadaan/{procurement}` | `procurements.update` | `kelola-pengadaan` |
+
+**Aturan.**
+
+- Hanya dari status `MenungguPenerimaan` — batas yang sama dengan pembatalan.
+  Selama itu belum ada apa pun yang terjadi secara fisik, sehingga **tidak ada
+  satu pun mutasi stok yang perlu disesuaikan**.
+- Yang boleh diubah: `supplier_id`, `procurement_date`, serta `amount` dan
+  `unit_price` tiap baris. Batas `amount ≤ amount_granted` tetap berlaku.
+- Yang **tidak** boleh: `procurement_request_id` (memindahkan realisasi ke usulan
+  lain menabrak indeks unik ADR 0016) dan susunan barangnya (ditetapkan usulan
+  yang disetujui, sehingga aturan ADR 0021 terpenuhi dengan sendirinya).
+- Baris diperbarui **di tempat**, dikunci `procurement_detail_id`, supaya
+  formulir penerimaan tetap menunjuk baris yang sama. Kiriman wajib mencakup
+  seluruh baris — yang hilang akan tertinggal memakai nilai lamanya tanpa
+  disadari siapa pun.
+- `update()` memanggil `NotificationScanner::periksaRealisasi()` karena isi
+  notifikasi `RealisasiMenungguPenerimaan` memuat nama penyedia.
+- Tombol **Ubah Realisasi** diletakkan di atas **Batalkan Realisasi**: urutan
+  tombol adalah anjuran tentang mana yang seharusnya lebih sering dipakai.
 
 ## Pembatalan realisasi
 
@@ -323,9 +361,14 @@ penerimaan barang yang tidak pernah datang. Rincian keputusan:
   dibutuhkan diajukan lewat usulan baru. Halaman usulan menjelaskan hal ini,
   supaya status `Disetujui` tanpa tombol **Realisasikan** tidak terbaca seperti
   bug.
-- `KesalahanPencatatan` sekaligus menjadi jalur koreksi bagi realisasi yang
-  salah ketik — salah penyedia, salah harga, salah jumlah — yang selama ini
-  tidak punya jalan keluar apa pun.
+- `KesalahanPencatatan` **menyempit** sejak
+  [ADR 0025](../keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md):
+  salah ketik biasa diperbaiki lewat Ubah Realisasi, sehingga alasan ini tinggal
+  untuk satu kasus yang memang tidak dapat diperbaiki dengan mengubah —
+  realisasi yang dibuat dari usulan yang sama sekali salah, karena
+  `procurement_request_id` terkunci. Efeknya `AlasanPembatalan` kembali menjadi
+  daftar kegagalan nyata di lapangan, bukan campuran kegagalan lapangan dan
+  kekeliruan administrasi.
 
 **Notifikasi baru**: `RealisasiDibatalkan` (peristiwa, ke Pengelola Gudang +
 Admin kecuali pelaku) dan `UsulanBelumDirealisasi` (keadaan, ke Pejabat

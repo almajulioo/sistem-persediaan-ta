@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\StoreSupplierRequest;
 use App\Http\Requests\Pengadaan\UpdateSupplierRequest;
@@ -27,7 +28,7 @@ class SupplierController extends Controller
         $status = (string) $request->query('status', '');
 
         $suppliers = Supplier::query()
-            ->withCount('procurements')
+            ->withCount($this->cacahPengadaan())
             ->when($keyword !== '', fn ($query) => $query->search($keyword))
             ->when($status === 'aktif', fn ($query) => $query->where('is_active', true))
             ->when($status === 'arsip', fn ($query) => $query->where('is_active', false))
@@ -70,7 +71,10 @@ class SupplierController extends Controller
     {
         return view('pages.suppliers.show', [
             'title' => $supplier->supplier_name,
-            'supplier' => $supplier,
+            // Angka ringkasnya memakai definisi yang sama dengan daftar, tetapi
+            // tabel di bawahnya tetap memuat seluruh baris beserta badge
+            // statusnya: ditampilkan, tidak dihitung (ADR 0026).
+            'supplier' => $supplier->loadCount($this->cacahPengadaan()),
             'procurements' => $supplier->procurements()
                 ->with('procurementRequest')
                 ->latest('procurement_date')
@@ -115,11 +119,16 @@ class SupplierController extends Controller
     {
         // Penyedia yang sudah dipakai realisasi harus tetap ada demi keutuhan
         // riwayat dan BAST yang sudah terbit atas namanya.
+        //
+        // Realisasi yang dibatalkan pun ikut menghalangi — `supplier_id`
+        // memakai restrictOnDelete, jadi barisnya tetap menunjuk penyedia ini.
+        // Disebut eksplisit di pesannya supaya "0 pengadaan tetapi tidak bisa
+        // dihapus" tidak terbaca sebagai bug (ADR 0026).
         if ($blocking = $supplier->blockingRelations()) {
             return back()->with(
                 'error',
                 "Penyedia {$supplier->supplier_name} tidak dapat dihapus karena masih memiliki ".
-                implode(', ', $blocking).'. Arsipkan penyedia ini sebagai gantinya.',
+                implode(', ', $blocking).', termasuk yang sudah dibatalkan. Arsipkan penyedia ini sebagai gantinya.',
             );
         }
 
@@ -132,5 +141,24 @@ class SupplierController extends Controller
         return redirect()
             ->route('suppliers.index')
             ->with('status', "Penyedia {$name} berhasil dihapus.");
+    }
+
+    /**
+     * Dua cacah pengadaan per penyedia, dipakai bersama daftar dan detail.
+     *
+     * Angka utama hanya menghitung pengadaan yang benar-benar berjalan;
+     * realisasi yang dibatalkan dicacah terpisah, tidak pernah dilebur ke
+     * dalamnya. Sebuah realisasi batal adalah dokumen yang pernah ada tetapi
+     * tidak pernah menjadi transaksi, sehingga menghitungnya sebagai
+     * "pengadaan ke sekian" pada penyedia itu menyesatkan. Lihat ADR 0026.
+     *
+     * @return array<string, \Closure>
+     */
+    private function cacahPengadaan(): array
+    {
+        return [
+            'procurements as procurements_count' => fn ($query) => $query->where('status', '!=', ProcurementStatus::Dibatalkan),
+            'procurements as procurements_cancelled_count' => fn ($query) => $query->where('status', ProcurementStatus::Dibatalkan),
+        ];
     }
 }

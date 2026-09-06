@@ -56,6 +56,9 @@
             <td>
                 <span class="label">Jumlah Realisasi</span>
                 <span class="nilai">{{ number_format($summary['total'], 0, ',', '.') }}</span>
+                @if ($summary['dibatalkan'] > 0)
+                    <span class="label">{{ number_format($summary['dibatalkan'], 0, ',', '.') }} dibatalkan</span>
+                @endif
             </td>
             <td>
                 <span class="label">Menunggu Penerimaan</span>
@@ -137,9 +140,16 @@
     @if ($summary['nilai_diterima'] < $summary['nilai'])
         <p style="font-size: 8.5px; color: #475467; margin-top: 8px;">
             Catatan: nilai diterima lebih kecil daripada nilai dipesan. Selisihnya berasal dari pengadaan yang
-            barangnya datang kurang dari pesanan, dari pengadaan yang masih menunggu penerimaan, dan dari
-            pengadaan yang dibatalkan sehingga barangnya tidak jadi datang. Stok bertambah sebanyak yang
-            benar-benar diterima, bukan sebanyak yang dipesan.
+            barangnya datang kurang dari pesanan, dan dari pengadaan yang masih menunggu penerimaan. Stok
+            bertambah sebanyak yang benar-benar diterima, bukan sebanyak yang dipesan.
+        </p>
+    @endif
+
+    @if ($summary['dibatalkan'] > 0)
+        <p style="font-size: 8.5px; color: #475467; margin-top: 8px;">
+            Catatan: {{ number_format($summary['dibatalkan'], 0, ',', '.') }} realisasi yang dibatalkan tetap
+            tercantum pada tabel di atas beserta statusnya, tetapi tidak ikut dihitung pada rekap maupun nilai
+            &mdash; pengadaannya tidak pernah menjadi transaksi.
         </p>
     @endif
 

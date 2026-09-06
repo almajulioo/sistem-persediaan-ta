@@ -220,3 +220,54 @@ describe('halaman detail', function () {
             ->assertSee('Belum ada pengadaan kepada penyedia ini.');
     });
 });
+
+describe('cacah pengadaan penyedia', function () {
+    /**
+     * Satu penyedia dengan dua realisasi: satu berjalan, satu dibatalkan.
+     * Pembantunya dipakai ulang dari berkas uji Tahap 3 dan pembatalan.
+     */
+    $penyediaDenganSatuBatal = function (): Supplier {
+        $pejabat = pejabatPengadaan();
+        $gudang = pengelolaGudang();
+        $supplier = Supplier::factory()->create(['supplier_name' => 'CV Bumi Lampung']);
+
+        foreach ([false, true] as $dibatalkan) {
+            $usulan = setujuiUsulan($pejabat, buatUsulan($gudang, [
+                ['item_id' => \App\Models\Item::factory()->create()->item_id, 'amount_request' => 10],
+            ]));
+            $procurement = buatRealisasi($pejabat, $usulan, $supplier);
+
+            if ($dibatalkan) {
+                test()->actingAs($pejabat)
+                    ->patch("/pengadaan/{$procurement->procurement_id}/batal", pembatalanPayload());
+            }
+        }
+
+        return $supplier;
+    };
+
+    it('tidak menghitung realisasi yang dibatalkan pada daftar', function () use ($penyediaDenganSatuBatal) {
+        // Inti ADR 0026: yang dicacah adalah pengadaan yang benar-benar
+        // berjalan, bukan dokumen yang pernah dibuat.
+        $penyediaDenganSatuBatal();
+
+        $this->actingAs(pejabatPengadaan())
+            ->get('/penyedia')
+            ->assertOk()
+            ->assertSee('1&times;', false)
+            ->assertSee('1 dibatalkan');
+    });
+
+    it('menyebut pembatalannya di halaman detail tanpa menyembunyikan barisnya', function () use ($penyediaDenganSatuBatal) {
+        $supplier = $penyediaDenganSatuBatal();
+
+        $this->actingAs(pejabatPengadaan())
+            ->get("/penyedia/{$supplier->supplier_id}")
+            ->assertOk()
+            ->assertSee('1 pengadaan berjalan')
+            ->assertSee('lainnya dibatalkan')
+            // Barisnya tetap tampil lengkap dengan badge statusnya.
+            ->assertSee('Dibatalkan')
+            ->assertSee('Menunggu Penerimaan');
+    });
+});

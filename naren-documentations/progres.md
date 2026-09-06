@@ -5,6 +5,86 @@ perubahan.
 
 ---
 
+## 7 September 2026 — Koreksi realisasi, dan agregat yang jujur
+
+Bermula dari laporan pemakaian: setelah sebuah realisasi dibatalkan, kolom
+"Pengadaan" pada daftar penyedia tetap bertambah satu. Usul pertamanya adalah
+menghapus baris realisasinya supaya angkanya otomatis benar. Usul itu ditolak,
+dan penelusurannya justru memunculkan dua masalah yang lebih dalam. Keputusan
+lengkap di [ADR 0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md)
+dan [ADR 0026](keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md).
+
+**Yang salah angkanya, bukan datanya.** `SupplierController::index()` memakai
+`withCount('procurements')` — mencacah *dokumen*, bukan pengadaan yang
+benar-benar terjadi. Kebocoran yang sama ternyata ada di kartu "Jumlah Realisasi"
+dan "Nilai Dipesan" pada `/pengadaan` serta rekap laporan PDF. Menariknya,
+halaman **detail** penyedia sudah jujur sejak awal karena tiap barisnya membawa
+badge status; yang menyesatkan hanya angka ringkasnya.
+
+**Pembatalan sedang dipakai sebagai tombol "ubah".** Pembatalannya terjadi
+*karena salah ketik*. Sejak ADR 0024 pembatalan bersifat terminal bagi usulannya,
+sehingga satu angka nol yang kelebihan pada kolom harga memaksa Pengelola Gudang
+mengajukan usulan baru dari nol, dan meninggalkan satu baris realisasi batal
+permanen di riwayat penyedia. `KesalahanPencatatan` yang ditambahkan ADR 0024
+sebagai jalan keluar salah ketik ternyata jauh terlalu mahal — padahal selama
+status masih `MenungguPenerimaan` belum ada apa pun yang terjadi secara fisik.
+
+**Yang dikerjakan.**
+
+- Rute `GET pengadaan/{procurement}/edit` dan `PUT pengadaan/{procurement}` di
+  bawah `kelola-pengadaan`, beserta `UpdateProcurementRequest` dan
+  `pages/procurements/edit.blade.php`. Boleh diubah: penyedia, tanggal, jumlah
+  pesan, dan harga satuan. Tidak boleh: `procurement_request_id` dan susunan
+  barangnya.
+- Baris diperbarui **di tempat**, dikunci `procurement_detail_id`, supaya
+  formulir penerimaan tetap menunjuk baris yang sama. Kiriman wajib mencakup
+  seluruh baris.
+- `update()` memanggil `NotificationScanner::periksaRealisasi()` — isi
+  `RealisasiMenungguPenerimaan` memuat nama penyedia, jadi basi begitu
+  penyedianya diganti.
+- Tombol **Ubah Realisasi** diletakkan di atas **Batalkan Realisasi**: urutan
+  tombol adalah anjuran tentang mana yang seharusnya lebih sering dipakai.
+- `AlasanPembatalan::KesalahanPencatatan` menyempit — tinggal untuk realisasi
+  yang dibuat dari usulan yang sama sekali salah, satu-satunya kekeliruan yang
+  memang tidak dapat diperbaiki dengan mengubah.
+- Agregat di tiga tempat mengecualikan realisasi batal, dengan cacah pembatalan
+  selalu ikut ditampilkan: daftar penyedia (`SupplierController::cacahPengadaan()`
+  dipakai bersama daftar dan detail), kartu `/pengadaan`, dan rekap laporan PDF.
+  Barisnya sendiri **tetap ditampilkan** di mana pun — ditampilkan, tidak
+  dihitung.
+- Catatan kaki laporan PDF ditulis ulang: sejak nilai batal tidak lagi masuk
+  "Nilai Dipesan", selisih dua angka nilai kembali hanya punya dua sebab.
+- 22 uji baru: `ProcurementEditTest` (16) plus tambahan di `ProcurementReportTest`
+  dan `SupplierManagementTest`.
+
+**Mengapa usul menghapus ditolak.** Tiga akibatnya. Kolom `cancelled_by`,
+`cancel_reason`, dan `cancel_note` yang baru dibuat kemarin menjadi sia-sia.
+Menghapus barisnya membebaskan kembali indeks unik `procurement_request_id`
+sehingga usulan asalnya hidup lagi — membalik keputusan "pembatalan bersifat
+terminal" lewat pintu belakang. Dan yang paling menentukan: pola "lima realisasi
+dibatalkan kepada penyedia yang sama" justru tepat hal yang ingin dilihat
+pemeriksa pada lembaga pemeriksa keuangan; menghapusnya bukan membersihkan data,
+melainkan menghapus temuan.
+
+**Temuan saat verifikasi.** Jejak audit sempat menampilkan dua entri "Mengubah
+realisasi pengadaan" padahal hanya satu pengubahan yang dilakukan lewat skrip.
+Pemeriksaan kronologi `audit_logs` menunjukkan entri pertama berasal dari Naren
+sendiri yang sedang mencoba fitur barunya di peramban pada menit yang sama —
+dibuat 02:08:46, diubah 02:08:58, dibatalkan 02:09:50. Penjaga statusnya terbukti
+benar: realisasi yang sudah `diterima` tidak punya satu pun jejak pengubahan.
+
+**Verifikasi.** 305 test lulus (890 asersi), naik dari 283 — 22 uji baru, tanpa
+regresi. Pint bersih pada 23 berkas. `migrate:fresh --seed` berhasil.
+
+**Uji HTTP nyata.** Realisasi dibuat dengan harga sengaja salah (Rp99.999), lalu
+diperbaiki lewat formulir Ubah Realisasi menjadi Rp12.500 sekaligus berganti
+penyedia: nilai total ikut berubah, jejak audit tercatat, dan isi notifikasi
+lonceng gudang menyebut penyedia yang baru. Setelah itu daftar penyedia
+menampilkan `1×` dengan `1 dibatalkan` di bawahnya, dan rekap `/pengadaan`
+menampilkan `2` dengan `1 dibatalkan` — persis keluhan yang memicu sesi ini.
+
+---
+
 ## 7 September 2026 — Menutup celah alur pengadaan
 
 Bukan tahap baru, melainkan tindak lanjut pemeriksaan menyeluruh sehari setelah

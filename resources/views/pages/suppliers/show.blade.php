@@ -67,7 +67,11 @@
             <div class="border-b border-gray-100 p-5 dark:border-gray-800 sm:p-6">
                 <h3 class="text-theme-lg font-semibold text-gray-800 dark:text-white/90">Riwayat Pengadaan</h3>
                 <p class="text-theme-sm mt-1 text-gray-500 dark:text-gray-400">
-                    Realisasi pengadaan yang pernah dilakukan kepada penyedia ini.
+                    {{ $supplier->procurements_count }} pengadaan berjalan kepada penyedia ini.
+                    @if ($supplier->procurements_cancelled_count > 0)
+                        {{ $supplier->procurements_cancelled_count }} lainnya dibatalkan sebelum barang diterima,
+                        dan tetap ditampilkan di bawah tanpa ikut dihitung.
+                    @endif
                 </p>
             </div>
 

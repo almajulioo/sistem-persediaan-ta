@@ -53,6 +53,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Diterima |
 | [0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md) | Laporan pengadaan berbutir barang, dan BAST mencetak jumlah diterima | Diterima |
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
+| [0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md) | Realisasi dapat diubah selama belum dikonfirmasi diterima | Diterima |
+| [0026](keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md) | Agregat mencacah pengadaan yang terjadi, bukan dokumen yang pernah dibuat | Diterima |
 
 ## Cara memelihara dokumentasi ini
 
