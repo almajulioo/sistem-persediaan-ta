@@ -1,7 +1,7 @@
 # Modul Pengadaan
 
-> **Status: dalam pengerjaan.** Dibangun empat tahap. Tahap 1 dan 2 selesai
-> 6 September 2026.
+> **Status: dalam pengerjaan.** Dibangun empat tahap. Tahap 1, 2, dan 3
+> selesai 6 September 2026.
 
 Mengelola pengadaan barang persediaan dari usulan sampai barang masuk gudang.
 
@@ -143,10 +143,56 @@ jenis notifikasi baru. Rincian keputusan:
 eksklusif dengan ambang 7 hari), `UsulanDisetujui` dan `UsulanDitolak`
 (peristiwa ke pengaju).
 
-## Tahap 3 — Realisasi dan Penerimaan ⏳
+## Tahap 3 — Realisasi dan Penerimaan ✅
 
-Belum dikerjakan. Inti modul: `ProcurementReceiptPoster` yang menambah stok
-lewat `StockLedger` sebanyak `amount_received`.
+Realisasi pengadaan dari usulan yang sudah disetujui, dan konfirmasi
+penerimaan barang yang menambah stok lewat `StockLedger`. Rincian keputusan:
+[ADR 0021](../keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
+
+**Rute realisasi** — `ProcurementController`, tiga gate seperti Tahap 2:
+
+| Metode | URL | Nama | Gate | Keterangan |
+|---|---|---|---|---|
+| GET | `/pengadaan` | `procurements.index` | `akses-pengadaan` | Daftar, penyaring status |
+| GET | `/pengadaan/create` | `procurements.create` | `kelola-pengadaan` | Menerima `?procurement_request_id=` dari halaman usulan |
+| POST | `/pengadaan` | `procurements.store` | `kelola-pengadaan` | |
+| GET | `/pengadaan/{procurement}` | `procurements.show` | `akses-pengadaan` | Detail + tombol Konfirmasi Penerimaan bila masih Menunggu Penerimaan |
+
+**Rute penerimaan** — `ProcurementReceiptController`, gate `kelola-gudang`,
+peristiwa sekali jadi tanpa rute ubah/hapus:
+
+| Metode | URL | Nama | Keterangan |
+|---|---|---|---|
+| GET | `/pengadaan/{procurement}/penerimaan/create` | `procurement-receipts.create` | Formulir konfirmasi, saran nomor BAST berurut |
+| POST | `/pengadaan/{procurement}/penerimaan` | `procurement-receipts.store` | Menjalankan `ProcurementReceiptPoster` |
+
+**Aturan.**
+
+- Formulir realisasi hanya dapat dibuka dari usulan `Disetujui` yang belum
+  punya realisasi — tombol **Realisasikan** pada halaman usulan, bukan
+  halaman berdiri sendiri. Wajib mencakup **seluruh** rincian usulan yang
+  disetujui (`amount_granted > 0`), karena `procurement_request_id` unik
+  berarti satu usulan paling banyak menghasilkan satu realisasi selamanya —
+  barang yang dikecualikan sekarang tidak akan pernah punya kesempatan kedua.
+- `item_id` pada rincian realisasi diturunkan server-side dari
+  `procurement_request_detail_id`, bukan dikirim klien — pola yang sama
+  dengan persetujuan usulan Tahap 2.
+- `ProcurementReceiptPoster::post()` mengikuti pola `OpnamePoster`: transaksi
+  terkunci, `StockLedger::record(type: Masuk, amount: amount_received)` per
+  barang (baris bernilai nol tidak menghasilkan mutasi), referensi menunjuk
+  `Procurement` (alias morph `pengadaan`), status realisasi berubah menjadi
+  `Diterima`, lalu `AuditLogger` dan notifikasi dipanggil di luar transaksi.
+- Kiriman yang **lebih** dari pesanan tidak dibatasi validasi — hanya
+  kekurangan kiriman yang jadi perhatian ADR 0017.
+- `received_at` adalah tanggal bisnis yang dapat diedit (seperti
+  `procurement_date`/`opname_date`/`mutation_date`), bukan dikunci ke `now()`.
+
+**Notifikasi baru**: `RealisasiMenungguPenerimaan` (keadaan, ke Pengelola
+Gudang + Admin) dan `PenerimaanDikonfirmasi` (peristiwa, ke Pejabat Pengadaan
+yang merealisasi).
+
+**Belum dikerjakan di tahap ini**: status `ProcurementStatus::Dibatalkan`
+masih tanpa pemicu — belum ada kebutuhan lapangan yang mengonfirmasinya.
 
 ## Tahap 4 — Dokumen, BAST, dan laporan ⏳
 
@@ -155,5 +201,6 @@ Belum dikerjakan. Unggahan di disk privat, BAST PDF, ekspor PDF/CSV.
 ## Butir yang masih menunggu lapangan
 
 **Format nomor dokumen resmi BPK** untuk `procurement_receipts.bast_number`
-belum dikonfirmasi. Rencananya nomor diisi manual dengan saran berurut yang
-boleh ditimpa, tanpa validasi format yang dipaksakan.
+belum dikonfirmasi. Formulir konfirmasi penerimaan sudah menyediakan saran
+nomor berurut (`{urutan}/BAST/{tahun}`) yang boleh ditimpa bebas, tanpa
+validasi format yang dipaksakan.

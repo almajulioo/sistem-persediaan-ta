@@ -27,8 +27,9 @@ class ProcurementRequestSeeder extends Seeder
         $this->diajukan($pengaju);
         $this->disetujuiSebagian($pengaju);
         $this->ditolak($pengaju);
+        $this->disetujuiPenuh($pengaju);
 
-        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (3 usulan).');
+        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (4 usulan).');
     }
 
     /**
@@ -94,6 +95,29 @@ class ProcurementRequestSeeder extends Seeder
                 'item_id' => $item->item_id,
                 'amount_request' => 10,
                 'amount_granted' => 0,
+            ]);
+        }
+    }
+
+    /**
+     * Disetujui penuh dan belum direalisasikan — supaya tombol "Realisasikan"
+     * (Tahap 3) langsung punya usulan yang bisa dicoba tanpa mengajukan dan
+     * menyetujui usulan baru lebih dulu.
+     */
+    private function disetujuiPenuh(User $pengaju): void
+    {
+        $usulan = ProcurementRequest::create([
+            'user_id' => $pengaju->user_id,
+            'source' => ProcurementRequestSource::PemantauanStok,
+            'status' => ProcurementRequestStatus::Disetujui,
+        ]);
+        $usulan->forceFill(['created_at' => now()->subDays(1)])->save();
+
+        if ($item = Item::where('item_code', 'ATK-012')->first()) {
+            $usulan->details()->create([
+                'item_id' => $item->item_id,
+                'amount_request' => 20,
+                'amount_granted' => 20,
             ]);
         }
     }

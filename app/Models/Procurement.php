@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ProcurementDocumentType;
 use App\Enums\ProcurementStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +40,14 @@ class Procurement extends Model
         ];
     }
 
+    /**
+     * Judul singkat untuk tampilan dan notifikasi, mis. "Realisasi #A1B2C3D4".
+     */
+    public function judul(): string
+    {
+        return 'Realisasi #'.strtoupper(substr($this->procurement_id, 0, 8));
+    }
+
     public function isMenungguPenerimaan(): bool
     {
         return $this->status === ProcurementStatus::MenungguPenerimaan;
@@ -47,6 +56,15 @@ class Procurement extends Model
     public function isDiterima(): bool
     {
         return $this->status === ProcurementStatus::Diterima;
+    }
+
+    public function scopeFilter(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->when(
+                ProcurementStatus::tryFrom((string) ($filters['status'] ?? '')),
+                fn (Builder $query, ProcurementStatus $status) => $query->where('status', $status),
+            );
     }
 
     /**

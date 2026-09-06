@@ -7,6 +7,8 @@ use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\ProcurementController;
+use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
 use App\Http\Controllers\Request\RequestController;
@@ -77,6 +79,9 @@ Route::middleware('auth')->group(function () {
     Route::middleware('can:akses-pengadaan')->group(function () {
         Route::get('usulan-pengadaan', [ProcurementRequestController::class, 'index'])
             ->name('procurement-requests.index');
+
+        Route::get('pengadaan', [ProcurementController::class, 'index'])
+            ->name('procurements.index');
     });
 
     /*
@@ -117,6 +122,13 @@ Route::middleware('auth')->group(function () {
             ->name('procurement-requests.create');
         Route::post('usulan-pengadaan', [ProcurementRequestController::class, 'store'])
             ->name('procurement-requests.store');
+
+        // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
+        // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
+        Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
+            ->name('procurement-receipts.create');
+        Route::post('pengadaan/{procurement}/penerimaan', [ProcurementReceiptController::class, 'store'])
+            ->name('procurement-receipts.store');
     });
 
     /*
@@ -139,11 +151,23 @@ Route::middleware('auth')->group(function () {
             ->name('procurement-requests.approve');
         Route::patch('usulan-pengadaan/{procurementRequest}/tolak', [ProcurementRequestController::class, 'reject'])
             ->name('procurement-requests.reject');
+
+        // Realisasi: merealisasi adalah tugas Pejabat Pengadaan (ADR 0016).
+        // "create" wajib terdaftar sebelum "pengadaan/{procurement}" di bawah
+        // (gate berbeda, tetap satu berkas rute) — kalau tidak, "create"
+        // tertangkap sebagai parameter dan gagal route model binding.
+        Route::get('pengadaan/create', [ProcurementController::class, 'create'])
+            ->name('procurements.create');
+        Route::post('pengadaan', [ProcurementController::class, 'store'])
+            ->name('procurements.store');
     });
 
     Route::middleware('can:akses-pengadaan')->group(function () {
         Route::get('usulan-pengadaan/{procurementRequest}', [ProcurementRequestController::class, 'show'])
             ->name('procurement-requests.show');
+
+        Route::get('pengadaan/{procurement}', [ProcurementController::class, 'show'])
+            ->name('procurements.show');
     });
 
     /*

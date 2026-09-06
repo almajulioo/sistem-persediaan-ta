@@ -42,6 +42,7 @@ penerimanya sudah ditendang keluar sesi.
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
+| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
 
 ### Peristiwa
 
@@ -52,6 +53,7 @@ penerimanya sudah ditendang keluar sesi.
 | Mutasi Manual Sensitif | Perhatian | Admin, **kecuali pelaku** | Kontrol internal |
 | Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
 | Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
+| Penerimaan Barang Dikonfirmasi | Info | Pejabat Pengadaan yang merealisasi | Tahu barang yang direalisasikannya sudah sampai |
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -120,6 +122,8 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `ItemController::toggleStatus()` | `periksaBarang()` — barang diarsipkan menutup peringatannya |
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
 | `OpnamePoster::post()` | `catatOpnameDiposting()`, di luar transaksi |
+| `ProcurementController::store()` | `periksaRealisasi()` |
+| `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
 
 **Terjadwal**, harian pukul 06.00 lewat `routes/console.php`:
 
@@ -156,7 +160,7 @@ Baris yang sudah pulih tetap ditampilkan dengan penanda "Sudah pulih".
 
 | Berkas | Peran |
 |---|---|
-| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 10 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
+| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 16 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
 | [app/Enums/NotificationLevel.php](../../app/Enums/NotificationLevel.php) | Mendesak / Perhatian / Info, `bobot()`, `dotClass()` |
 | [app/Support/Notifier.php](../../app/Support/Notifier.php) | `terapkanKeadaan()`, `catatPeristiwa()`, `selesaikan()`, `bersihkan()` |
 | [app/Support/NotificationScanner.php](../../app/Support/NotificationScanner.php) | Seluruh pemeriksaan domain |
@@ -178,17 +182,20 @@ bebas seandainya notifikasi surel kelak dibangun di atas mekanisme Laravel.
 
 ## Rencana lanjutan
 
-**Tahap 2 Pengadaan (usulan) sudah dibangun** — lihat katalog di atas dan
-[ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md).
+**Tahap 2 dan 3 Pengadaan (usulan, realisasi, penerimaan) sudah dibangun** —
+lihat katalog di atas,
+[ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md),
+dan [ADR 0021](../keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
 Tombol "Ajukan Usulan Pengadaan" ada di halaman barang yang stoknya
-Habis/Menipis, bukan langsung pada notifikasinya sendiri — notifikasi Stok
-Habis/Menipis tetap menautkan ke halaman barang seperti sebelumnya.
+Habis/Menipis, "Realisasikan" ada di halaman usulan yang sudah disetujui, dan
+"Konfirmasi Penerimaan" ada di halaman realisasi yang masih Menunggu
+Penerimaan — notifikasi keadaannya sendiri menautkan ke halaman dokumen yang
+bersangkutan, bukan langsung membuka formulir aksi.
 
-**Tahap 3-4 Pengadaan** (realisasi dan penerimaan) akan menambah case enum
-lagi: realisasi berstatus *Menunggu Penerimaan* yang menunggu konfirmasi
-Pengelola Gudang (keadaan, sesuai
-[ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md)), dan
-penerimaan barang dikonfirmasi (peristiwa).
+**Tahap 4 Pengadaan** (dokumen dan BAST PDF) berencana menambah notifikasi
+keadaan `BastBelumDiunggah` sesuai
+[ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md): penerimaan
+yang sudah dikonfirmasi tetapi berkas BAST bertanda tangannya belum diunggah.
 
 **Kanal lain** (surel, WhatsApp) belum dibangun. Titik ekstensinya satu:
 `Notifier::tulisSatu()`. Kanal tambahan dikirim dari sana berdasarkan

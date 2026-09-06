@@ -5,6 +5,79 @@ perubahan.
 
 ---
 
+## 6 September 2026 — Pengadaan Tahap 3: Realisasi dan Penerimaan
+
+Inti modul pengadaan: realisasi dari usulan yang disetujui, dan konfirmasi
+penerimaan yang benar-benar menambah stok. Tidak ada migrasi baru — seluruh
+kolom yang dibutuhkan (`unit_price`, `amount_received`) sudah mendarat di
+Tahap 1. Keputusan lengkap di
+[ADR 0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
+
+**Yang dikerjakan.**
+
+- `ProcurementController` (realisasi, gate `kelola-pengadaan` untuk
+  create/store, `akses-pengadaan` untuk index/show) dan
+  `ProcurementReceiptController` (penerimaan, gate `kelola-gudang`,
+  create/store saja — peristiwa sekali jadi tanpa rute ubah) — tiga
+  controller terpisah sesuai rancangan ADR 0016.
+- `App\Support\ProcurementReceiptPoster`, mengikuti pola `OpnamePoster`:
+  transaksi terkunci, `StockLedger::record(type: Masuk, amount: amount_received)`
+  per barang (baris nol tidak menghasilkan mutasi), status realisasi menjadi
+  `Diterima`, baris `ProcurementReceipt` dibuat, lalu `AuditLogger` dan
+  notifikasi dipanggil di luar transaksi.
+- `StoreProcurementRequest` (form request realisasi) menurunkan `item_id`
+  server-side dari `procurement_request_detail_id` lewat `rincianDisetujui()`,
+  pola yang sama dengan `ApproveProcurementRequestRequest` Tahap 2 — klien
+  tidak pernah mengirim `item_id` secara langsung.
+  `ConfirmProcurementReceiptRequest` memvalidasi jumlah diterima tanpa batas
+  atas (hanya kekurangan kiriman yang jadi perhatian ADR 0017).
+- Tombol "Realisasikan" pada halaman usulan (tampil hanya bila `Disetujui`
+  dan belum punya realisasi) dan "Konfirmasi Penerimaan" pada halaman
+  realisasi (tampil hanya bila masih `MenungguPenerimaan`) — pola jalur masuk
+  yang sama dengan tombol usulan pengadaan pada halaman barang di Tahap 2.
+- `NotificationScanner::periksaRealisasi()`/`periksaSeluruhRealisasi()`/
+  `catatPenerimaanDikonfirmasi()`, dan dua jenis notifikasi baru sesuai
+  rencana yang sudah dicatat sejak modul Notifikasi dibangun:
+  `RealisasiMenungguPenerimaan` (keadaan, ke Pengelola Gudang + Admin) dan
+  `PenerimaanDikonfirmasi` (peristiwa, ke Pejabat Pengadaan yang merealisasi).
+- `ProcurementSeeder`: satu realisasi contoh dibawa **sampai diterima lewat
+  `ProcurementReceiptPoster::post()` sungguhan** (bukan baris yang ditulis
+  langsung ke tabel), sengaja dibuat diterima sebagian (tinta warna kurang 5
+  botol) supaya `ProcurementDetail::kurangKirim()` punya contoh nyata.
+  `ProcurementRequestSeeder` mendapat usulan keempat (`disetujuiPenuh`,
+  ATK-012) yang sengaja dibiarkan belum direalisasikan untuk mendemokan
+  tombol "Realisasikan".
+- 15 uji baru: matriks akses tiga gate (realisasi) dan gate tunggal
+  (penerimaan), validasi (usulan belum disetujui, realisasi ganda, jumlah
+  melebihi disetujui), jalur pintas dari halaman usulan, dan yang paling
+  penting — uji yang membuktikan stok bertambah sebanyak `amount_received`
+  bukan `amount` lewat HTTP sungguhan.
+
+**Temuan saat verifikasi manual (bukan bug, tapi layak dicatat).** Dua
+dokumen yang dibuat pada detik yang sama saat `migrate:fresh --seed`
+menampilkan label 8-karakter (`judul()`) yang identik di tampilan
+(`Realisasi #01A076E9` dan `Usulan #01A076E9`) padahal UUID sebenarnya
+berbeda total. Penyebabnya `HasUuids` menghasilkan UUID v7 berurut yang
+prefiksnya berbasis waktu; kemunculannya sama karena dibuat pada milidetik
+yang berdekatan dalam satu proses seeding. Tidak memengaruhi fungsi apa pun
+(route model binding dan relasi memakai UUID penuh), tetapi dicatat sebagai
+gotcha di `CLAUDE.md` supaya tidak disangka bug saat pemeriksaan berikutnya.
+
+**Verifikasi.** 216 test lulus (656 asersi), naik dari 201 — 15 uji baru,
+tanpa regresi. Pint bersih pada seluruh 13 berkas baru/ubahan inti (dua
+berkas lain — `MenuHelper.php` dan `routes/web.php` — punya isu gaya
+pra-ada di blok milik Alma, sengaja tidak disentuh sesuai aturan cakupan
+sempit). `migrate:fresh --seed` berhasil dari basis data kosong; pemeriksaan
+lewat `tinker` membuktikan stok ATK-003 bertambah 40 (kiriman penuh) dan
+ATK-004 bertambah 15 dari 20 dipesan (kiriman kurang, `kurangKirim()` = 5),
+notifikasi `PenerimaanDikonfirmasi` tercatat 1 baris, dan keadaan
+`RealisasiMenungguPenerimaan` tertutup begitu diterima.
+
+**Berikutnya.** Tahap 4 — Dokumen, BAST, dan laporan: unggahan berkas ke disk
+privat, BAST PDF, ekspor PDF/CSV, dan notifikasi keadaan `BastBelumDiunggah`.
+
+---
+
 ## 6 September 2026 — Pengadaan Tahap 2: Usulan Pengadaan
 
 Modul Pengadaan sesungguhnya, menyusul rancangan skema Tahap 1. Tidak ada

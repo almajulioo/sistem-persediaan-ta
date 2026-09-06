@@ -9,6 +9,7 @@ use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\OpnameDetail;
+use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
@@ -69,6 +70,7 @@ class NotificationScanner
         self::periksaOpname();
         self::periksaPeriodeOpname();
         self::periksaSeluruhUsulan();
+        self::periksaSeluruhRealisasi();
     }
 
     /**
@@ -369,6 +371,91 @@ class NotificationScanner
                 self::periksaUsulan($procurementRequest, $penerima);
             }
         });
+    }
+
+    /**
+     * Keadaan satu realisasi pengadaan: menunggu konfirmasi Pengelola Gudang
+     * bahwa barang sudah diterima. Dipanggil setelah realisasi dibuat atau
+     * penerimaannya dikonfirmasi supaya notifikasinya muncul dan menghilang
+     * seketika.
+     *
+     * @param  EloquentCollection<int, User>|null  $penerima
+     */
+    public static function periksaRealisasi(Procurement $procurement, ?EloquentCollection $penerima = null): void
+    {
+        $penerima ??= self::pengawasGudang();
+
+        $judul = $procurement->judul();
+
+        Notifier::terapkanKeadaan(
+            berlaku: $procurement->isMenungguPenerimaan(),
+            penerima: $penerima,
+            type: NotificationType::RealisasiMenungguPenerimaan,
+            dedupKey: NotificationType::RealisasiMenungguPenerimaan->dedupKey($procurement->procurement_id),
+            title: "Realisasi menunggu penerimaan: {$judul}",
+            body: sprintf(
+                '%s dari %s menunggu konfirmasi barang diterima. Periksa fisik barang lalu konfirmasi penerimaan supaya stok bertambah.',
+                $judul,
+                $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
+    }
+
+    /**
+     * Keadaan seluruh realisasi pengadaan. Menyapu seluruh baris, bukan hanya
+     * yang berstatus MenungguPenerimaan, supaya realisasi yang baru
+     * dikonfirmasi tetapi pemeriksaan reaktifnya sempat gagal tetap ikut
+     * ditutup di sini.
+     */
+    public static function periksaSeluruhRealisasi(): void
+    {
+        $penerima = self::pengawasGudang();
+
+        Procurement::query()->with('supplier')->chunk(100, function ($procurements) use ($penerima) {
+            foreach ($procurements as $procurement) {
+                self::periksaRealisasi($procurement, $penerima);
+            }
+        });
+    }
+
+    /**
+     * Peristiwa: penerimaan barang pengadaan dikonfirmasi, sehingga stok
+     * sudah bertambah.
+     *
+     * Penerimanya adalah Pejabat Pengadaan yang merealisasi (`Procurement::user_id`),
+     * bukan pengaju usulan — ia yang paling berkepentingan tahu barang yang
+     * direalisasikannya sudah sampai. Pelakunya sendiri (Pengelola Gudang yang
+     * mengonfirmasi) tidak diberi tahu.
+     */
+    public static function catatPenerimaanDikonfirmasi(Procurement $procurement, User $pelaku): void
+    {
+        self::periksaRealisasi($procurement);
+
+        $procurement->loadMissing('user', 'supplier');
+        $perealisasi = $procurement->user;
+
+        if ($perealisasi === null || $perealisasi->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        $judul = $procurement->judul();
+
+        Notifier::catatPeristiwa(
+            penerima: new EloquentCollection([$perealisasi]),
+            type: NotificationType::PenerimaanDikonfirmasi,
+            dedupKey: NotificationType::PenerimaanDikonfirmasi->dedupKey($procurement->procurement_id),
+            title: "Barang {$judul} sudah diterima",
+            body: sprintf(
+                '%s mengonfirmasi penerimaan %s dari %s. Stok sudah bertambah.',
+                $pelaku->fullname,
+                $judul,
+                $procurement->supplier?->supplier_name ?? 'penyedia',
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
     }
 
     /**

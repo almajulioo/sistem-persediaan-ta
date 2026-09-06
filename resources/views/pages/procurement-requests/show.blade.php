@@ -20,9 +20,25 @@
             </nav>
         </div>
 
-        <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $procurementRequest->status->badgeClass() }}">
-            {{ $procurementRequest->status->label() }}
-        </span>
+        <div class="flex items-center gap-3">
+            <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $procurementRequest->status->badgeClass() }}">
+                {{ $procurementRequest->status->label() }}
+            </span>
+
+            @if ($procurementRequest->isDisetujui() && ! $procurementRequest->procurement()->exists())
+                @can('kelola-pengadaan')
+                    <a href="{{ route('procurements.create', ['procurement_request_id' => $procurementRequest->procurement_request_id]) }}"
+                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                        Realisasikan
+                    </a>
+                @endcan
+            @elseif ($procurementRequest->procurement()->exists())
+                <a href="{{ route('procurements.show', $procurementRequest->procurement) }}"
+                    class="text-theme-sm rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                    Lihat Realisasi
+                </a>
+            @endif
+        </div>
     </div>
 
     <x-ui.flash />
