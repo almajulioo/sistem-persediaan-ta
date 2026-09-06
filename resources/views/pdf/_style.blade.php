@@ -74,4 +74,24 @@
         padding-top: 3px;
     }
     .footer .kanan { float: right; }
+
+    /* --- Khusus BAST: dokumen naratif, bukan tabel laporan --- */
+    .judul-dokumen { text-align: center; margin-bottom: 14px; }
+    .judul-dokumen .nama {
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+        text-decoration: underline;
+        letter-spacing: .3px;
+    }
+    .judul-dokumen .nomor { font-size: 10px; margin-top: 4px; }
+
+    p.paragraf { font-size: 10px; line-height: 1.6; text-align: justify; margin: 8px 0; }
+
+    table.pihak { width: 100%; border-collapse: collapse; margin: 6px 0 6px 20px; }
+    table.pihak td { font-size: 10px; padding: 1px 0; vertical-align: top; }
+    table.pihak .label { width: 110px; }
+    table.pihak .titik { width: 12px; }
+
+    table.data tr.total td { background: #f2f4f7; font-weight: bold; }
 </style>

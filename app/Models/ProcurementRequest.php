@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +42,14 @@ class ProcurementRequest extends Model
         ];
     }
 
+    /**
+     * Judul singkat untuk tampilan dan notifikasi, mis. "Usulan #A1B2C3D4".
+     */
+    public function judul(): string
+    {
+        return 'Usulan #'.strtoupper(substr($this->procurement_request_id, 0, 8));
+    }
+
     public function isDiajukan(): bool
     {
         return $this->status === ProcurementRequestStatus::Diajukan;
@@ -49,6 +58,43 @@ class ProcurementRequest extends Model
     public function isDisetujui(): bool
     {
         return $this->status === ProcurementRequestStatus::Disetujui;
+    }
+
+    public function isDitolak(): bool
+    {
+        return $this->status === ProcurementRequestStatus::Ditolak;
+    }
+
+    /**
+     * Ringkasan rincian barang, dipakai tampilan daftar dan isi notifikasi.
+     *
+     * `amount_granted` null (belum diputuskan) dihitung 0 pada jumlah disetujui.
+     *
+     * @return array<string, int>
+     */
+    public function ringkasan(): array
+    {
+        $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
+
+        return [
+            'barang' => $details->count(),
+            'barang_disetujui' => $details->filter(fn (ProcurementRequestDetail $detail) => $detail->disetujui())->count(),
+            'diminta' => (int) $details->sum('amount_request'),
+            'disetujui' => (int) $details->sum(fn (ProcurementRequestDetail $detail) => $detail->amount_granted ?? 0),
+        ];
+    }
+
+    public function scopeFilter(Builder $query, array $filters): Builder
+    {
+        return $query
+            ->when(
+                ProcurementRequestStatus::tryFrom((string) ($filters['status'] ?? '')),
+                fn (Builder $query, ProcurementRequestStatus $status) => $query->where('status', $status),
+            )
+            ->when(
+                ProcurementRequestSource::tryFrom((string) ($filters['source'] ?? '')),
+                fn (Builder $query, ProcurementRequestSource $source) => $query->where('source', $source),
+            );
     }
 
     public function user(): BelongsTo

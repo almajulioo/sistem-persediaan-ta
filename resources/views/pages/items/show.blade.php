@@ -30,6 +30,14 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
+            @if (in_array($item->stockStatus(), [\App\Enums\StockStatus::Habis, \App\Enums\StockStatus::Menipis], true))
+                @can('kelola-gudang')
+                    <a href="{{ route('procurement-requests.create', ['item_id' => $item->item_id]) }}"
+                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                        Ajukan Usulan Pengadaan
+                    </a>
+                @endcan
+            @endif
             <a href="{{ route('items.kartu-persediaan', $item) }}" target="_blank" rel="noopener"
                 class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                 Cetak Kartu Persediaan

@@ -37,10 +37,21 @@ enum NotificationType: string
     case OpnameDrafMenggantung = 'opname_draf_menggantung';
     case PeriodeBelumDiopname = 'periode_belum_diopname';
 
+    // --- Keadaan usulan pengadaan ---
+    case UsulanMenungguPersetujuan = 'usulan_menunggu_persetujuan';
+    case UsulanMenggantung = 'usulan_menggantung';
+
+    // --- Keadaan realisasi pengadaan ---
+    case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
+    case BastBelumDiunggah = 'bast_belum_diunggah';
+
     // --- Peristiwa ---
     case OpnameDiposting = 'opname_diposting';
     case StokBergerakSetelahDicacah = 'stok_bergerak_setelah_dicacah';
     case MutasiManualSensitif = 'mutasi_manual_sensitif';
+    case UsulanDisetujui = 'usulan_disetujui';
+    case UsulanDitolak = 'usulan_ditolak';
+    case PenerimaanDikonfirmasi = 'penerimaan_dikonfirmasi';
 
     public function label(): string
     {
@@ -52,9 +63,16 @@ enum NotificationType: string
             self::OpnameSiapDiposting => 'Opname Siap Diposting',
             self::OpnameDrafMenggantung => 'Draf Opname Menggantung',
             self::PeriodeBelumDiopname => 'Periode Belum Diopname',
+            self::UsulanMenungguPersetujuan => 'Usulan Menunggu Persetujuan',
+            self::UsulanMenggantung => 'Usulan Pengadaan Menggantung',
+            self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
+            self::BastBelumDiunggah => 'BAST Belum Diunggah',
             self::OpnameDiposting => 'Opname Diposting',
             self::StokBergerakSetelahDicacah => 'Stok Bergerak Setelah Dicacah',
             self::MutasiManualSensitif => 'Mutasi Manual Sensitif',
+            self::UsulanDisetujui => 'Usulan Pengadaan Disetujui',
+            self::UsulanDitolak => 'Usulan Pengadaan Ditolak',
+            self::PenerimaanDikonfirmasi => 'Penerimaan Barang Dikonfirmasi',
         };
     }
 
@@ -68,9 +86,16 @@ enum NotificationType: string
             self::OpnameSiapDiposting => 'Seluruh barang sudah dicacah dan draf tinggal diposting.',
             self::OpnameDrafMenggantung => 'Draf opname dibiarkan terlalu lama tanpa diselesaikan.',
             self::PeriodeBelumDiopname => 'Periode berjalan hampir berakhir tetapi opname belum dibuat.',
+            self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
+            self::UsulanMenggantung => 'Usulan pengadaan sudah lama diajukan tanpa disetujui maupun ditolak.',
+            self::RealisasiMenungguPenerimaan => 'Realisasi pengadaan menunggu konfirmasi barang diterima Pengelola Gudang.',
+            self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
             self::StokBergerakSetelahDicacah => 'Stok berubah di antara pencacahan dan posting, sehingga penyesuaian berbeda dari hasil cacah.',
             self::MutasiManualSensitif => 'Mutasi manual yang mengurangi stok tanpa dokumen sumber.',
+            self::UsulanDisetujui => 'Usulan pengadaan yang diajukan telah disetujui, sebagian atau seluruhnya.',
+            self::UsulanDitolak => 'Usulan pengadaan yang diajukan tidak dilanjutkan ke realisasi.',
+            self::PenerimaanDikonfirmasi => 'Barang pengadaan telah dikonfirmasi diterima gudang; stok sudah bertambah.',
         };
     }
 
@@ -82,7 +107,10 @@ enum NotificationType: string
         return match ($this) {
             self::OpnameDiposting,
             self::StokBergerakSetelahDicacah,
-            self::MutasiManualSensitif => false,
+            self::MutasiManualSensitif,
+            self::UsulanDisetujui,
+            self::UsulanDitolak,
+            self::PenerimaanDikonfirmasi => false,
             default => true,
         };
     }
@@ -96,10 +124,17 @@ enum NotificationType: string
             self::OpnameDrafMenggantung,
             self::PeriodeBelumDiopname,
             self::StokBergerakSetelahDicacah,
-            self::MutasiManualSensitif => NotificationLevel::Perhatian,
+            self::MutasiManualSensitif,
+            self::UsulanMenungguPersetujuan,
+            self::UsulanMenggantung,
+            self::RealisasiMenungguPenerimaan,
+            self::BastBelumDiunggah,
+            self::UsulanDitolak => NotificationLevel::Perhatian,
             self::StokBerlebih,
             self::BarangTidakBergerak,
-            self::OpnameDiposting => NotificationLevel::Info,
+            self::OpnameDiposting,
+            self::UsulanDisetujui,
+            self::PenerimaanDikonfirmasi => NotificationLevel::Info,
         };
     }
 

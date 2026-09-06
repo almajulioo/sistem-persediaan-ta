@@ -5,6 +5,248 @@ perubahan.
 
 ---
 
+## 6 September 2026 — Pengadaan Tahap 4: Dokumen, BAST, dan laporan
+
+Tahap penutup modul pengadaan, sekaligus penutup seluruh sub sistem. Tidak ada
+migrasi baru — `procurement_documents` sudah mendarat di Tahap 1, satu tahap
+sebelum fiturnya ditulis. Keputusan baru dicatat di dua ADR:
+[ADR 0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md)
+(wewenang berkas) dan
+[ADR 0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md)
+(bentuk laporan dan isi BAST).
+
+**Yang dikerjakan.**
+
+- `App\Support\DocumentStorage` sebagai satu-satunya seam penyimpanan berkas:
+  path `pengadaan/{procurement_id}/{uuid}.{ext}` di disk privat, pengacakan
+  nama, penghapusan, dan pemeriksaan keberadaan berkas. Controller tidak pernah
+  menyebut nama disk maupun menyusun path.
+- `ProcurementDocumentController` (unggah / unduh / hapus) beserta
+  `StoreProcurementDocumentRequest` — `mimes:pdf,jpg,jpeg,png`, maksimal 5 MB.
+  Ketiganya di bawah gate `akses-pengadaan`; penghapusan dipersempit lagi di
+  controller menjadi pengunggahnya sendiri atau Admin.
+- BAST PDF (`pdf/bast-pengadaan.blade.php`): dokumen naratif dua pihak, bukan
+  tabel laporan. Seluruh angkanya `amount_received`, dan kiriman kurang
+  menghasilkan paragraf catatan yang menyebut jenis serta jumlah kekurangannya.
+- Laporan pengadaan PDF + CSV (`procurements.pdf`, `procurements.csv`) berbutir
+  **satu baris per barang per realisasi**, mengikuti empat penyaring yang sama
+  dengan layar: status, penyedia, tanggal awal, tanggal akhir.
+  `Procurement::scopeFilter()` diperluas dari satu penyaring menjadi empat, dan
+  kini dipakai bersama oleh layar, PDF, CSV, dan penjaga batas ekspor.
+- Rekap di halaman daftar diubah menjadi **mengikuti penyaring** (sebelumnya
+  selalu menghitung seluruh basis data) dan ditambah dua kartu nilai: Nilai
+  Dipesan dan Nilai Diterima, dihitung lewat subkueri ke `procurement_details`.
+  `Procurement::nilaiDiterima()` melengkapi `nilaiTotal()` yang sudah ada.
+- Notifikasi keadaan `BastBelumDiunggah` (ambang 3 hari, ke Gudang + Admin),
+  dilipat ke dalam `periksaRealisasi()` yang sudah ada sehingga ikut terpicu
+  jalur reaktif maupun sapuan terjadwal `notifikasi:periksa`. Ditutup oleh
+  unggahan BAST, berlaku lagi bila berkasnya dihapus.
+- Kartu "Berkas Pendukung" pada halaman realisasi (daftar + formulir unggah +
+  unduh + hapus), tombol "Cetak BAST" pada kartu penerimaan, dan tombol
+  Ekspor CSV / Cetak PDF pada halaman daftar — pola tombol yang sama dengan
+  halaman Riwayat Mutasi.
+- `ProcurementSeeder`: tanggal penerimaan contoh dimundurkan ke 5 hari lalu
+  (dari 1 hari) supaya melewati ambang tiga hari — `BastBelumDiunggah` kini
+  punya contoh nyata di data awal, sejalan dengan alasan kiriman kurang
+  sengaja diseed di Tahap 3.
+- 42 uji baru dalam dua berkas: `ProcurementDocumentTest` (25) dan
+  `ProcurementReportTest` (17).
+
+**Keputusan yang sempat hampir diambil terbalik.** Godaan pertama adalah
+membagi izin unggah menurut jenis dokumen — BAST hanya Pengelola Gudang, SPK
+hanya Pejabat Pengadaan — supaya konsisten dengan pemisahan tugas ADR 0016.
+Ditolak setelah disadari bahwa yang dipisah ADR 0016 adalah wewenang
+**memutuskan**, bukan wewenang melampirkan bukti; sebuah pindaian tidak
+menggerakkan status apa pun dan tidak menyentuh stok. Sistem yang menolak
+lampiran yang sudah benar tidak membuat orang menunggu orang yang "berhak",
+melainkan membuat berkas itu beredar di luar sistem. Yang dibutuhkan adalah
+atribusi, dan `uploaded_by` + `audit_logs` sudah menyediakannya. Alasan lengkap
+beserta empat alternatif lain di ADR 0022.
+
+**Temuan saat menulis uji.** `$this->actingAs()` di dalam `beforeEach` membuat
+sesi uji tetap terautentikasi sepanjang test case, sehingga uji "tamu diarahkan
+ke halaman masuk" justru menerima 200. Berkas uji Tahap 2 dan 3 tidak
+terpengaruh karena membangun datanya di dalam tiap uji, bukan di `beforeEach`.
+Diperbaiki dengan `auth()->logout()` eksplisit di awal uji tamu — bukan dengan
+memindahkan pembangunan data, karena `beforeEach` yang berbagi satu realisasi
+justru yang membuat berkas uji ini terbaca.
+
+**Verifikasi.** 258 test lulus (762 asersi), naik dari 216 — 42 uji baru, tanpa
+regresi. Pint bersih pada 10 berkas baru/ubahan; `routes/web.php` tetap
+dilaporkan bermasalah, tetapi isunya pra-ada di blok `permintaan` milik Alma
+(dibuktikan dengan menjalankan Pint pada versi `HEAD` berkas itu) sehingga
+sengaja tidak disentuh. `migrate:fresh --seed` berhasil dari basis data kosong,
+dan `notifikasi:periksa` menghasilkan 2 baris `BastBelumDiunggah` — satu untuk
+Pengelola Gudang, satu untuk Admin, persis penerima yang dimaksud.
+
+**Uji HTTP nyata** (server hidup, MySQL, disk sungguhan — bukan `Storage::fake`):
+laporan PDF 1,6 MB dan BAST 880 KB keduanya diawali `%PDF-1.7`; CSV memuat
+`40;15000;600000;40;0;600000` untuk barang yang lengkap dan
+`20;25000;500000;15;5;375000` untuk yang kurang kirim, sehingga dua sisi nilai
+ADR 0017 benar-benar terlihat terpisah. Unggahan 880 KB mendarat di
+`storage/app/private/pengadaan/{id}/{uuid}.pdf` dengan nama teracak, diunduh
+kembali utuh dengan `Content-Disposition` bernama asli `BAST Ditandatangani.pdf`,
+dan `BastBelumDiunggah` turun 2 &rarr; 0 seketika. Janji keamanan ADR 0018
+diuji langsung: `/storage/{path}` menjawab 403, `/{path}` menjawab 404, dan
+rute unduh tanpa sesi mengarahkan ke `/login`. Penghapusan oleh akun
+`pengadaan` (bukan pengunggahnya) ditolak dengan pesan dan barisnya tetap ada;
+penghapusan oleh `gudang` membuang baris **dan** berkas fisiknya, lalu
+`BastBelumDiunggah` berlaku lagi.
+
+**Catatan.** Satu konsekuensi ADR 0018 belum ada yang memanggilnya: menghapus
+sebuah pengadaan harus ikut membuang berkasnya lewat `DocumentStorage`, karena
+`cascadeOnDelete` pada basis data tidak menyentuh berkas fisik. Rute hapus
+pengadaan memang belum ada, jadi tidak ada kode mati yang ditulis untuk itu —
+tetapi inilah hal pertama yang harus diingat bila rute itu kelak dibuat.
+
+---
+
+## 6 September 2026 — Pengadaan Tahap 3: Realisasi dan Penerimaan
+
+Inti modul pengadaan: realisasi dari usulan yang disetujui, dan konfirmasi
+penerimaan yang benar-benar menambah stok. Tidak ada migrasi baru — seluruh
+kolom yang dibutuhkan (`unit_price`, `amount_received`) sudah mendarat di
+Tahap 1. Keputusan lengkap di
+[ADR 0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
+
+**Yang dikerjakan.**
+
+- `ProcurementController` (realisasi, gate `kelola-pengadaan` untuk
+  create/store, `akses-pengadaan` untuk index/show) dan
+  `ProcurementReceiptController` (penerimaan, gate `kelola-gudang`,
+  create/store saja — peristiwa sekali jadi tanpa rute ubah) — tiga
+  controller terpisah sesuai rancangan ADR 0016.
+- `App\Support\ProcurementReceiptPoster`, mengikuti pola `OpnamePoster`:
+  transaksi terkunci, `StockLedger::record(type: Masuk, amount: amount_received)`
+  per barang (baris nol tidak menghasilkan mutasi), status realisasi menjadi
+  `Diterima`, baris `ProcurementReceipt` dibuat, lalu `AuditLogger` dan
+  notifikasi dipanggil di luar transaksi.
+- `StoreProcurementRequest` (form request realisasi) menurunkan `item_id`
+  server-side dari `procurement_request_detail_id` lewat `rincianDisetujui()`,
+  pola yang sama dengan `ApproveProcurementRequestRequest` Tahap 2 — klien
+  tidak pernah mengirim `item_id` secara langsung.
+  `ConfirmProcurementReceiptRequest` memvalidasi jumlah diterima tanpa batas
+  atas (hanya kekurangan kiriman yang jadi perhatian ADR 0017).
+- Tombol "Realisasikan" pada halaman usulan (tampil hanya bila `Disetujui`
+  dan belum punya realisasi) dan "Konfirmasi Penerimaan" pada halaman
+  realisasi (tampil hanya bila masih `MenungguPenerimaan`) — pola jalur masuk
+  yang sama dengan tombol usulan pengadaan pada halaman barang di Tahap 2.
+- `NotificationScanner::periksaRealisasi()`/`periksaSeluruhRealisasi()`/
+  `catatPenerimaanDikonfirmasi()`, dan dua jenis notifikasi baru sesuai
+  rencana yang sudah dicatat sejak modul Notifikasi dibangun:
+  `RealisasiMenungguPenerimaan` (keadaan, ke Pengelola Gudang + Admin) dan
+  `PenerimaanDikonfirmasi` (peristiwa, ke Pejabat Pengadaan yang merealisasi).
+- `ProcurementSeeder`: satu realisasi contoh dibawa **sampai diterima lewat
+  `ProcurementReceiptPoster::post()` sungguhan** (bukan baris yang ditulis
+  langsung ke tabel), sengaja dibuat diterima sebagian (tinta warna kurang 5
+  botol) supaya `ProcurementDetail::kurangKirim()` punya contoh nyata.
+  `ProcurementRequestSeeder` mendapat usulan keempat (`disetujuiPenuh`,
+  ATK-012) yang sengaja dibiarkan belum direalisasikan untuk mendemokan
+  tombol "Realisasikan".
+- 15 uji baru: matriks akses tiga gate (realisasi) dan gate tunggal
+  (penerimaan), validasi (usulan belum disetujui, realisasi ganda, jumlah
+  melebihi disetujui), jalur pintas dari halaman usulan, dan yang paling
+  penting — uji yang membuktikan stok bertambah sebanyak `amount_received`
+  bukan `amount` lewat HTTP sungguhan.
+
+**Temuan saat verifikasi manual (bukan bug, tapi layak dicatat).** Dua
+dokumen yang dibuat pada detik yang sama saat `migrate:fresh --seed`
+menampilkan label 8-karakter (`judul()`) yang identik di tampilan
+(`Realisasi #01A076E9` dan `Usulan #01A076E9`) padahal UUID sebenarnya
+berbeda total. Penyebabnya `HasUuids` menghasilkan UUID v7 berurut yang
+prefiksnya berbasis waktu; kemunculannya sama karena dibuat pada milidetik
+yang berdekatan dalam satu proses seeding. Tidak memengaruhi fungsi apa pun
+(route model binding dan relasi memakai UUID penuh), tetapi dicatat sebagai
+gotcha di `CLAUDE.md` supaya tidak disangka bug saat pemeriksaan berikutnya.
+
+**Verifikasi.** 216 test lulus (656 asersi), naik dari 201 — 15 uji baru,
+tanpa regresi. Pint bersih pada seluruh 13 berkas baru/ubahan inti (dua
+berkas lain — `MenuHelper.php` dan `routes/web.php` — punya isu gaya
+pra-ada di blok milik Alma, sengaja tidak disentuh sesuai aturan cakupan
+sempit). `migrate:fresh --seed` berhasil dari basis data kosong; pemeriksaan
+lewat `tinker` membuktikan stok ATK-003 bertambah 40 (kiriman penuh) dan
+ATK-004 bertambah 15 dari 20 dipesan (kiriman kurang, `kurangKirim()` = 5),
+notifikasi `PenerimaanDikonfirmasi` tercatat 1 baris, dan keadaan
+`RealisasiMenungguPenerimaan` tertutup begitu diterima.
+
+**Berikutnya.** Tahap 4 — Dokumen, BAST, dan laporan: unggahan berkas ke disk
+privat, BAST PDF, ekspor PDF/CSV, dan notifikasi keadaan `BastBelumDiunggah`.
+
+---
+
+## 6 September 2026 — Pengadaan Tahap 2: Usulan Pengadaan
+
+Modul Pengadaan sesungguhnya, menyusul rancangan skema Tahap 1. Tidak ada
+migrasi baru — seluruh kolom yang dibutuhkan (`source`, `status`,
+`amount_granted`) sudah mendarat di Tahap 1.
+
+**Keputusan yang baru diambil saat pengodean** (belum ditetapkan ADR 0016):
+bagaimana persetujuan sebagian ditangkap, dan katalog notifikasi usulan.
+Keduanya didokumentasikan di
+[ADR 0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md):
+
+- Persetujuan **satu dokumen sekali putus** lewat peta `granted[]` per barang,
+  bukan satu aksi per barang — usulan dengan banyak barang tetap satu
+  permintaan HTTP untuk satu keputusan.
+- Menolak mengisi `amount_granted = 0` eksplisit pada seluruh barang, karena
+  `null` sudah bermakna "belum diputuskan" pada model.
+- Empat notifikasi baru: `UsulanMenungguPersetujuan`/`UsulanMenggantung`
+  (keadaan, saling eksklusif dengan ambang 7 hari, meniru pola
+  `OpnameSiapDiposting`/`OpnameDrafMenggantung`), `UsulanDisetujui`/`UsulanDitolak`
+  (peristiwa ke pengaju).
+- `source` bukan field pilihan pengguna — diturunkan dari titik masuk
+  formulir (tombol pada halaman barang vs navigasi langsung). Sumber
+  `DariPermintaan` sengaja diblokir di validasi: integrasi ke sub sistem
+  Permintaan belum punya titik masuk aplikasi.
+
+**Yang dikerjakan.**
+
+- `ProcurementRequestController`: `index`/`show` di bawah gate `akses-pengadaan`
+  (kedua peran baca), `create`/`store` di bawah `kelola-gudang` (Pengelola
+  Gudang mengusulkan), `approve`/`reject` di bawah `kelola-pengadaan` (Pejabat
+  Pengadaan memutuskan) — tiga gate berbeda pada satu controller, pola baru di
+  proyek ini.
+- `StoreProcurementRequestRequest` dan `ApproveProcurementRequestRequest`;
+  yang kedua memvalidasi `granted.*` terhadap `amount_request` sesungguhnya
+  lewat `withValidator()` yang membaca model rute, pola yang sama dengan
+  `UpdateOpnameCountRequest`.
+- Tombol "Ajukan Usulan Pengadaan" pada halaman barang, muncul hanya saat
+  status stok Habis/Menipis dan pengguna punya gate `kelola-gudang`; membawa
+  `?item_id=` ke formulir usulan yang otomatis memilihkan barangnya.
+- `NotificationScanner::periksaUsulan()`/`periksaSeluruhUsulan()`/
+  `catatUsulanDiputuskan()`, mendampingi method sejenis untuk stok dan opname.
+- Tiga halaman (`index`, `create`, `show`) — pemilih barang pada `create`
+  memakai ulang pola pencarian Alpine.js yang sudah ada pada formulir
+  permintaan barang (Alma), disesuaikan nama field dan tanpa batas stok
+  (usulan pengadaan justru mengusulkan menambah stok).
+- `ProcurementRequestSeeder`: tiga usulan contoh (Diajukan, Disetujui
+  sebagian, Ditolak) supaya modul langsung bisa dicoba.
+- 22 uji baru: matriks akses tiga gate, validasi (barang kosong, duplikat,
+  jumlah nol, sumber diblokir), persetujuan sebagian, penolakan mengisi nol,
+  penjagaan usulan yang sudah diputuskan, dan jalur pintas dari halaman
+  barang.
+
+**Gotcha yang ditemukan.** Rute `usulan-pengadaan/create` (GET) harus
+terdaftar sebelum `usulan-pengadaan/{procurementRequest}` (GET) di
+`routes/web.php`, walau keduanya berada di grup gate yang berbeda — kalau
+tidak, "create" tertangkap sebagai parameter dan gagal *route model binding*.
+Diselesaikan dengan urutan pendaftaran grup, dicatat sebagai gotcha di
+`CLAUDE.md`.
+
+**Verifikasi.** 201 test lulus (608 asersi), naik dari 179 — 22 uji baru,
+tanpa regresi. Pint bersih pada seluruh berkas baru/ubahan (satu isu gaya
+pra-ada pada `MenuHelper.php` milik blok Alma sengaja tidak disentuh, sesuai
+aturan cakupan sempit). `migrate:fresh --seed` **belum diverifikasi** sesi ini
+karena MySQL (XAMPP) tidak berjalan di lingkungan pengembangan saat itu —
+tidak ada migrasi baru yang berisiko, tetapi tetap perlu dijalankan sebelum
+Tahap 3 dimulai.
+
+**Berikutnya.** Tahap 3 — Realisasi dan Penerimaan: `ProcurementReceiptPoster`
+yang menambah stok lewat `StockLedger` sebanyak `amount_received`, bukan
+`amount` (ADR 0017).
+
+---
+
 ## 6 September 2026 — Pengadaan Tahap 1: rancangan alur, skema, dan Penyedia
 
 Sesi perancangan modul Pengadaan, dilanjutkan pengerjaan tahap pertamanya.

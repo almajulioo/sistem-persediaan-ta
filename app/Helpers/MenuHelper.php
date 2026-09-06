@@ -40,6 +40,8 @@ class MenuHelper
                 'name' => 'Pengadaan',
                 'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
                 'subItems' => [
+                    ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
+                    ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
                     ['name' => 'Penyedia Barang', 'path' => '/penyedia'],
                 ],
             ],
@@ -51,6 +53,8 @@ class MenuHelper
                     ['name' => 'Master Barang', 'path' => '/barang'],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stok Opname', 'path' => '/opname'],
+                    ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
+                    ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
                 ],
             ],
         ];

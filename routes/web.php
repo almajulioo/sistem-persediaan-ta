@@ -7,6 +7,10 @@ use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\ProcurementController;
+use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
+use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
+use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
 use App\Http\Controllers\Request\RequestController;
 use Illuminate\Support\Facades\Route;
@@ -64,6 +68,47 @@ Route::middleware('auth')->group(function () {
 
     /*
     |----------------------------------------------------------------------
+    | Usulan pengadaan — daftar dan detail (Pengelola Gudang + Pejabat
+    | Pengadaan, dan Admin)
+    |----------------------------------------------------------------------
+    | Gate `akses-pengadaan` meloloskan kedua peran karena `can:` yang
+    | ditumpuk bersifat DAN, bukan ATAU (lihat ADR 0016). Rute `create` (di
+    | bawah `can:kelola-gudang`) sengaja didaftarkan sebelum rute `show`
+    | berparameter di sini, supaya "usulan-pengadaan/create" tidak tertangkap
+    | sebagai {procurementRequest}.
+    */
+    Route::middleware('can:akses-pengadaan')->group(function () {
+        Route::get('usulan-pengadaan', [ProcurementRequestController::class, 'index'])
+            ->name('procurement-requests.index');
+
+        Route::get('pengadaan', [ProcurementController::class, 'index'])
+            ->name('procurements.index');
+
+        // Cetak laporan. Ruas statis "laporan" didaftarkan di grup ini yang
+        // berada paling awal, sesuai kebiasaan berkas ini, walau nyatanya
+        // "pengadaan/{procurement}" hanya satu ruas sehingga tidak menelannya.
+        Route::get('pengadaan/laporan/pdf', [ProcurementController::class, 'exportPdf'])
+            ->name('procurements.pdf');
+        Route::get('pengadaan/laporan/csv', [ProcurementController::class, 'exportCsv'])
+            ->name('procurements.csv');
+
+        // BAST dicetak dari sistem, lalu ditandatangani dan dipindai di luar
+        // sistem. Keduanya boleh dilakukan kedua peran pengadaan (ADR 0018).
+        Route::get('pengadaan/{procurement}/bast', [ProcurementController::class, 'bast'])
+            ->name('procurements.bast');
+
+        // Berkas pendukung. Tidak ada tautan langsung ke berkasnya: disknya
+        // privat, dan seluruh unduhan wajib melewati rute terjaga ini.
+        Route::post('pengadaan/{procurement}/dokumen', [ProcurementDocumentController::class, 'store'])
+            ->name('procurement-documents.store');
+        Route::get('pengadaan/{procurement}/dokumen/{document}/unduh', [ProcurementDocumentController::class, 'download'])
+            ->name('procurement-documents.download');
+        Route::delete('pengadaan/{procurement}/dokumen/{document}', [ProcurementDocumentController::class, 'destroy'])
+            ->name('procurement-documents.destroy');
+    });
+
+    /*
+    |----------------------------------------------------------------------
     | Manajemen gudang (Pengelola Gudang, dan Admin)
     |----------------------------------------------------------------------
     | Memakai gate `kelola-gudang`, bukan middleware `role:`, karena gate sudah
@@ -94,6 +139,19 @@ Route::middleware('auth')->group(function () {
         Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
         Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
         Route::resource('opname', StockOpnameController::class)->names('opname');
+
+        // Usulan pengadaan: mengusulkan adalah tugas Pengelola Gudang (ADR 0016).
+        Route::get('usulan-pengadaan/create', [ProcurementRequestController::class, 'create'])
+            ->name('procurement-requests.create');
+        Route::post('usulan-pengadaan', [ProcurementRequestController::class, 'store'])
+            ->name('procurement-requests.store');
+
+        // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
+        // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
+        Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
+            ->name('procurement-receipts.create');
+        Route::post('pengadaan/{procurement}/penerimaan', [ProcurementReceiptController::class, 'store'])
+            ->name('procurement-receipts.store');
     });
 
     /*
@@ -110,6 +168,29 @@ Route::middleware('auth')->group(function () {
 
         Route::patch('penyedia/{supplier}/status', [SupplierController::class, 'toggleStatus'])
             ->name('suppliers.toggle-status');
+
+        // Menyetujui/menolak usulan adalah tugas Pejabat Pengadaan (ADR 0016).
+        Route::patch('usulan-pengadaan/{procurementRequest}/setujui', [ProcurementRequestController::class, 'approve'])
+            ->name('procurement-requests.approve');
+        Route::patch('usulan-pengadaan/{procurementRequest}/tolak', [ProcurementRequestController::class, 'reject'])
+            ->name('procurement-requests.reject');
+
+        // Realisasi: merealisasi adalah tugas Pejabat Pengadaan (ADR 0016).
+        // "create" wajib terdaftar sebelum "pengadaan/{procurement}" di bawah
+        // (gate berbeda, tetap satu berkas rute) — kalau tidak, "create"
+        // tertangkap sebagai parameter dan gagal route model binding.
+        Route::get('pengadaan/create', [ProcurementController::class, 'create'])
+            ->name('procurements.create');
+        Route::post('pengadaan', [ProcurementController::class, 'store'])
+            ->name('procurements.store');
+    });
+
+    Route::middleware('can:akses-pengadaan')->group(function () {
+        Route::get('usulan-pengadaan/{procurementRequest}', [ProcurementRequestController::class, 'show'])
+            ->name('procurement-requests.show');
+
+        Route::get('pengadaan/{procurement}', [ProcurementController::class, 'show'])
+            ->name('procurements.show');
     });
 
     /*

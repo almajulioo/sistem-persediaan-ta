@@ -40,6 +40,10 @@ penerimanya sudah ditendang keluar sesi.
 | Opname Siap Diposting | Perhatian | Pembuat draf | Periksa lalu posting |
 | Draf Opname Menggantung | Perhatian | Pembuat + Admin | Lanjutkan atau hapus draf |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
+| Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
+| Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
+| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
+| BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 
 ### Peristiwa
 
@@ -48,6 +52,9 @@ penerimanya sudah ditendang keluar sesi.
 | Opname Diposting | Info | Gudang + Admin, **kecuali pelaku** | Penyesuaian sudah masuk buku mutasi |
 | Stok Bergerak Setelah Dicacah | Perhatian | Pembuat opname | Satu-satunya cara mengetahuinya |
 | Mutasi Manual Sensitif | Perhatian | Admin, **kecuali pelaku** | Kontrol internal |
+| Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
+| Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
+| Penerimaan Barang Dikonfirmasi | Info | Pejabat Pengadaan yang merealisasi | Tahu barang yang direalisasikannya sudah sampai |
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -64,6 +71,8 @@ siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian
 | Draf opname menggantung | 7 hari | `NotificationScanner::HARI_DRAF_MENGGANTUNG` |
 | Barang tidak bergerak | 180 hari | `NotificationScanner::HARI_TIDAK_BERGERAK` |
 | Jelang akhir periode | 30 hari | `NotificationScanner::HARI_JELANG_AKHIR_PERIODE` |
+| Usulan pengadaan menggantung | 7 hari | `NotificationScanner::HARI_USULAN_MENGGANTUNG` |
+| BAST belum diunggah | 3 hari | `NotificationScanner::HARI_BAST_BELUM_DIUNGGAH` |
 | Simpan notifikasi selesai | 30 hari | `Notifier::HARI_SIMPAN` |
 
 Ambang stok memakai `items.stock_min` dan `items.stock_max` yang sudah ada sejak
@@ -116,6 +125,10 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `ItemController::toggleStatus()` | `periksaBarang()` — barang diarsipkan menutup peringatannya |
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
 | `OpnamePoster::post()` | `catatOpnameDiposting()`, di luar transaksi |
+| `ProcurementController::store()` | `periksaRealisasi()` |
+| `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
+| `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
+| `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
 
 **Terjadwal**, harian pukul 06.00 lewat `routes/console.php`:
 
@@ -152,7 +165,7 @@ Baris yang sudah pulih tetap ditampilkan dengan penanda "Sudah pulih".
 
 | Berkas | Peran |
 |---|---|
-| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 10 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
+| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 16 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
 | [app/Enums/NotificationLevel.php](../../app/Enums/NotificationLevel.php) | Mendesak / Perhatian / Info, `bobot()`, `dotClass()` |
 | [app/Support/Notifier.php](../../app/Support/Notifier.php) | `terapkanKeadaan()`, `catatPeristiwa()`, `selesaikan()`, `bersihkan()` |
 | [app/Support/NotificationScanner.php](../../app/Support/NotificationScanner.php) | Seluruh pemeriksaan domain |
@@ -174,12 +187,23 @@ bebas seandainya notifikasi surel kelak dibangun di atas mekanisme Laravel.
 
 ## Rencana lanjutan
 
-**Modul Pengadaan** cukup menambah case enum beserta pemeriksaannya. Kandidat
-yang sudah terlihat: usulan pengadaan menunggu persetujuan (keadaan), realisasi
-berstatus *Menunggu Penerimaan* yang menunggu konfirmasi Pengelola Gudang
-(keadaan, sesuai [ADR 0008](../keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md)),
-dan penerimaan barang dikonfirmasi (peristiwa). Notifikasi Stok Habis dapat
-menautkan langsung ke formulir usulan pengadaan begitu rutenya ada.
+**Tahap 2 dan 3 Pengadaan (usulan, realisasi, penerimaan) sudah dibangun** —
+lihat katalog di atas,
+[ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md),
+dan [ADR 0021](../keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
+Tombol "Ajukan Usulan Pengadaan" ada di halaman barang yang stoknya
+Habis/Menipis, "Realisasikan" ada di halaman usulan yang sudah disetujui, dan
+"Konfirmasi Penerimaan" ada di halaman realisasi yang masih Menunggu
+Penerimaan — notifikasi keadaannya sendiri menautkan ke halaman dokumen yang
+bersangkutan, bukan langsung membuka formulir aksi.
+
+**Tahap 4 Pengadaan sudah dibangun**, beserta `BastBelumDiunggah` yang
+dijanjikan [ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md):
+penerimaan yang sudah dikonfirmasi lebih dari tiga hari lalu tetapi berkas BAST
+bertanda tangannya belum diunggah. Keadaannya menutup diri sendiri begitu
+berkasnya masuk, dan berlaku lagi bila berkas itu dihapus. Ambangnya sengaja
+tidak nol: urutan fisiknya cetak &rarr; tanda tangan &rarr; pindai &rarr;
+unggah, dan yang ditagih adalah kelalaian, bukan jeda yang normal.
 
 **Kanal lain** (surel, WhatsApp) belum dibangun. Titik ekstensinya satu:
 `Notifier::tulisSatu()`. Kanal tambahan dikirim dari sana berdasarkan
