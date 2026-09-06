@@ -24,8 +24,9 @@ class RequestController extends Controller
         $dateTo = (string) $request->query('date_to', '');
 
         $isKepalaUnit = $request->user()->hasRole(UserRole::KepalaUnit);
-        $isStaffUmum = $request->user()->hasRole(UserRole::StaffUmum);
+        $isPengelolaGudang = $request->user()->hasRole(UserRole::PengelolaGudang);
         $isAdmin = $request->user()->isAdmin();
+        $isUser = $request->user()->hasRole(UserRole::Pengguna);
 
         $requests = ModelsRequest::with('user')
             ->when($keyword !== '', function ($query) use ($keyword) {
@@ -39,7 +40,8 @@ class RequestController extends Controller
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('date', '>=', $dateFrom))
             ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo))
             ->when($isKepalaUnit, fn ($query) => $query->where('status', 'submitted')) // TODO: Kepala Unit hanya melihat permintaan dari unitnya sendiri, bukan semua unit.
-            ->when($isStaffUmum, fn ($query) => $query->where('status', 'approved_by_head'))
+            ->when($isPengelolaGudang, fn ($query) => $query->where('status', 'approved_by_head'))
+            ->when($isUser, fn ($query) => $query->where('user_id', $request->user()->user_id))
             ->latest('date')
             ->latest('created_at')
             ->paginate(15)
@@ -67,8 +69,9 @@ class RequestController extends Controller
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'isKepalaUnit' => $isKepalaUnit,
-            'isStaffUmum' => $isStaffUmum,
+            'isPengelolaGudang' => $isPengelolaGudang,
             'isAdmin' => $isAdmin,
+            'isUser' => $isUser,
         ]);
     }
     public function create()
@@ -183,7 +186,7 @@ class RequestController extends Controller
         if($action === 'approve') {
             if ($user->hasRole(UserRole::KepalaUnit) && $request->status === 'submitted') {
                 $request->update(['status' => 'approved_by_head']);
-            } elseif ($user->hasRole(UserRole::StaffUmum) && $request->status === 'approved_by_head') {
+            } elseif ($user->hasRole(UserRole::PengelolaGudang) && $request->status === 'approved_by_head') {
                 $request->update(['status' => 'processed_by_staff']);
             } elseif ($user->isAdmin() && $request->status === 'processed_by_staff') {
                 $request->update(['status' => 'completed']);
