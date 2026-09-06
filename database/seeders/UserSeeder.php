@@ -52,7 +52,14 @@ class UserSeeder extends Seeder
                 'fullname' => 'Staff Umum',
                 'unit' => 'Subbagian Umum dan TU',
                 'role' => UserRole::StaffUmum,
-            ]
+            ],
+            [
+                'username' => 'pengguna',
+                'email' => 'pengguna@bpk.go.id',
+                'fullname' => 'Pengguna Sistem',
+                'unit' => 'Subbagian Umum dan TU',
+                'role' => UserRole::Pengguna,
+            ],
         ];
 
         foreach ($accounts as $account) {

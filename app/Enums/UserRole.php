@@ -15,6 +15,8 @@ enum UserRole: string
     case PejabatPengadaan = 'pejabat_pengadaan';
     case KepalaUnit = 'kepala_unit';
     case StaffUmum = 'staff_umum';
+    case Pengguna = 'pengguna';
+    
 
     public function label(): string
     {
@@ -24,6 +26,7 @@ enum UserRole: string
             self::PejabatPengadaan => 'Pejabat Pengadaan',
             self::KepalaUnit => 'Kepala Unit',
             self::StaffUmum => 'Staff Umum',
+            self::Pengguna => 'Pengguna',
         };
     }
 
@@ -35,6 +38,7 @@ enum UserRole: string
             self::PejabatPengadaan => 'Mengelola usulan dan realisasi pengadaan barang.',
             self::KepalaUnit => 'Menyetujui permintaan barang dari unit kerja.',
             self::StaffUmum => 'Mengubah kuantitas barang permintaan barang.',
+            self::Pengguna => 'Mengajukan permintaan barang.',
         };
     }
 
@@ -49,6 +53,7 @@ enum UserRole: string
             self::PejabatPengadaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::KepalaUnit => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
             self::StaffUmum => 'bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
+            self::Pengguna => 'bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
         };
     }
 
