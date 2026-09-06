@@ -14,7 +14,6 @@ enum UserRole: string
     case PengelolaGudang = 'pengelola_gudang';
     case PejabatPengadaan = 'pejabat_pengadaan';
     case KepalaUnit = 'kepala_unit';
-    case StaffUmum = 'staff_umum';
     case Pengguna = 'pengguna';
     
 
@@ -25,7 +24,6 @@ enum UserRole: string
             self::PengelolaGudang => 'Pengelola Gudang',
             self::PejabatPengadaan => 'Pejabat Pengadaan',
             self::KepalaUnit => 'Kepala Unit',
-            self::StaffUmum => 'Staff Umum',
             self::Pengguna => 'Pengguna',
         };
     }
@@ -37,7 +35,6 @@ enum UserRole: string
             self::PengelolaGudang => 'Mengelola stok, permintaan barang, mutasi, dan stock opname.',
             self::PejabatPengadaan => 'Mengelola usulan dan realisasi pengadaan barang.',
             self::KepalaUnit => 'Menyetujui permintaan barang dari unit kerja.',
-            self::StaffUmum => 'Mengubah kuantitas barang permintaan barang.',
             self::Pengguna => 'Mengajukan permintaan barang.',
         };
     }
@@ -52,7 +49,6 @@ enum UserRole: string
             self::PengelolaGudang => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
             self::PejabatPengadaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::KepalaUnit => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
-            self::StaffUmum => 'bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
             self::Pengguna => 'bg-gray-50 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
         };
     }

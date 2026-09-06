@@ -5,7 +5,11 @@
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Daftar Permintaan Barang</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Kelola dan pantau permintaan barang yang diajukan.
+                @if (!$isUser)
+                    Kelola dan pantau permintaan barang yang diajukan oleh unit kerja.
+                @else
+                    Pantau status permintaan barang yang telah diajukan.
+                @endif
             </p>
         </div>
 
@@ -20,19 +24,21 @@
 
     <x-ui.flash />
 
-    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
-        @foreach ([
-            ['label' => 'Permintaan Diproses', 'value' => $summary['pending'], 'class' => 'text-warning-600 dark:text-orange-400'],
-            ['label' => 'Permintaan Bulan Ini', 'value' => $summary['bulan_ini'], 'class' => 'text-gray-800 dark:text-white/90'],
-            ['label' => 'Permintaan Selesai Bulan Ini', 'value' => $summary['selesai_bulan_ini'], 'class' => 'text-success-600 dark:text-success-500'],
-        ] as $card)
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-                <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
-                <h4 class="text-title-sm mt-2 font-bold {{ $card['class'] }}">{{ $card['value'] }}</h4>
-            </div>
-        @endforeach
-    </div>
-
+    @if (!$isUser && !$isKepalaUnit)
+        <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
+            @foreach ([
+                ['label' => 'Permintaan Diproses', 'value' => $summary['pending'], 'class' => 'text-gray-600 dark:text-orange-400'],
+                ['label' => 'Permintaan Bulan Ini', 'value' => $summary['bulan_ini'], 'class' => 'text-gray-600 dark:text-white/90'],
+                ['label' => 'Permintaan Selesai Bulan Ini', 'value' => $summary['selesai_bulan_ini'], 'class' => 'text-gray-600 dark:text-success-500'],
+                ] as $card)
+                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                    <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
+                    <h4 class="text-title-sm mt-2 font-bold {{ $card['class'] }}">{{ $card['value'] }}</h4>
+                </div>
+            @endforeach
+        </div>
+    @endif
+        
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         <form method="GET" action="{{ route('request.index') }}"
             class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-5 dark:border-gray-800 sm:p-6">
@@ -121,7 +127,7 @@
                                         Detail
                                     </a>
 
-                                    @if ($row->status === 'approved_by_head' && $isStaffUmum)
+                                    @if ($row->status === 'approved_by_head' && $isPengelolaGudang)
                                         <a href="{{ route('request.edit', $row) }}"
                                             class="text-theme-xs text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
                                             Ubah Kuantitas
@@ -130,7 +136,7 @@
 
                                     @php
                                         $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
-                                                    ($row->status === 'approved_by_head' && $isStaffUmum) ||
+                                                    ($row->status === 'approved_by_head' && $isPengelolaGudang) ||
                                                     ($row->status === 'processed_by_staff' && $isAdmin);
                                     @endphp
 

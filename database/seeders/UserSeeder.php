@@ -47,13 +47,6 @@ class UserSeeder extends Seeder
                 'role' => UserRole::KepalaUnit,
             ],
             [
-                'username' => 'staffumum',
-                'email' => 'staffumum@bpk.go.id',
-                'fullname' => 'Staff Umum',
-                'unit' => 'Subbagian Umum dan TU',
-                'role' => UserRole::StaffUmum,
-            ],
-            [
                 'username' => 'pengguna',
                 'email' => 'pengguna@bpk.go.id',
                 'fullname' => 'Pengguna Sistem',
