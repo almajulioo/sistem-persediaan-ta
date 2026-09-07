@@ -16,7 +16,6 @@ use Illuminate\Support\Facades\Storage;
 
 class RequestController extends Controller
 {
-    
     public function index(Request $request)
     {
         $keyword = trim((string) $request->query('q', ''));
@@ -41,7 +40,10 @@ class RequestController extends Controller
             ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('date', '>=', $dateFrom))
             ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo))
-            ->when($isKepalaUnit, fn ($query) => $query->where('status', 'submitted')) // TODO: Kepala Unit hanya melihat permintaan dari unitnya sendiri, bukan semua unit.
+            ->when($isKepalaUnit, function ($query) use ($request) {
+                $query->where('status', 'submitted')
+                    ->whereHas('user', fn ($userQuery) => $userQuery->where('unit', $request->user()->unit));
+            })
             ->when($isPengelolaGudang, fn ($query) => $query->where('status', 'approved_by_head'))
             ->when($isUser, fn ($query) => $query->where('user_id', $request->user()->user_id))
             ->latest('date')
@@ -110,8 +112,20 @@ class RequestController extends Controller
     {
         $notaDinas = $request->requestDocuments()
             ->where('document_type', 'nota_dinas')
+            ->with('user')
             ->latest('created_at')
             ->first();
+
+        $viewer = auth()->user();
+        $canView = $viewer->hasRole(UserRole::Admin)
+            || $viewer->hasRole(UserRole::PengelolaGudang)
+            || ($viewer->hasRole(UserRole::Pengguna)
+                && $notaDinas?->user_id === $viewer->user_id)
+            || ($viewer->hasRole(UserRole::KepalaUnit)
+                && filled($viewer->unit)
+                && $viewer->unit === $notaDinas?->user?->unit);
+
+        abort_unless($canView, 403);
 
         abort_unless($notaDinas && Storage::disk('local')->exists($notaDinas->file_path), 404);
 
@@ -154,7 +168,7 @@ class RequestController extends Controller
 
         $documentGenerator->generateNotaDinas($itemRequest);
 
-        return redirect()->route('request.create')->with('success', 'Permintaan barang berhasil dibuat.');
+        return redirect()->route('request.index')->with('status', 'Permintaan barang berhasil dibuat.');
     }
 
     public function update(UpdatePermintaanBarangRequest $httpRequest, ModelsRequest $request)
@@ -187,36 +201,46 @@ class RequestController extends Controller
 
         return redirect()
             ->route('request.index')
-            ->with('success', 'Permintaan barang berhasil diperbarui.');
+            ->with('status', 'Permintaan barang berhasil diperbarui.');
     }
 
     public function respondByRole(ModelsRequest $request, Request $httpRequest)
     {
         $action = $httpRequest->input('action');
         $user = $httpRequest->user();
+        $request->loadMissing('user');
 
         if (!in_array($action, ['approve', 'reject'])) {
             return redirect()->back()->with('error', 'Aksi tidak valid.');
         }
 
+        $canRespond = ($user->hasRole(UserRole::KepalaUnit)
+                && $request->status === 'submitted'
+                && $user->unit === $request->user->unit)
+            || ($user->hasRole(UserRole::PengelolaGudang)
+                && $request->status === 'approved_by_head')
+            || ($user->isAdmin() && $request->status === 'processed_by_staff');
+
+        if (!$canRespond) {
+            return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk memproses permintaan ini.');
+        }
+
         if ($action === 'reject') {
             $request->update(['status' => 'rejected']);
-            return redirect()->back()->with('success', 'Permintaan telah ditolak.');
+            return redirect()->back()->with('status', 'Permintaan telah ditolak.');
         }
 
         if($action === 'approve') {
-            if ($user->hasRole(UserRole::KepalaUnit) && $request->status === 'submitted') {
+            if ($user->hasRole(UserRole::KepalaUnit)) {
                 $request->update(['status' => 'approved_by_head']);
-            } elseif ($user->hasRole(UserRole::PengelolaGudang) && $request->status === 'approved_by_head') {
+            } elseif ($user->hasRole(UserRole::PengelolaGudang)) {
                 $request->update(['status' => 'processed_by_staff']);
-            } elseif ($user->isAdmin() && $request->status === 'processed_by_staff') {
+            } elseif ($user->isAdmin()) {
                 $request->update(['status' => 'completed']);
-            } else {
-                return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk menyetujui permintaan ini.');
             }
         }
         $request->save();
 
-        return redirect()->route('request.index')->with('success', 'Permintaan berhasil diproses.');
+        return redirect()->route('request.index')->with('status', 'Permintaan berhasil diproses.');
     }
 }

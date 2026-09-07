@@ -31,7 +31,26 @@
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Nama Pemohon</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->user?->fullname ?? '-' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tanggal</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->date?->translatedFormat('d F Y') ?? '-' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tipe</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ ucfirst($requestData->type) }}</dd></div>
-            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Status</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ ucfirst($requestData->status) }}</dd></div>
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Status</dt>
+                <dd>
+                    <span @class([
+                        'text-theme-xs mt-1 inline-block rounded-full px-2.5 py-1 font-medium',
+                        'bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-500' => $requestData->status === 'submitted',
+                        'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500' => !in_array($requestData->status, ['submitted', 'rejected', 'completed'], true),
+                        'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500' => $requestData->status === 'rejected',
+                        'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' => $requestData->status === 'completed',
+                    ])>
+                        {{ [
+                            'submitted' => 'Terkirim',
+                            'approved_by_head' => 'Disetujui Kepala Unit',
+                            'processed_by_staff' => 'Disetujui Staff Umum',
+                            'completed' => 'Selesai',
+                            'rejected' => 'Ditolak',
+                        ][$requestData->status] ?? ucfirst(str_replace('_', ' ', $requestData->status)) }}
+                    </span>
+                </dd>
+            </div>
         </dl>
     </div>
 

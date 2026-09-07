@@ -113,7 +113,7 @@
 <body>
 
     <div class="header-title">NOTA DINAS</div>
-    <div class="header-no">No. {{ $request->request_number }}</div>
+    <div class="header-no">No. 51/B/ND/DJPKN-V.BLP.2/KEU.02.02/06/2026</div>
 
     <table class="meta-table">
         <tr>

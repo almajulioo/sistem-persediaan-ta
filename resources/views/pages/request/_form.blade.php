@@ -185,14 +185,6 @@
                 const selectedItem = this.items.find(i => i.item_id == this.selectedItemCode);
                 if (!selectedItem) return;
 
-                // Validasi batas stok dengan modal kamu
-                if (parseInt(this.inputQty) > selectedItem.stock_current) {
-                    this.$dispatch('show-request-validation-modal', {
-                        message: `Jumlah permintaan melebihi stok tersedia (${selectedItem.stock_current})!`
-                    });
-                    return;
-                }
-
                 const existingIndex = this.requestedList.findIndex(i => i.item_id == selectedItem.item_id);
                 if (existingIndex !== -1) {
                     const newQty = parseInt(this.requestedList[existingIndex].qty) + parseInt(this.inputQty);
