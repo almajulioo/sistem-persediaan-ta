@@ -55,6 +55,13 @@ enum NotificationType: string
     case PenerimaanDikonfirmasi = 'penerimaan_dikonfirmasi';
     case RealisasiDibatalkan = 'realisasi_dibatalkan';
 
+    // --- Permintaan ---
+    case PermintaanDiajukan = 'permintaan_diajukan';
+    case PermintaanDisetujuiKepalaUnit = 'permintaan_disetujui_kepala_unit';
+    case PermintaanDisetujuiPengelolaGudang = 'permintaan_disetujui_pengelola_gudang';
+    case PermintaanDitolak = 'permintaan_ditolak';
+    case PermintaanSelesai = 'permintaan_selesai';
+
     public function label(): string
     {
         return match ($this) {
@@ -77,6 +84,11 @@ enum NotificationType: string
             self::UsulanDitolak => 'Usulan Pengadaan Ditolak',
             self::PenerimaanDikonfirmasi => 'Penerimaan Barang Dikonfirmasi',
             self::RealisasiDibatalkan => 'Realisasi Pengadaan Dibatalkan',
+            self::PermintaanDiajukan => 'Permintaan Diajukan',
+            self::PermintaanDisetujuiKepalaUnit => 'Permintaan Disetujui Kepala Unit',
+            self::PermintaanDisetujuiPengelolaGudang => 'Permintaan Disetujui Pengelola Gudang',
+            self::PermintaanDitolak => 'Permintaan Ditolak',
+            self::PermintaanSelesai => 'Permintaan Selesai',
         };
     }
 
@@ -102,6 +114,11 @@ enum NotificationType: string
             self::UsulanDitolak => 'Usulan pengadaan yang diajukan tidak dilanjutkan ke realisasi.',
             self::PenerimaanDikonfirmasi => 'Barang pengadaan telah dikonfirmasi diterima gudang; stok sudah bertambah.',
             self::RealisasiDibatalkan => 'Realisasi pengadaan tidak dilanjutkan, sehingga barangnya tidak akan datang.',
+            self::PermintaanDiajukan => 'Permintaan barang dari unit kerja telah diajukan ke gudang.',
+            self::PermintaanDisetujuiKepalaUnit => 'Permintaan barang dari unit kerja telah disetujui oleh Kepala Unit.',
+            self::PermintaanDisetujuiPengelolaGudang => 'Permintaan barang dari unit kerja telah disetujui oleh Pengelola Gudang dan siap diambil/dikirim.',
+            self::PermintaanDitolak => 'Permintaan barang dari unit kerja tidak disetujui.',
+            self::PermintaanSelesai => 'Permintaan barang dari unit kerja telah selesai diproses dan ditutup.',
         };
     }
 
@@ -118,6 +135,11 @@ enum NotificationType: string
             self::UsulanDitolak,
             self::PenerimaanDikonfirmasi,
             self::RealisasiDibatalkan => false,
+            self::PermintaanDiajukan,
+            self::PermintaanDisetujuiKepalaUnit,
+            self::PermintaanDisetujuiPengelolaGudang,
+            self::PermintaanDitolak,
+            self::PermintaanSelesai => false,
             default => true,
         };
     }
@@ -139,6 +161,11 @@ enum NotificationType: string
             self::BastBelumDiunggah,
             self::UsulanDitolak,
             self::RealisasiDibatalkan => NotificationLevel::Perhatian,
+            self::PermintaanDiajukan => NotificationLevel::Perhatian,
+            self::PermintaanDisetujuiKepalaUnit => NotificationLevel::Perhatian,
+            self::PermintaanDisetujuiPengelolaGudang => NotificationLevel::Perhatian,
+            self::PermintaanDitolak => NotificationLevel::Info,
+            self::PermintaanSelesai => NotificationLevel::Info,
             self::StokBerlebih,
             self::BarangTidakBergerak,
             self::OpnameDiposting,

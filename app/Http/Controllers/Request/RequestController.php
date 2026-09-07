@@ -11,6 +11,7 @@ use App\Models\Item;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
 use App\Support\RequestDocumentGenerator;
+use App\Support\NotificationScanner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -167,6 +168,7 @@ class RequestController extends Controller
         });
 
         $documentGenerator->generateNotaDinas($itemRequest);
+        NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
 
         return redirect()->route('request.index')->with('status', 'Permintaan barang berhasil dibuat.');
     }
@@ -227,6 +229,7 @@ class RequestController extends Controller
 
         if ($action === 'reject') {
             $request->update(['status' => 'rejected']);
+            NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));
             return redirect()->back()->with('status', 'Permintaan telah ditolak.');
         }
 
@@ -239,6 +242,7 @@ class RequestController extends Controller
                 $request->update(['status' => 'completed']);
             }
         }
+        NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));
         $request->save();
 
         return redirect()->route('request.index')->with('status', 'Permintaan berhasil diproses.');

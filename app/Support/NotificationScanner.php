@@ -11,6 +11,7 @@ use App\Models\Item;
 use App\Models\OpnameDetail;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
+use App\Models\Request as ModelsRequest;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\User;
@@ -666,6 +667,73 @@ class NotificationScanner
         }
 
         self::periksaUsulan($procurementRequest);
+    }
+
+    /**
+     * Peristiwa: permintaan barang berpindah ke tahap berikutnya.
+     *
+     * Penerima sengaja berganti sesuai pemilik pekerjaan pada tahap tersebut:
+     * Kepala Unit dari unit pemohon, Pengelola Gudang, lalu Admin.
+     */
+    public static function catatPermintaanDiajukan(ModelsRequest $request): void
+    {
+        $request->loadMissing('user');
+        $kepalaUnit = $request->user?->unit
+            ? User::query()
+                ->where('is_active', true)
+                ->where('role', UserRole::KepalaUnit->value)
+                ->where('unit', $request->user->unit)
+                ->get()
+            : new EloquentCollection;
+
+        Notifier::catatPeristiwa(
+            penerima: $kepalaUnit,
+            type: NotificationType::PermintaanDiajukan,
+            dedupKey: NotificationType::PermintaanDiajukan->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number} menunggu persetujuan",
+            body: "Permintaan barang dari unit {$request->user?->unit} perlu diperiksa dan disetujui.",
+            actionUrl: route('request.index', absolute: false),
+            subject: $request,
+        );
+    }
+
+    /**
+     * Catat perpindahan penerima setelah Kepala Unit, Pengelola Gudang, atau
+     * Admin mengubah status permintaan.
+     */
+    public static function catatPermintaanDiputuskan(ModelsRequest $request): void
+    {
+        $request->loadMissing('user');
+        $penerima = match ($request->status) {
+            'approved_by_head' => self::pengawasGudang(),
+            'processed_by_staff' => Notifier::penerimaBerperan(UserRole::Admin),
+            'rejected', 'completed' => $request->user !== null
+                ? new EloquentCollection([$request->user])
+                : new EloquentCollection,
+            default => new EloquentCollection,
+        };
+
+        $type = match ($request->status) {
+            'approved_by_head' => NotificationType::PermintaanDisetujuiKepalaUnit,
+            'processed_by_staff' => NotificationType::PermintaanDisetujuiPengelolaGudang,
+            'rejected' => NotificationType::PermintaanDitolak,
+            'completed' => NotificationType::PermintaanSelesai,
+            default => null,
+        };
+
+        if ($type === null) {
+            return;
+        }
+
+        Notifier::catatPeristiwa(
+            penerima: $penerima,
+            type: $type,
+            dedupKey: $type->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: {$type->label()}",
+            body: $type->description(),
+            actionUrl: route('request.index', absolute: false),
+            subject: $request,
+        );
     }
 
     /**

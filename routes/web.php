@@ -48,7 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
 
-    Route::middleware('role:kepala_unit,staff_umum,admin')->group(function () {
+    Route::middleware('role:kepala_unit,pengelola_gudang,admin')->group(function () {
         Route::get('/permintaan/{request}/edit', [RequestController::class, 'edit'])->name('request.edit');
         Route::put('/permintaan/{request}', [RequestController::class, 'update'])->name('request.update');
         Route::post('/permintaan/{request}/respond', [RequestController::class, 'respondByRole'])->name('request.respond');

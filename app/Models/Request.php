@@ -46,6 +46,7 @@ class Request extends Model
         'request_number',
         'bast_number',
         'nd_number',
+        // TODO: Tambahkan Description field di sini nanti ditambah juga di show request 
     ];
 
     /**
