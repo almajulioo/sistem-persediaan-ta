@@ -37,6 +37,9 @@ enum NotificationType: string
     case OpnameDrafMenggantung = 'opname_draf_menggantung';
     case PeriodeBelumDiopname = 'periode_belum_diopname';
 
+    // --- Keadaan draf usulan pengadaan ---
+    case DraftUsulanTersedia = 'draft_usulan_tersedia';
+
     // --- Keadaan usulan pengadaan ---
     case UsulanMenungguPersetujuan = 'usulan_menunggu_persetujuan';
     case UsulanMenggantung = 'usulan_menggantung';
@@ -69,6 +72,7 @@ enum NotificationType: string
             self::StokMenipis => 'Stok Menipis',
             self::StokBerlebih => 'Stok Berlebih',
             self::BarangTidakBergerak => 'Barang Tidak Bergerak',
+            self::DraftUsulanTersedia => 'Draf Usulan Tersedia',
             self::OpnameSiapDiposting => 'Opname Siap Diposting',
             self::OpnameDrafMenggantung => 'Draf Opname Menggantung',
             self::PeriodeBelumDiopname => 'Periode Belum Diopname',
@@ -99,6 +103,7 @@ enum NotificationType: string
             self::StokMenipis => 'Stok sudah menyentuh batas minimum yang ditetapkan.',
             self::StokBerlebih => 'Stok melampaui batas maksimum; berisiko menumpuk dan kedaluwarsa.',
             self::BarangTidakBergerak => 'Tidak ada mutasi apa pun dalam waktu lama; layak dievaluasi atau diarsipkan.',
+            self::DraftUsulanTersedia => 'Draf usulan pengadaan otomatis sudah terkumpul dari pemantauan stok, menunggu ditinjau.',
             self::OpnameSiapDiposting => 'Seluruh barang sudah dicacah dan draf tinggal diposting.',
             self::OpnameDrafMenggantung => 'Draf opname dibiarkan terlalu lama tanpa diselesaikan.',
             self::PeriodeBelumDiopname => 'Periode berjalan hampir berakhir tetapi opname belum dibuat.',
@@ -149,6 +154,7 @@ enum NotificationType: string
         return match ($this) {
             self::StokHabis => NotificationLevel::Mendesak,
             self::StokMenipis,
+            self::DraftUsulanTersedia,
             self::OpnameSiapDiposting,
             self::OpnameDrafMenggantung,
             self::PeriodeBelumDiopname,

@@ -57,7 +57,7 @@ Admin lolos seluruhnya lewat `Gate::before`.
 |---|---|
 | `suppliers` | Data induk penyedia; identitasnya dicetak di BAST |
 | `procurement_requests` | Usulan pengadaan; `source` membedakan tiga asal-usul |
-| `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang |
+| `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
 | `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia |
 | `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_received` datang, `unit_price` harga satuan |
 | `procurement_receipts` | Peristiwa penerimaan: siapa, kapan, nomor BAST |
@@ -122,7 +122,7 @@ jenis notifikasi baru. Rincian keputusan:
 | Metode | URL | Nama | Gate | Keterangan |
 |---|---|---|---|---|
 | GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan sumber |
-| GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan; menerima `?item_id=` dari halaman barang |
+| GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan manual, murni dari nol |
 | POST | `/usulan-pengadaan` | `procurement-requests.store` | `kelola-gudang` | |
 | GET | `/usulan-pengadaan/{procurementRequest}` | `procurement-requests.show` | `akses-pengadaan` | Detail + formulir keputusan bila masih Diajukan |
 | PATCH | `/usulan-pengadaan/{procurementRequest}/setujui` | `procurement-requests.approve` | `kelola-pengadaan` | Menerima peta `granted[]` per barang, sekali putus |
@@ -136,16 +136,58 @@ jenis notifikasi baru. Rincian keputusan:
   disetujui tanpa menolak seluruh usulan — inilah wujud "disetujui sebagian".
 - Usulan yang sudah diputuskan (`Disetujui`/`Ditolak`) tidak dapat diputuskan
   ulang; rute `approve`/`reject` menolaknya dengan pesan, bukan 500.
-- `source` bukan field pilihan pengguna: formulir yang dibuka lewat tombol
-  "Ajukan Usulan Pengadaan" pada halaman barang (stok Habis/Menipis) otomatis
-  bersumber `PemantauanStok` dengan barang sudah terpilih; selain itu `Manual`.
-  Sumber `DariPermintaan` sengaja belum bisa dipilih lewat formulir ini —
+- Formulir manual ini hanya menerima `source = Manual` sejak
+  [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) —
+  `PemantauanStok` sekarang seluruhnya lahir lewat draf otomatis (lihat
+  [Draf usulan pengadaan otomatis](#draf-usulan-pengadaan-otomatis) di bawah),
+  bukan lagi lewat formulir ini dengan satu barang terisi. Sumber
+  `DariPermintaan` sengaja belum bisa dipilih sama sekali lewat formulir —
   integrasi ke sub sistem Permintaan belum ada titik masuknya.
 
 **Notifikasi baru** (lihat [modul/notifikasi.md](notifikasi.md)):
 `UsulanMenungguPersetujuan` dan `UsulanMenggantung` (keadaan, saling
 eksklusif dengan ambang 7 hari), `UsulanDisetujui` dan `UsulanDitolak`
 (peristiwa ke pengaju).
+
+## Draf usulan pengadaan otomatis
+
+Ditambahkan 13 September 2026, menggantikan jalan pintas per barang di atas
+dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
+[ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md).
+
+**Rute** — seluruhnya `kelola-gudang`, didaftarkan sebelum
+`usulan-pengadaan/{procurementRequest}` karena ruas statis:
+
+| Metode | URL | Nama | Keterangan |
+|---|---|---|---|
+| GET | `/usulan-pengadaan/draf` | `procurement-requests.draft.edit` | Menjalankan ulang pemindaian lalu menampilkan draf, atau keadaan kosong |
+| PUT | `/usulan-pengadaan/draf` | `procurement-requests.draft.update` | Mengganti seluruh rincian draf sekaligus |
+| POST | `/usulan-pengadaan/draf/ajukan` | `procurement-requests.draft.finalize` | Memindahkan status Draf → Diajukan |
+| DELETE | `/usulan-pengadaan/draf` | `procurement-requests.draft.discard` | Membuang draf beserta rinciannya |
+
+**Aturan.**
+
+- `App\Support\ProcurementDraftScanner` menjaga satu baris `ProcurementRequest`
+  berstatus `Draf` tetap berisi seluruh barang di bawah `stock_min`, dengan
+  saran jumlah `max(max(stock_max, stock_min) - stock_current, 1)`. Dipanggil
+  eksplisit di titik yang sama dengan `NotificationScanner::periksaBarang()`,
+  ditambah `OpnamePoster::post()` dan sapuan terjadwal `notifikasi:periksa`.
+- Baris `is_auto = true` sepenuhnya milik pemindaian: dihitung ulang tiap
+  pemindaian, dibuang begitu barangnya pulih. Begitu Pengelola Gudang
+  menyimpan draf lewat `draft.update`, seluruh baris yang dikirim ditandai
+  `is_auto = false` dan sejak itu kebal dari perubahan otomatis.
+- Draf yang kehabisan seluruh barisnya (baik karena pulih maupun dikosongkan
+  manual) **dihapus**, bukan dibiarkan sebagai baris kosong.
+- Draf tidak pernah muncul di tabel `/usulan-pengadaan`, hitungan
+  ringkasannya, maupun pilihan penyaring status — `ProcurementRequestStatus::options()`
+  mengecualikannya, dan query index memakai `bukanDraf()`. Ia ditampilkan
+  lewat banner tersendiri di halaman yang sama.
+- Tombol "Ajukan Usulan Pengadaan" pada halaman detail barang (stok
+  Habis/Menipis) sekarang menautkan ke halaman draf, bukan lagi ke formulir
+  manual dengan satu barang terisi.
+
+**Notifikasi baru**: `DraftUsulanTersedia` (keadaan, ke Pengelola Gudang +
+Admin), aktif selama draf berisi minimal satu barang.
 
 ## Tahap 3 — Realisasi dan Penerimaan ✅
 

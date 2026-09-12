@@ -65,6 +65,11 @@ class ProcurementRequest extends Model
         return $this->status === ProcurementRequestStatus::Ditolak;
     }
 
+    public function isDraf(): bool
+    {
+        return $this->status === ProcurementRequestStatus::Draf;
+    }
+
     /**
      * Ringkasan rincian barang, dipakai tampilan daftar dan isi notifikasi.
      *
@@ -82,6 +87,21 @@ class ProcurementRequest extends Model
             'diminta' => (int) $details->sum('amount_request'),
             'disetujui' => (int) $details->sum(fn (ProcurementRequestDetail $detail) => $detail->amount_granted ?? 0),
         ];
+    }
+
+    public function scopeDraf(Builder $query): Builder
+    {
+        return $query->where('status', ProcurementRequestStatus::Draf);
+    }
+
+    /**
+     * Usulan sungguhan — mengecualikan draf otomatis yang belum diajukan
+     * (ADR 0027). Dipakai daftar dan ringkasan usulan supaya draf tidak ikut
+     * terhitung sebagai dokumen usulan.
+     */
+    public function scopeBukanDraf(Builder $query): Builder
+    {
+        return $query->where('status', '!=', ProcurementRequestStatus::Draf);
     }
 
     public function scopeFilter(Builder $query, array $filters): Builder

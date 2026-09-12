@@ -37,6 +37,7 @@ penerimanya sudah ditendang keluar sesi.
 | Stok Menipis | Perhatian | Gudang + Admin | Usul pengadaan sebelum habis |
 | Stok Berlebih | Info | Gudang + Admin | Tinjau kebutuhan, cegah menumpuk |
 | Barang Tidak Bergerak | Info | Gudang + Admin | Evaluasi atau arsipkan |
+| Draf Usulan Tersedia | Perhatian | Gudang + Admin | Tinjau, sesuaikan jumlah, lalu ajukan |
 | Opname Siap Diposting | Perhatian | Pembuat draf | Periksa lalu posting |
 | Draf Opname Menggantung | Perhatian | Pembuat + Admin | Lanjutkan atau hapus draf |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
@@ -122,12 +123,12 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 
 | Titik panggil | Pemeriksaan |
 |---|---|
-| `StockMutationController::store()` | `periksaBarang()` + `catatMutasiManual()` |
-| `ItemController::store()` | `periksaBarang()` — barang baru bisa lahir habis |
-| `ItemController::update()` | `periksaBarang()` — ambang batas ikut menentukan status |
-| `ItemController::toggleStatus()` | `periksaBarang()` — barang diarsipkan menutup peringatannya |
+| `StockMutationController::store()` | `periksaBarang()` + `catatMutasiManual()` + `ProcurementDraftScanner::perbaruiBarang()` |
+| `ItemController::store()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — barang baru bisa lahir habis |
+| `ItemController::update()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — ambang batas ikut menentukan status |
+| `ItemController::toggleStatus()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — barang diarsipkan menutup peringatan dan baris drafnya |
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
-| `OpnamePoster::post()` | `catatOpnameDiposting()`, di luar transaksi |
+| `OpnamePoster::post()` | `catatOpnameDiposting()` + `ProcurementDraftScanner::perbaruiBarangTerdampak()`, di luar transaksi |
 | `ProcurementController::store()` | `periksaRealisasi()` + `periksaUsulan()` — usulannya berhenti menganggur |
 | `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan |
 | `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
@@ -140,6 +141,10 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 php artisan notifikasi:periksa              # aman dijalankan kapan saja
 php artisan notifikasi:periksa --bersihkan  # sekaligus buang yang lama
 ```
+
+Sejak [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md), perintah
+yang sama juga menjalankan `App\Support\ProcurementDraftScanner::perbaruiSeluruh()`
+— sapuan penuh draf usulan otomatis, sejajar `NotificationScanner::periksaSemua()`.
 
 Di server dibutuhkan satu entri cron:
 
@@ -169,10 +174,11 @@ Baris yang sudah pulih tetap ditampilkan dengan penanda "Sudah pulih".
 
 | Berkas | Peran |
 |---|---|
-| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 16 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
+| [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 25 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
 | [app/Enums/NotificationLevel.php](../../app/Enums/NotificationLevel.php) | Mendesak / Perhatian / Info, `bobot()`, `dotClass()` |
 | [app/Support/Notifier.php](../../app/Support/Notifier.php) | `terapkanKeadaan()`, `catatPeristiwa()`, `selesaikan()`, `bersihkan()` |
 | [app/Support/NotificationScanner.php](../../app/Support/NotificationScanner.php) | Seluruh pemeriksaan domain |
+| [app/Support/ProcurementDraftScanner.php](../../app/Support/ProcurementDraftScanner.php) | Sejajar NotificationScanner, tetapi menjaga draf usulan pengadaan (ADR 0027), bukan baris notifikasi |
 | [app/Models/Notification.php](../../app/Models/Notification.php) | Tabel `user_notifications`, scope `aktif()`, `terpenting()` |
 | [app/Console/Commands/PeriksaNotifikasi.php](../../app/Console/Commands/PeriksaNotifikasi.php) | `notifikasi:periksa` |
 | [app/Http/Controllers/NotificationController.php](../../app/Http/Controllers/NotificationController.php) | Daftar, tandai dibaca |
@@ -195,11 +201,14 @@ bebas seandainya notifikasi surel kelak dibangun di atas mekanisme Laravel.
 lihat katalog di atas,
 [ADR 0020](../keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md),
 dan [ADR 0021](../keputusan/0021-realisasi-dan-penerimaan-pengadaan.md).
-Tombol "Ajukan Usulan Pengadaan" ada di halaman barang yang stoknya
-Habis/Menipis, "Realisasikan" ada di halaman usulan yang sudah disetujui, dan
-"Konfirmasi Penerimaan" ada di halaman realisasi yang masih Menunggu
-Penerimaan — notifikasi keadaannya sendiri menautkan ke halaman dokumen yang
-bersangkutan, bukan langsung membuka formulir aksi.
+Tombol "Lihat Draf Usulan Pengadaan" ada di halaman barang yang stoknya
+Habis/Menipis (mengarah ke draf otomatis sejak
+[ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md), bukan lagi
+formulir manual dengan satu barang terisi), "Realisasikan" ada di halaman
+usulan yang sudah disetujui, dan "Konfirmasi Penerimaan" ada di halaman
+realisasi yang masih Menunggu Penerimaan — notifikasi keadaannya sendiri
+menautkan ke halaman dokumen yang bersangkutan, bukan langsung membuka
+formulir aksi.
 
 **Tahap 4 Pengadaan sudah dibangun**, beserta `BastBelumDiunggah` yang
 dijanjikan [ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md):

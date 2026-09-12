@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Support\AuditLogger;
 use App\Support\NotificationScanner;
 use App\Support\Notifier;
+use App\Support\ProcurementDraftScanner;
 use App\Support\StockLedger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -100,6 +101,7 @@ class ItemController extends Controller
 
         // Barang baru bisa langsung lahir dalam keadaan habis atau menipis.
         NotificationScanner::periksaBarang($item);
+        ProcurementDraftScanner::perbaruiBarang($item);
 
         return redirect()
             ->route('items.index')
@@ -136,6 +138,7 @@ class ItemController extends Controller
         // Ambang batas ikut menentukan status stok, jadi mengubahnya bisa
         // memunculkan maupun menghilangkan peringatan tanpa stok bergerak.
         NotificationScanner::periksaBarang($item);
+        ProcurementDraftScanner::perbaruiBarang($item);
 
         return redirect()
             ->route('items.index')
@@ -155,6 +158,7 @@ class ItemController extends Controller
 
         // Barang yang diarsipkan tidak lagi dilayani; peringatan stoknya ditutup.
         NotificationScanner::periksaBarang($item);
+        ProcurementDraftScanner::perbaruiBarang($item);
 
         return back()->with('status', "Barang {$item->item_code} berhasil di{$state}.");
     }

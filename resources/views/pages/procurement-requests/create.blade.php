@@ -11,15 +11,6 @@
 
     <x-ui.flash />
 
-    @if ($prefillItem)
-        <div class="mb-6 rounded-2xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/15">
-            <p class="text-theme-sm text-warning-700 dark:text-warning-400">
-                Diajukan dari pemantauan stok: <strong>{{ $prefillItem->item_name }}</strong> sudah dipilih di bawah
-                — isi jumlah yang diminta lalu klik Tambah.
-            </p>
-        </div>
-    @endif
-
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <form action="{{ route('procurement-requests.store') }}" method="POST" x-data="procurementRequestForm()">
             @csrf
@@ -127,8 +118,8 @@
         function procurementRequestForm() {
             return {
                 items: @json($items),
-                selectedItemId: @json($prefillItem->item_id ?? ''),
-                selectedItemText: @json($prefillItem ? "{$prefillItem->item_code} — {$prefillItem->item_name}" : ''),
+                selectedItemId: '',
+                selectedItemText: '',
                 searchQuery: '',
                 inputAmount: '',
                 errorMessage: '',

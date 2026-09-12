@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\StockMutation;
 use App\Support\AuditLogger;
 use App\Support\NotificationScanner;
+use App\Support\ProcurementDraftScanner;
 use App\Support\StockLedger;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -87,6 +88,7 @@ class StockMutationController extends Controller
         // mutasi manual yang mengurangi stok tanpa dokumen dilaporkan ke Admin.
         NotificationScanner::periksaBarang($item);
         NotificationScanner::catatMutasiManual($mutation, $request->user());
+        ProcurementDraftScanner::perbaruiBarang($item);
 
         return redirect()
             ->route('mutations.index')

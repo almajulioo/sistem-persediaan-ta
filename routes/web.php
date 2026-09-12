@@ -9,6 +9,7 @@ use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
 use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
+use App\Http\Controllers\Pengadaan\ProcurementDraftController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
@@ -41,7 +42,6 @@ Route::middleware('auth')->group(function () {
         return view('pages.profile', ['title' => 'Profil']);
     })->name('profile');
 
-
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
@@ -53,7 +53,6 @@ Route::middleware('auth')->group(function () {
         Route::put('/permintaan/{request}', [RequestController::class, 'update'])->name('request.update');
         Route::post('/permintaan/{request}/respond', [RequestController::class, 'respondByRole'])->name('request.respond');
     });
-
 
     /*
     |----------------------------------------------------------------------
@@ -146,6 +145,18 @@ Route::middleware('auth')->group(function () {
         Route::post('usulan-pengadaan', [ProcurementRequestController::class, 'store'])
             ->name('procurement-requests.store');
 
+        // Draf usulan otomatis dari pemantauan stok (ADR 0027). Statis, jadi
+        // wajib terdaftar sebelum "usulan-pengadaan/{procurementRequest}" di
+        // bawah, sama seperti "create" di atas.
+        Route::get('usulan-pengadaan/draf', [ProcurementDraftController::class, 'edit'])
+            ->name('procurement-requests.draft.edit');
+        Route::put('usulan-pengadaan/draf', [ProcurementDraftController::class, 'update'])
+            ->name('procurement-requests.draft.update');
+        Route::post('usulan-pengadaan/draf/ajukan', [ProcurementDraftController::class, 'finalize'])
+            ->name('procurement-requests.draft.finalize');
+        Route::delete('usulan-pengadaan/draf', [ProcurementDraftController::class, 'discard'])
+            ->name('procurement-requests.draft.discard');
+
         // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
         // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
         Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
@@ -223,7 +234,6 @@ Route::middleware('auth')->group(function () {
             ->name('users.toggle-status');
     });
 
-   
     /*
     |----------------------------------------------------------------------
     | Halaman referensi komponen TailAdmin

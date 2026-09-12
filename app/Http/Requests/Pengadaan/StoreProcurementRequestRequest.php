@@ -22,9 +22,13 @@ class StoreProcurementRequestRequest extends FormRequest
             // `dari_permintaan` belum bisa dipilih lewat formulir ini: sumber itu
             // butuh referensi ke `requests` milik sub sistem Permintaan, dan
             // integrasinya belum dibangun. Lihat ADR 0015.
+            //
+            // `pemantauan_stok` juga tidak lagi diterima di sini sejak ADR 0027:
+            // jalur itu sekarang selalu lewat draf otomatis
+            // (ProcurementDraftController), bukan formulir manual ini.
             'source' => [
                 'required',
-                Rule::in([ProcurementRequestSource::Manual->value, ProcurementRequestSource::PemantauanStok->value]),
+                Rule::in([ProcurementRequestSource::Manual->value]),
             ],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string', 'distinct', Rule::exists('items', 'item_id')],

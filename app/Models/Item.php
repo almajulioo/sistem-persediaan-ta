@@ -87,6 +87,22 @@ class Item extends Model
     }
 
     /**
+     * Stok sudah menyentuh atau melewati batas minimum — gabungan
+     * StockStatus::Menipis dan StockStatus::Habis. Dipakai
+     * App\Support\ProcurementDraftScanner untuk menentukan barang yang perlu
+     * masuk draf usulan pengadaan (ADR 0027).
+     */
+    public function diBawahMinimum(): bool
+    {
+        return $this->stock_current <= $this->stock_min;
+    }
+
+    public function scopeDiBawahMinimum(Builder $query): Builder
+    {
+        return $query->whereColumn('stock_current', '<=', 'stock_min');
+    }
+
+    /**
      * Barang yang masih boleh dipakai pada transaksi baru.
      */
     public function scopeAktif(Builder $query): Builder

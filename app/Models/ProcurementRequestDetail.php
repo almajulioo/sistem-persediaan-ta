@@ -26,13 +26,14 @@ class ProcurementRequestDetail extends Model
     /**
      * @var list<string>
      */
-    protected $fillable = ['procurement_request_id', 'item_id', 'amount_request', 'amount_granted'];
+    protected $fillable = ['procurement_request_id', 'item_id', 'amount_request', 'amount_granted', 'is_auto'];
 
     protected function casts(): array
     {
         return [
             'amount_request' => 'integer',
             'amount_granted' => 'integer',
+            'is_auto' => 'boolean',
         ];
     }
 

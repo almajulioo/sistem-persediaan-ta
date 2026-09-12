@@ -22,6 +22,21 @@
 
     <x-ui.flash />
 
+    @can('kelola-gudang')
+        @if ($draftBanner)
+            <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/15">
+                <p class="text-theme-sm text-warning-700 dark:text-warning-400">
+                    Draf usulan otomatis menunggu ditinjau:
+                    <strong>{{ $draftBanner->details_count }} barang</strong> di bawah stok minimum sudah terkumpul dari pemantauan stok.
+                </p>
+                <a href="{{ route('procurement-requests.draft.edit') }}"
+                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                    Tinjau Draf
+                </a>
+            </div>
+        @endif
+    @endcan
+
     {{-- Ringkasan --}}
     <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
         @foreach ([

@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Notification;
 use App\Support\NotificationScanner;
 use App\Support\Notifier;
+use App\Support\ProcurementDraftScanner;
 use Illuminate\Console\Command;
 
 /**
@@ -27,6 +28,7 @@ class PeriksaNotifikasi extends Command
         $this->info('Memeriksa keadaan gudang…');
 
         NotificationScanner::periksaSemua();
+        ProcurementDraftScanner::perbaruiSeluruh();
 
         $aktif = Notification::query()->aktif()->count();
         $this->line("Notifikasi aktif setelah pemeriksaan: {$aktif}");

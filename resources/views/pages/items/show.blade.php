@@ -32,9 +32,9 @@
         <div class="flex flex-wrap items-center gap-2">
             @if (in_array($item->stockStatus(), [\App\Enums\StockStatus::Habis, \App\Enums\StockStatus::Menipis], true))
                 @can('kelola-gudang')
-                    <a href="{{ route('procurement-requests.create', ['item_id' => $item->item_id]) }}"
+                    <a href="{{ route('procurement-requests.draft.edit') }}"
                         class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-                        Ajukan Usulan Pengadaan
+                        Lihat Draf Usulan Pengadaan
                     </a>
                 @endcan
             @endif

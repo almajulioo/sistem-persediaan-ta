@@ -38,6 +38,7 @@ class ProcurementRequestController extends Controller
         return view('pages.procurement-requests.index', [
             'title' => 'Usulan Pengadaan',
             'usulan' => ProcurementRequest::query()
+                ->bukanDraf()
                 ->filter($filters)
                 ->with(['user', 'details'])
                 ->latest('created_at')
@@ -45,29 +46,26 @@ class ProcurementRequestController extends Controller
                 ->withQueryString(),
             'filters' => $filters,
             'summary' => [
-                'total' => ProcurementRequest::count(),
+                'total' => ProcurementRequest::query()->bukanDraf()->count(),
                 'diajukan' => ProcurementRequest::where('status', ProcurementRequestStatus::Diajukan)->count(),
                 'disetujui' => ProcurementRequest::where('status', ProcurementRequestStatus::Disetujui)->count(),
                 'ditolak' => ProcurementRequest::where('status', ProcurementRequestStatus::Ditolak)->count(),
             ],
+            // Draf otomatis (ADR 0027) ditampilkan lewat banner tersendiri,
+            // bukan sebagai baris di tabel usulan sungguhan.
+            'draftBanner' => ProcurementRequest::query()->draf()->withCount('details')->first(),
         ]);
     }
 
-    public function create(Request $request): View
+    public function create(): View
     {
-        // Jalur pintas dari notifikasi Stok Habis/Menipis: barang datang
-        // sudah terisi dan sumbernya otomatis PemantauanStok (ADR 0016).
-        $prefillItem = $request->filled('item_id')
-            ? Item::aktif()->find((string) $request->query('item_id'))
-            : null;
-
+        // Jalur pintas per barang dari notifikasi Stok Habis/Menipis sudah
+        // digantikan draf otomatis (ADR 0027) — formulir ini sekarang murni
+        // manual.
         return view('pages.procurement-requests.create', [
             'title' => 'Ajukan Usulan Pengadaan',
             'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit', 'stock_current']),
-            'prefillItem' => $prefillItem,
-            'source' => $prefillItem !== null
-                ? ProcurementRequestSource::PemantauanStok->value
-                : ProcurementRequestSource::Manual->value,
+            'source' => ProcurementRequestSource::Manual->value,
         ]);
     }
 
@@ -100,8 +98,14 @@ class ProcurementRequestController extends Controller
             ->with('status', "{$procurementRequest->judul()} berhasil diajukan.");
     }
 
-    public function show(ProcurementRequest $procurementRequest): View
+    public function show(ProcurementRequest $procurementRequest): View|RedirectResponse
     {
+        // URL lama/tebakan ke draf otomatis dialihkan ke halaman drafnya
+        // sendiri (ADR 0027) — draf bukan usulan yang bisa ditampilkan di sini.
+        if ($procurementRequest->isDraf()) {
+            return redirect()->route('procurement-requests.draft.edit');
+        }
+
         return view('pages.procurement-requests.show', [
             'title' => $procurementRequest->judul(),
             'procurementRequest' => $procurementRequest->load(['user', 'details.item', 'procurement']),

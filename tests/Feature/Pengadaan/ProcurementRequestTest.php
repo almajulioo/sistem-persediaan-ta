@@ -155,6 +155,16 @@ describe('mengajukan usulan', function () {
             ], 'dari_permintaan'))
             ->assertSessionHasErrors('source');
     });
+
+    it('menolak sumber pemantauan_stok karena jalur itu sekarang lewat draf otomatis', function () {
+        $item = Item::factory()->create();
+
+        $this->actingAs(pengelolaGudang())
+            ->post('/usulan-pengadaan', usulanPayload([
+                ['item_id' => $item->item_id, 'amount_request' => 10],
+            ], 'pemantauan_stok'))
+            ->assertSessionHasErrors('source');
+    });
 });
 
 describe('menyetujui usulan', function () {
@@ -279,23 +289,14 @@ describe('menolak usulan', function () {
 });
 
 describe('jalur pintas dari pemantauan stok', function () {
-    it('mengisikan barang pada formulir saat datang dari notifikasi stok', function () {
-        $item = Item::factory()->habis()->create(['item_name' => 'Kertas Sticky Note']);
-
-        $this->actingAs(pengelolaGudang())
-            ->get("/usulan-pengadaan/create?item_id={$item->item_id}")
-            ->assertOk()
-            ->assertSee('Kertas Sticky Note')
-            ->assertSee('Diajukan dari pemantauan stok');
-    });
-
-    it('menampilkan tombol usulan pengadaan pada barang yang stoknya habis', function () {
+    it('menampilkan tombol menuju draf pada barang yang stoknya habis', function () {
         $item = Item::factory()->habis()->create();
 
         $this->actingAs(pengelolaGudang())
             ->get("/barang/{$item->item_id}")
             ->assertOk()
-            ->assertSee('Ajukan Usulan Pengadaan');
+            ->assertSee('Lihat Draf Usulan Pengadaan')
+            ->assertSee('/usulan-pengadaan/draf', false);
     });
 
     it('menyembunyikan tombol usulan pengadaan pada barang yang stoknya aman', function () {
@@ -304,6 +305,6 @@ describe('jalur pintas dari pemantauan stok', function () {
         $this->actingAs(pengelolaGudang())
             ->get("/barang/{$item->item_id}")
             ->assertOk()
-            ->assertDontSee('Ajukan Usulan Pengadaan');
+            ->assertDontSee('Lihat Draf Usulan Pengadaan');
     });
 });

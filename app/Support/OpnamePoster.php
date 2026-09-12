@@ -56,6 +56,7 @@ class OpnamePoster
         // ikut tertulis bila posting batal, dan kegagalannya tidak boleh
         // menggagalkan posting yang sudah sah.
         NotificationScanner::catatOpnameDiposting($opname, $actor);
+        ProcurementDraftScanner::perbaruiBarangTerdampak($opname);
     }
 
     /**

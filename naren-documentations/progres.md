@@ -5,6 +5,80 @@ perubahan.
 
 ---
 
+## 13 September 2026 — Draf usulan pengadaan otomatis
+
+Permintaan perubahan mekanisme: sebelumnya diasumsikan sistem sudah otomatis
+membuat usulan pengadaan per barang begitu stoknya di bawah minimum, dengan
+rumus `stock_max - stock_current`. Penelusuran memastikan asumsi itu keliru —
+yang otomatis selama ini hanya notifikasi `StokMenipis`/`StokHabis`; membuat
+usulannya tetap sepenuhnya manual lewat jalan pintas satu-barang yang mengisi
+formulir tanpa jumlah. Keputusan lengkap di
+[ADR 0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md).
+
+**Arah yang dipilih**, dikonfirmasi bersama pengguna sebelum dibangun: draf
+tunggal yang dijaga otomatis oleh sistem (bukan sekadar pemilih saran di
+dalam formulir manual, yang tetap pasif) — seluruh barang di bawah minimum
+ditampung dalam satu dokumen berstatus `Draf`, barang baru bergabung ke draf
+yang sama saat pemindaian ulang, barang yang pulih dibuang otomatis dari
+draf, dan jalan pintas lama di halaman barang diarahkan ke halaman draf.
+
+**Yang dikerjakan.**
+
+- `ProcurementRequestStatus::Draf`, dikecualikan dari `options()` dan dari
+  hitungan/daftar `/usulan-pengadaan` (`ProcurementRequest::scopeBukanDraf()`)
+  — draf ditampilkan lewat banner tersendiri, bukan sebagai baris usulan.
+- `procurement_requests.user_id` dijadikan nullable (migrasi) — draf lahir
+  tanpa pengaju manusia, baru terisi saat benar-benar diajukan.
+- `procurement_request_details.is_auto` (migrasi) — menandai baris yang masih
+  dikelola otomatis; begitu Pengelola Gudang menyimpan draf, seluruh baris
+  yang dikirim menjadi milik manusia dan kebal dari perubahan otomatis
+  selanjutnya, termasuk penghapusan saat barangnya pulih.
+- `App\Support\ProcurementDraftScanner` (baru, sejajar `NotificationScanner`):
+  `perbaruiBarang()`, `perbaruiSeluruh()`, `perbaruiBarangTerdampak()`,
+  `sinkronkanNotifikasi()`. Dipanggil eksplisit dari titik yang sama dengan
+  `NotificationScanner::periksaBarang()` (`ItemController` x3,
+  `StockMutationController::store()`), ditambah `OpnamePoster::post()` dan
+  sapuan terjadwal `notifikasi:periksa`.
+- Saran jumlah: `max(max(stock_max, stock_min) - stock_current, 1)` — jatuh
+  kembali ke `stock_min` saat `stock_max = 0` (tanpa batas atas), sehingga
+  tidak pernah menyarankan angka nol atau negatif.
+- `App\Http\Controllers\Pengadaan\ProcurementDraftController` (baru):
+  `edit()`, `update()` (ganti seluruh rincian sekaligus — baris yang tidak
+  dikirim ulang dianggap dibuang, kebalikan dari konvensi
+  `ProcurementController::update()`), `finalize()`, `discard()`. Empat rute
+  baru di bawah `usulan-pengadaan/draf`, didaftarkan sebelum
+  `usulan-pengadaan/{procurementRequest}` sesuai gotcha urutan rute statis.
+- `NotificationType::DraftUsulanTersedia` (keadaan, Gudang + Admin), meniru
+  pola `UsulanMenungguPersetujuan`.
+- `StoreProcurementRequestRequest` tidak lagi menerima `source = pemantauan_stok`
+  — jalur itu seluruhnya milik draf; formulir manual murni untuk usulan dari
+  nol.
+- Tombol "Ajukan Usulan Pengadaan" di halaman barang menjadi "Lihat Draf
+  Usulan Pengadaan", menautkan ke draf, bukan lagi memprefill formulir manual.
+- 25 uji baru (`ProcurementDraftTest`) plus penyesuaian `ProcurementRequestTest`
+  untuk jalur pintas dan validasi `source`. 330 pengujian lolos.
+
+**Dua trade-off yang diterima secara sadar, dicatat supaya tidak ditemukan
+kembali sebagai bug di kemudian hari:**
+
+1. **Barang yang dibuang manual dari draf bisa muncul lagi** pada pemindaian
+   berikutnya selama stoknya masih di bawah minimum — bukan bug, karena
+   kekurangannya memang belum selesai. Tidak ada memori "dismiss".
+2. **Tidak ada constraint tingkat basis data** yang menjamin hanya satu draf
+   terbuka pada satu waktu. `lockForUpdate()` pada draf yang sudah ada sudah
+   cukup untuk kasus umum; risiko dua permintaan bersamaan sama-sama membuat
+   draf pertama diterima sebagai kasus tepi berpeluang sangat kecil, sepadan
+   dengan profil pemakaian sistem ini.
+
+Satu catatan implementasi yang layak diketahui sesi berikutnya: direktif
+Blade `@json()` memecah argumennya dengan `explode(',', ...)` tanpa
+memperhatikan kurung/array bersarang — ekspresi kompleks dengan banyak koma
+di dalamnya (seperti `$koleksi->map(fn ($x) => [...banyak field...])`)
+**terpotong diam-diam**, bukan gagal dengan galat yang jelas. Hitung ekspresi
+semacam itu lebih dulu di blok `@php`, lalu `@json()`-kan variabel polosnya.
+
+---
+
 ## 7 September 2026 — Koreksi realisasi, dan agregat yang jujur
 
 Bermula dari laporan pemakaian: setelah sebuah realisasi dibatalkan, kolom
