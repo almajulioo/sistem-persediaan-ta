@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\CancelProcurementRequest;
@@ -80,7 +81,7 @@ class ProcurementController extends Controller
                 ->with('error', 'Usulan pengadaan tidak ditemukan.');
         }
 
-        if (! $procurementRequest->isDisetujui() || $procurementRequest->procurement()->exists()) {
+        if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
             return redirect()
                 ->route('procurement-requests.show', $procurementRequest)
                 ->with('error', 'Usulan ini tidak dapat direalisasikan. Realisasi hanya dari usulan yang sudah disetujui dan belum memiliki realisasi.');
@@ -115,6 +116,13 @@ class ProcurementController extends Controller
                     'unit_price' => $item['unit_price'],
                 ], $data['items']),
             );
+
+            // Satu-satunya tempat baris `procurements` lahir dari sebuah
+            // usulan, sehingga satu-satunya tempat transisi ini terjadi.
+            // Permanen — tidak pernah berbalik meski realisasinya kelak
+            // dibatalkan (ADR 0028).
+            ProcurementRequest::whereKey($data['procurement_request_id'])
+                ->update(['status' => ProcurementRequestStatus::DisetujuiSelesai]);
 
             return $procurement;
         });

@@ -71,7 +71,7 @@ class ProcurementRequestSeeder extends Seeder
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::Manual,
-            'status' => ProcurementRequestStatus::Disetujui,
+            'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(10)])->save();
 
@@ -125,7 +125,7 @@ class ProcurementRequestSeeder extends Seeder
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::PemantauanStok,
-            'status' => ProcurementRequestStatus::Disetujui,
+            'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(1)])->save();
 
@@ -156,7 +156,7 @@ class ProcurementRequestSeeder extends Seeder
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
             'source' => ProcurementRequestSource::Manual,
-            'status' => ProcurementRequestStatus::Disetujui,
+            'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill([
             'created_at' => now()->subDays(9),

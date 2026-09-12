@@ -29,8 +29,7 @@ class ProcurementSeeder extends Seeder
      */
     public function run(): void
     {
-        $usulan = ProcurementRequest::where('status', ProcurementRequestStatus::Disetujui)
-            ->whereDoesntHave('procurement')
+        $usulan = ProcurementRequest::where('status', ProcurementRequestStatus::DisetujuiMenungguRealisasi)
             ->with('details.item')
             ->orderBy('created_at')
             ->first();
@@ -53,6 +52,10 @@ class ProcurementSeeder extends Seeder
             'status' => ProcurementStatus::MenungguPenerimaan,
             'user_id' => $pejabat->user_id,
         ]);
+
+        // Dibuat langsung lewat model, bukan lewat ProcurementController::store(),
+        // jadi transisi statusnya (ADR 0028) perlu ditiru manual di sini.
+        $usulan->forceFill(['status' => ProcurementRequestStatus::DisetujuiSelesai])->save();
 
         foreach ($usulan->details as $detail) {
             $procurement->details()->create([

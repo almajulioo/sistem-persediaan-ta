@@ -55,9 +55,24 @@ class ProcurementRequest extends Model
         return $this->status === ProcurementRequestStatus::Diajukan;
     }
 
-    public function isDisetujui(): bool
+    public function isDisetujuiMenungguRealisasi(): bool
     {
-        return $this->status === ProcurementRequestStatus::Disetujui;
+        return $this->status === ProcurementRequestStatus::DisetujuiMenungguRealisasi;
+    }
+
+    public function isDisetujuiSelesai(): bool
+    {
+        return $this->status === ProcurementRequestStatus::DisetujuiSelesai;
+    }
+
+    /**
+     * Salah satu dari dua rupa "disetujui" — dipakai tempat yang cuma peduli
+     * keputusan Pejabat Pengadaan-nya positif, tanpa peduli sudah
+     * direalisasikan atau belum (ADR 0028).
+     */
+    public function sudahDisetujui(): bool
+    {
+        return $this->status->sudahDisetujui();
     }
 
     public function isDitolak(): bool

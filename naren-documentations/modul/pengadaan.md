@@ -134,8 +134,9 @@ jenis notifikasi baru. Rincian keputusan:
   `granted[procurement_request_detail_id] => jumlah` diterapkan ke seluruh
   rincian dalam satu transaksi. Barang dengan `granted = 0` berarti tidak
   disetujui tanpa menolak seluruh usulan — inilah wujud "disetujui sebagian".
-- Usulan yang sudah diputuskan (`Disetujui`/`Ditolak`) tidak dapat diputuskan
-  ulang; rute `approve`/`reject` menolaknya dengan pesan, bukan 500.
+- Usulan yang sudah diputuskan (`DisetujuiMenungguRealisasi`/`DisetujuiSelesai`/`Ditolak`)
+  tidak dapat diputuskan ulang; rute `approve`/`reject` menolaknya dengan
+  pesan, bukan 500.
 - Formulir manual ini hanya menerima `source = Manual` sejak
   [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) —
   `PemantauanStok` sekarang seluruhnya lahir lewat draf otomatis (lihat
@@ -188,6 +189,33 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
 
 **Notifikasi baru**: `DraftUsulanTersedia` (keadaan, ke Pengelola Gudang +
 Admin), aktif selama draf berisi minimal satu barang.
+
+## Status usulan disetujui: dua rupa
+
+Ditambahkan 13 September 2026 agar tabel dan filter usulan membedakan dua
+keadaan yang sebelumnya tercampur dalam satu status `Disetujui`. Rincian
+keputusan: [ADR 0028](../keputusan/0028-status-usulan-disetujui-dipecah-dua.md).
+
+| Status | Makna |
+|---|---|
+| `DisetujuiMenungguRealisasi` | Disetujui, belum ada `Procurement` untuk usulan ini |
+| `DisetujuiSelesai` | Disetujui dan sudah ada `Procurement`, **apa pun nasibnya** — termasuk yang dibatalkan |
+
+**Aturan.**
+
+- Transisi `MenungguRealisasi → Selesai` terjadi tepat satu kali, di
+  `ProcurementController::store()`, dan **tidak pernah berbalik** — realisasi
+  yang dibatalkan tidak mengembalikan usulan ke `MenungguRealisasi`, karena
+  "selesai" di sini berarti "sudah dibuatkan realisasi", bukan "realisasinya
+  berhasil".
+- `ProcurementRequest::sudahDisetujui()` mencakup kedua sub-status, dipakai
+  tempat yang cuma peduli keputusannya positif tanpa peduli sudah
+  direalisasi atau belum (mis. notifikasi `UsulanDisetujui`/`UsulanDitolak`).
+- Kartu ringkasan pada `/usulan-pengadaan` menampilkan keduanya terpisah:
+  "Disetujui, Menunggu Realisasi" dan "Disetujui, Selesai".
+- `ProcurementSeeder` membuat `Procurement` langsung lewat model (bukan lewat
+  controller), sehingga menirukan transisi status ini secara manual — perlu
+  diingat bila menambah seeder serupa di kemudian hari.
 
 ## Tahap 3 — Realisasi dan Penerimaan ✅
 

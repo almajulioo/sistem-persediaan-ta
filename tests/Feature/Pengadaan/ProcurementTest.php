@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\NotificationType;
+use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -131,6 +132,18 @@ describe('membuat realisasi', function () {
             ->where('type', NotificationType::RealisasiMenungguPenerimaan)
             ->aktif()
             ->exists())->toBeTrue();
+    });
+
+    it('memindahkan status usulan asalnya dari menunggu realisasi menjadi selesai', function () {
+        $pejabat = pejabatPengadaan();
+        $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
+            ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
+        ]));
+        expect($usulan->status)->toBe(ProcurementRequestStatus::DisetujuiMenungguRealisasi);
+
+        buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+
+        expect($usulan->fresh()->status)->toBe(ProcurementRequestStatus::DisetujuiSelesai);
     });
 
     it('menolak realisasi dari usulan yang belum disetujui', function () {

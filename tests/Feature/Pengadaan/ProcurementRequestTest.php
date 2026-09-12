@@ -194,7 +194,7 @@ describe('menyetujui usulan', function () {
 
         $usulan->refresh();
 
-        expect($usulan->status)->toBe(ProcurementRequestStatus::Disetujui)
+        expect($usulan->status)->toBe(ProcurementRequestStatus::DisetujuiMenungguRealisasi)
             ->and($detailA->refresh()->amount_granted)->toBe(40)
             ->and($detailB->refresh()->amount_granted)->toBe(20);
 
@@ -278,13 +278,13 @@ describe('menolak usulan', function () {
     it('menolak menolak usulan yang sudah diputuskan', function () {
         $item = Item::factory()->create();
         $usulan = buatUsulan(pengelolaGudang(), [['item_id' => $item->item_id, 'amount_request' => 10]]);
-        $usulan->forceFill(['status' => ProcurementRequestStatus::Disetujui])->save();
+        $usulan->forceFill(['status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi])->save();
 
         $this->actingAs(pejabatPengadaan())
             ->patch("/usulan-pengadaan/{$usulan->procurement_request_id}/tolak")
             ->assertSessionHas('error');
 
-        expect($usulan->refresh()->status)->toBe(ProcurementRequestStatus::Disetujui);
+        expect($usulan->refresh()->status)->toBe(ProcurementRequestStatus::DisetujuiMenungguRealisasi);
     });
 });
 

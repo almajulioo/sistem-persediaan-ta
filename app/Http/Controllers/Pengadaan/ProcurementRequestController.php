@@ -48,7 +48,8 @@ class ProcurementRequestController extends Controller
             'summary' => [
                 'total' => ProcurementRequest::query()->bukanDraf()->count(),
                 'diajukan' => ProcurementRequest::where('status', ProcurementRequestStatus::Diajukan)->count(),
-                'disetujui' => ProcurementRequest::where('status', ProcurementRequestStatus::Disetujui)->count(),
+                'disetujui_menunggu_realisasi' => ProcurementRequest::where('status', ProcurementRequestStatus::DisetujuiMenungguRealisasi)->count(),
+                'disetujui_selesai' => ProcurementRequest::where('status', ProcurementRequestStatus::DisetujuiSelesai)->count(),
                 'ditolak' => ProcurementRequest::where('status', ProcurementRequestStatus::Ditolak)->count(),
             ],
             // Draf otomatis (ADR 0027) ditampilkan lewat banner tersendiri,
@@ -123,7 +124,7 @@ class ProcurementRequestController extends Controller
                 $procurementRequest->details()->whereKey($detailId)->update(['amount_granted' => (int) $jumlah]);
             }
 
-            $procurementRequest->forceFill(['status' => ProcurementRequestStatus::Disetujui])->save();
+            $procurementRequest->forceFill(['status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi])->save();
         });
 
         AuditLogger::record($request->user(), "Menyetujui usulan pengadaan: {$procurementRequest->judul()}");

@@ -5,6 +5,58 @@ perubahan.
 
 ---
 
+## 13 September 2026 — Status usulan "Disetujui" dipecah dua
+
+Permintaan lanjutan setelah sesi draf otomatis di hari yang sama: status
+`Disetujui` pada usulan pengadaan menaungi dua keadaan riil yang berbeda —
+belum ada realisasi sama sekali, dan sudah ada realisasi apa pun nasibnya —
+tetapi keduanya tampil identik di tabel dan filter `/usulan-pengadaan`.
+Diminta agar terlihat jelas dan bisa disaring terpisah. Keputusan lengkap di
+[ADR 0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md).
+
+**Definisi yang dikonfirmasi bersama pengguna sebelum dibangun**: "selesai"
+berarti sudah dibuat dokumen realisasinya, titik — realisasi yang dibatalkan
+tetap terhitung "selesai", tidak kembali jadi "menunggu realisasi". Ini
+menyederhanakan kategorinya jadi murni biner (bukan tiga rupa yang juga
+membedakan nasib realisasi), dan pilihan status **tersimpan** (bukan
+turunan/computed seperti `Item::stockStatus()`) diambil justru karena user
+secara eksplisit ingin bisa **disaring** lewat filter dropdown.
+
+**Yang dikerjakan.**
+
+- `ProcurementRequestStatus::Disetujui` → `DisetujuiMenungguRealisasi` (badge
+  biru, label "Menunggu Realisasi") dan `DisetujuiSelesai` (badge hijau,
+  label "Selesai"). Label tampilan sengaja tidak mengulang kata "Disetujui"
+  di kedua badge.
+- `ProcurementRequestController::approve()` mengisi `DisetujuiMenungguRealisasi`;
+  `ProcurementController::store()` — satu-satunya tempat baris `procurements`
+  pernah lahir dari sebuah usulan — memindahkannya ke `DisetujuiSelesai`
+  dalam transaksi yang sama. Transisi permanen, tidak pernah berbalik.
+- Migrasi **data** (bukan skema — kolom `status` tetap string polos)
+  membackfill baris lama `disetujui` berdasarkan ada/tidaknya baris di
+  `procurements`.
+- `ProcurementRequest::isDisetujui()` diganti `isDisetujuiMenungguRealisasi()`,
+  `isDisetujuiSelesai()`, dan `sudahDisetujui()` (gabungan keduanya, dipakai
+  tempat yang cuma peduli keputusannya positif).
+- Efek samping yang menyederhanakan, bukan cuma menambah kerumitan: beberapa
+  pengecekan gabungan (`isDisetujui() && procurement()->exists()`/`=== null`)
+  di `ProcurementController::create()`, `StoreProcurementRequest`, dan
+  `NotificationScanner::periksaUsulanBelumDirealisasi()` menyusut jadi satu
+  kondisi status saja, tanpa perlu memuat relasi `procurement` lagi.
+- `ProcurementSeeder` membuat `Procurement` langsung lewat model (bukan lewat
+  controller), sehingga transisi statusnya ditiru manual di sana — dicatat
+  eksplisit di komentar seeder supaya tidak terlewat sesi berikutnya.
+- Kartu ringkasan `/usulan-pengadaan` bertambah dari 4 jadi 5: "Disetujui"
+  yang dulu satu kartu kini dua kartu terpisah.
+- 2 uji baru (transisi status setelah realisasi dibuat di `ProcurementTest`,
+  status tetap `DisetujuiSelesai` setelah dibatalkan di
+  `ProcurementCancellationTest`) plus penyesuaian assertion status di
+  `ProcurementRequestTest`. 332 pengujian lolos, diverifikasi juga lewat
+  `migrate:fresh --seed` terhadap MySQL sungguhan (distribusi status pada
+  data contoh diperiksa langsung lewat query, hasilnya konsisten).
+
+---
+
 ## 13 September 2026 — Draf usulan pengadaan otomatis
 
 Permintaan perubahan mekanisme: sebelumnya diasumsikan sistem sudah otomatis

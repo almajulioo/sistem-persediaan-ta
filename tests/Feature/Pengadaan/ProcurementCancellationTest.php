@@ -2,6 +2,7 @@
 
 use App\Enums\AlasanPembatalan;
 use App\Enums\NotificationType;
+use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
@@ -164,6 +165,18 @@ describe('membatalkan realisasi', function () {
 });
 
 describe('usulan setelah realisasinya dibatalkan', function () {
+    it('status usulannya tetap DisetujuiSelesai, tidak berbalik menjadi menunggu realisasi', function () {
+        // Definisi ADR 0028: "selesai" berarti sudah ada dokumen realisasi
+        // untuk usulan ini, terlepas dari nasibnya — dibatalkan bukan
+        // pengecualian.
+        $usulan = $this->procurement->procurementRequest;
+        expect($usulan->fresh()->status)->toBe(ProcurementRequestStatus::DisetujuiSelesai);
+
+        $this->actingAs($this->pejabat)->patch($this->url, pembatalanPayload());
+
+        expect($usulan->fresh()->status)->toBe(ProcurementRequestStatus::DisetujuiSelesai);
+    });
+
     it('tidak dapat direalisasikan ulang', function () {
         $usulan = $this->procurement->procurementRequest;
 

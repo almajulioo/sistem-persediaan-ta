@@ -404,13 +404,12 @@ class NotificationScanner
         string $judul,
         string $tautan,
     ): void {
-        $procurementRequest->loadMissing('procurement');
-
         // Ambangnya dihitung dari kapan usulan diputuskan. `updated_at` cukup
         // mewakilinya: satu-satunya hal yang mengubah baris usulan setelah
-        // dibuat adalah keputusan setujui/tolak itu sendiri.
-        $menganggur = $procurementRequest->isDisetujui()
-            && $procurementRequest->procurement === null
+        // dibuat adalah keputusan setujui/tolak, atau transisi ke
+        // DisetujuiSelesai saat direalisasikan (ADR 0028) — keduanya sama-sama
+        // menandakan usulan tidak lagi menganggur.
+        $menganggur = $procurementRequest->isDisetujuiMenungguRealisasi()
             && $procurementRequest->updated_at->lt(now()->subDays(self::HARI_USULAN_BELUM_DIREALISASI));
 
         Notifier::terapkanKeadaan(
@@ -438,7 +437,7 @@ class NotificationScanner
     {
         $penerima = self::pejabatPengadaan();
 
-        ProcurementRequest::query()->with('user', 'procurement')->chunk(100, function ($usulan) use ($penerima) {
+        ProcurementRequest::query()->with('user')->chunk(100, function ($usulan) use ($penerima) {
             foreach ($usulan as $procurementRequest) {
                 self::periksaUsulan($procurementRequest, $penerima);
             }
@@ -632,7 +631,7 @@ class NotificationScanner
         $tautan = route('procurement-requests.show', $procurementRequest, false);
         $ringkasan = $procurementRequest->ringkasan();
 
-        if ($procurementRequest->isDisetujui()) {
+        if ($procurementRequest->sudahDisetujui()) {
             Notifier::catatPeristiwa(
                 penerima: new EloquentCollection([$pengaju]),
                 type: NotificationType::UsulanDisetujui,

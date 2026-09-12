@@ -62,14 +62,14 @@ class StoreProcurementRequest extends FormRequest
                 return;
             }
 
-            if (! $procurementRequest->isDisetujui()) {
-                $validator->errors()->add('procurement_request_id', 'Realisasi hanya dapat dibuat dari usulan yang sudah disetujui.');
+            if ($procurementRequest->isDisetujuiSelesai()) {
+                $validator->errors()->add('procurement_request_id', 'Usulan ini sudah memiliki realisasi.');
 
                 return;
             }
 
-            if ($procurementRequest->procurement()->exists()) {
-                $validator->errors()->add('procurement_request_id', 'Usulan ini sudah memiliki realisasi.');
+            if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
+                $validator->errors()->add('procurement_request_id', 'Realisasi hanya dapat dibuat dari usulan yang sudah disetujui.');
 
                 return;
             }

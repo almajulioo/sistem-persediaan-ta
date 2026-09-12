@@ -38,11 +38,12 @@
     @endcan
 
     {{-- Ringkasan --}}
-    <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
+    <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5 md:gap-6">
         @foreach ([
             ['label' => 'Total Usulan', 'value' => $summary['total']],
             ['label' => 'Menunggu Persetujuan', 'value' => $summary['diajukan']],
-            ['label' => 'Disetujui', 'value' => $summary['disetujui']],
+            ['label' => 'Disetujui, Menunggu Realisasi', 'value' => $summary['disetujui_menunggu_realisasi']],
+            ['label' => 'Disetujui, Selesai', 'value' => $summary['disetujui_selesai']],
             ['label' => 'Ditolak', 'value' => $summary['ditolak']],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
