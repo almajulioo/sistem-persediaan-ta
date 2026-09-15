@@ -14,6 +14,7 @@ use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
 use App\Http\Controllers\Request\RequestController;
+use App\Http\Controllers\Request\ItemProposalController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,6 +48,11 @@ Route::middleware('auth')->group(function () {
     })->name('profile');
 
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
+    Route::get('/permintaan/usulan-barang', [ItemProposalController::class, 'index'])->name('request.item-proposals.index');
+    Route::get('/permintaan/usulan-barang/create', [ItemProposalController::class, 'create'])->name('request.item-proposals.create');
+    Route::post('/permintaan/usulan-barang', [ItemProposalController::class, 'store'])->name('request.item-proposals.store');
+    Route::patch('/permintaan/usulan-barang/{itemProposal}/keputusan', [ItemProposalController::class, 'decide'])
+        ->name('request.item-proposals.decide');
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
