@@ -95,6 +95,7 @@ dikabarkan ke Alma dan tercermin di kedua naskah:
 | Tabel | Perubahan | ADR |
 |---|---|---|
 | `users` | Tambah `last_login_at`, `last_login_ip` | [0001](../keputusan/0001-autentikasi-sesi-tanpa-starter-kit.md) |
+| `users` | Nilai peran baru `kasubbag_umum_ti` pada kolom `role`. **Tanpa migrasi** — `role` hanya `string` tanpa constraint — tetapi tetap perubahan pada tabel bersama, jadi harus disepakati | [0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) |
 | `items` | Tambah `is_active` | [0003](../keputusan/0003-arsip-alih-alih-hapus.md) |
 | `stock_mutations` | Tambah `user_id`, `stock_after`, `reference_number`, `notes` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 | `stock_mutations` | `reference` diganti nama menjadi `reference_id` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
@@ -123,6 +124,10 @@ ERD pada naskah Naren diperbarui.
 | `procurement_request_details` | Hapus `status` — duplikat `amount_granted`; menutup butir terbuka ADR 0015 | [0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md) |
 | `procurement_documents` | Tabel baru — berkas BAST pindai dan SPK/kontrak, di disk privat | [0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md) |
 | `procurement_receipts` | Hapus `file_url` — berkas pindah ke `procurement_documents`, dan NOT NULL-nya memblokir stok di belakang alur pemindaian | [0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md) |
+| `procurements` | Tambah `cancelled_at`, `cancelled_by`, `cancel_reason`, `cancel_note` | [0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md) |
+| `procurement_requests` | `user_id` menjadi **nullable** — draf otomatis tidak punya pengaju | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
+| `procurement_request_details` | Tambah `is_auto` — menandai baris yang masih dikelola draf otomatis | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
+| `procurements` | Tambah `reviewed_at`, `reviewed_by`, `review_note` — keputusan terakhir Kasubbag Umum dan TI; statusnya yang membedakan setuju dari tolak | [0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

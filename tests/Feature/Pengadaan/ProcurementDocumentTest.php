@@ -31,7 +31,8 @@ function realisasiDiterima(User $pejabat, User $petugas, int $diterimaHariLalu =
         ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
     ]));
 
-    $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+    // Persetujuan Kasubbag Umum dan TI adalah prasyarat penerimaan (ADR 0030).
+    $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
 
     ProcurementReceiptPoster::post(
         procurement: $procurement,
@@ -47,7 +48,7 @@ function realisasiDiterima(User $pejabat, User $petugas, int $diterimaHariLalu =
 }
 
 /**
- * Realisasi yang belum dikonfirmasi diterima.
+ * Realisasi yang sudah disetujui tetapi belum dikonfirmasi diterima.
  */
 function realisasiMenunggu(User $pejabat, User $petugas): Procurement
 {
@@ -55,7 +56,7 @@ function realisasiMenunggu(User $pejabat, User $petugas): Procurement
         ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
     ]));
 
-    return buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+    return buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
 }
 
 beforeEach(function () {

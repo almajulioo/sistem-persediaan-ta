@@ -2,6 +2,7 @@
 
 namespace App\Helpers;
 
+use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 
@@ -56,6 +57,33 @@ class MenuHelper
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
                     ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
                 ],
+            ],
+        ];
+    }
+
+    /**
+     * Menu persetujuan, tempat kerja Kasubbag Umum dan TI.
+     *
+     * Kunci `query` sengaja dipisah dari `path`: `isActive()` mencocokkan path
+     * saja, sehingga query string yang ikut menempel di `path` akan membuat
+     * penandaan menu aktif meleset. Sidebar menggabungkan keduanya saat
+     * merender `href`.
+     *
+     * Grup ini dirancang menampung tautan persetujuan dari sub sistem
+     * permintaan barang kelak — cukup satu item tambahan, tanpa perlu layar
+     * atau data bersama yang baru. Lihat ADR 0030.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function getApprovalItems(): array
+    {
+        return [
+            [
+                'icon' => 'task',
+                'name' => 'Realisasi Pengadaan',
+                'path' => '/pengadaan',
+                'query' => '?status='.ProcurementStatus::MenungguPersetujuan->value,
+                'roles' => [UserRole::Admin, UserRole::KasubbagUmumTi],
             ],
         ];
     }
@@ -130,6 +158,7 @@ class MenuHelper
 
         $groups = [
             ['title' => 'Menu', 'items' => self::getMainNavItems()],
+            ['title' => 'Persetujuan', 'items' => self::getApprovalItems()],
             ['title' => 'Administrasi', 'items' => self::getAdminItems()],
             ['title' => 'Akun', 'items' => self::getOthersItems()],
         ];

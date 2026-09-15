@@ -77,13 +77,24 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('kelola-permintaan', fn (User $user) => $user->hasRole(UserRole::PengelolaGudang));
 
-        // Dokumen pengadaan dibaca kedua peran sekaligus: Pejabat Pengadaan
-        // yang merealisasi, Pengelola Gudang yang mengusulkan dan menerima
-        // barangnya. Perlu gate tersendiri karena middleware `can:` yang
+        // Persetujuan realisasi pengadaan adalah wewenang jabatan Kasubbag Umum
+        // dan TI. Admin tetap lolos lewat Gate::before di atas: pemisahan staf
+        // TI dari pemberi persetujuan bersifat organisasional, tidak ditegakkan
+        // sistem. Lihat ADR 0030.
+        Gate::define('setujui-pengadaan', fn (User $user) => $user->hasRole(UserRole::KasubbagUmumTi));
+
+        // Dokumen pengadaan dibaca tiga peran sekaligus: Pejabat Pengadaan yang
+        // merealisasi, Pengelola Gudang yang mengusulkan dan menerima barangnya,
+        // serta Kasubbag Umum dan TI yang harus membaca dokumen sebelum
+        // memutuskannya. Perlu gate tersendiri karena middleware `can:` yang
         // ditumpuk bersifat DAN, bukan ATAU.
         Gate::define(
             'akses-pengadaan',
-            fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::PengelolaGudang),
+            fn (User $user) => $user->hasRole(
+                UserRole::PejabatPengadaan,
+                UserRole::PengelolaGudang,
+                UserRole::KasubbagUmumTi,
+            ),
         );
     }
 }

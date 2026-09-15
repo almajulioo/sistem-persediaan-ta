@@ -49,6 +49,10 @@ function realisasiPayload(ProcurementRequest $usulan, Supplier $supplier, array 
 
 /**
  * Buat realisasi lewat alur aplikasi, mengembalikan model Procurement.
+ *
+ * Realisasinya berhenti di MenungguPersetujuan — sejak ADR 0030 itulah keadaan
+ * kelahirannya. Fixture yang membutuhkan realisasi berjalan harus melanjutkan
+ * dengan `setujuiRealisasi()`.
  */
 function buatRealisasi(User $pejabat, ProcurementRequest $usulan, Supplier $supplier, array $overrides = []): Procurement
 {
@@ -57,6 +61,37 @@ function buatRealisasi(User $pejabat, ProcurementRequest $usulan, Supplier $supp
     $id = (string) str($response->headers->get('Location'))->match('#/pengadaan/([^/]+)#');
 
     return Procurement::findOrFail($id);
+}
+
+/**
+ * Akun Kasubbag Umum dan TI, pemberi persetujuan realisasi (ADR 0030).
+ *
+ * Namanya unik lintas berkas karena fungsi di berkas Pest bersifat global.
+ */
+function kasubbagUmumTi(array $attributes = []): User
+{
+    return User::factory()->role(UserRole::KasubbagUmumTi)->create($attributes);
+}
+
+/**
+ * Setujui realisasi lewat alur aplikasi sehingga statusnya berpindah ke
+ * MenungguPenerimaan — prasyarat setiap fixture yang meneruskan ke penerimaan,
+ * berkas, laporan, atau pembatalan.
+ */
+function setujuiRealisasi(Procurement $procurement, ?User $kasubbag = null): Procurement
+{
+    test()->actingAs($kasubbag ?? kasubbagUmumTi())
+        ->patch("/pengadaan/{$procurement->procurement_id}/setujui");
+
+    return $procurement->refresh();
+}
+
+/**
+ * Jalan pintas fixture: buat realisasi lalu setujui sekaligus.
+ */
+function buatRealisasiDisetujui(User $pejabat, ProcurementRequest $usulan, Supplier $supplier, array $overrides = []): Procurement
+{
+    return setujuiRealisasi(buatRealisasi($pejabat, $usulan, $supplier, $overrides));
 }
 
 describe('hak akses realisasi', function () {
@@ -104,9 +139,10 @@ describe('hak akses realisasi', function () {
 });
 
 describe('membuat realisasi', function () {
-    it('menyimpan realisasi beserta rincian, mencatat audit, dan memberi tahu Pengelola Gudang', function () {
+    it('menyimpan realisasi beserta rincian, mencatat audit, dan memberi tahu Kasubbag Umum dan TI', function () {
         $pejabat = pejabatPengadaan();
         $gudang = pengelolaGudang();
+        $kasubbag = kasubbagUmumTi();
         $item = Item::factory()->create(['item_name' => 'Tinta Printer Hitam']);
         $supplier = Supplier::factory()->create();
 
@@ -116,8 +152,11 @@ describe('membuat realisasi', function () {
 
         $procurement = buatRealisasi($pejabat, $usulan, $supplier);
 
-        expect($procurement->status)->toBe(ProcurementStatus::MenungguPenerimaan)
+        // ADR 0030: realisasi lahir menunggu persetujuan, bukan langsung
+        // menunggu penerimaan.
+        expect($procurement->status)->toBe(ProcurementStatus::MenungguPersetujuan)
             ->and($procurement->user_id)->toBe($pejabat->user_id)
+            ->and($procurement->reviewed_at)->toBeNull()
             ->and($procurement->details)->toHaveCount(1)
             ->and($procurement->details->first()->amount)->toBe(40)
             ->and($procurement->details->first()->unit_price)->toBe(10000)
@@ -128,10 +167,17 @@ describe('membuat realisasi', function () {
             ->exists())->toBeTrue();
 
         expect(Notification::query()
+            ->where('user_id', $kasubbag->user_id)
+            ->where('type', NotificationType::RealisasiMenungguPersetujuan)
+            ->aktif()
+            ->exists())->toBeTrue();
+
+        // Gudang belum ditagih apa pun: barangnya belum tentu jadi dipesan.
+        expect(Notification::query()
             ->where('user_id', $gudang->user_id)
             ->where('type', NotificationType::RealisasiMenungguPenerimaan)
             ->aktif()
-            ->exists())->toBeTrue();
+            ->exists())->toBeFalse();
     });
 
     it('memindahkan status usulan asalnya dari menunggu realisasi menjadi selesai', function () {
@@ -317,7 +363,7 @@ describe('konfirmasi penerimaan', function () {
         $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
             ['item_id' => $item->item_id, 'amount_request' => 40],
         ]));
-        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
         $response = $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
@@ -367,7 +413,7 @@ describe('konfirmasi penerimaan', function () {
         $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
             ['item_id' => $item->item_id, 'amount_request' => 10],
         ]));
-        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
         $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
@@ -397,7 +443,7 @@ describe('konfirmasi penerimaan', function () {
             ['item_id' => $kertas->item_id, 'amount_request' => 10],
             ['item_id' => $tinta->item_id, 'amount_request' => 5],
         ]));
-        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
 
         $this->actingAs($gudang)
             ->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [

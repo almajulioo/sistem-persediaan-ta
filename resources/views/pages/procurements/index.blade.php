@@ -33,14 +33,25 @@
 
     <x-ui.flash />
 
+    @php
+        // Dirakit lebih dulu, bukan sebagai ternari bersarang di dalam larik
+        // kartu: dua angka gagal berbagi satu baris catatan.
+        $catatanGagal = collect([
+            $summary['dibatalkan'] > 0 ? number_format($summary['dibatalkan'], 0, ',', '.').' dibatalkan' : null,
+            $summary['ditolak'] > 0 ? number_format($summary['ditolak'], 0, ',', '.').' ditolak' : null,
+        ])->filter()->implode(', ') ?: null;
+    @endphp
+
     {{-- Rekap mengikuti penyaring, bukan seluruh basis data: angka di kartu
          harus sama dengan angka di laporan yang dicetak dari halaman ini.
-         Realisasi yang dibatalkan tidak ikut dihitung — ia dokumen yang pernah
-         ada tetapi tidak pernah menjadi transaksi — dan tampil sebagai angka
-         kecil tersendiri supaya tidak ada yang disembunyikan (ADR 0026). --}}
-    <div class="mb-6 grid grid-cols-2 gap-4 md:gap-6 xl:grid-cols-5">
+         Realisasi yang dibatalkan maupun ditolak tidak ikut dihitung — keduanya
+         dokumen yang pernah ada tetapi tidak pernah menjadi transaksi — dan
+         tampil sebagai angka kecil tersendiri supaya tidak ada yang
+         disembunyikan (ADR 0026, ADR 0030). --}}
+    <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-6">
         @foreach ([
-            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $summary['dibatalkan'] > 0 ? number_format($summary['dibatalkan'], 0, ',', '.') . ' dibatalkan' : null],
+            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $catatanGagal],
+            ['label' => 'Menunggu Persetujuan', 'value' => number_format($summary['menunggu_persetujuan'], 0, ',', '.'), 'class' => 'text-purple-600 dark:text-purple-400', 'catatan' => null],
             ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400', 'catatan' => null],
             ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => null],
             ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => null],

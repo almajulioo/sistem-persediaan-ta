@@ -38,6 +38,7 @@ class Procurement extends Model
         return [
             'procurement_date' => 'date',
             'status' => ProcurementStatus::class,
+            'reviewed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'cancel_reason' => AlasanPembatalan::class,
         ];
@@ -51,6 +52,11 @@ class Procurement extends Model
         return 'Realisasi #'.strtoupper(substr($this->procurement_id, 0, 8));
     }
 
+    public function isMenungguPersetujuan(): bool
+    {
+        return $this->status === ProcurementStatus::MenungguPersetujuan;
+    }
+
     public function isMenungguPenerimaan(): bool
     {
         return $this->status === ProcurementStatus::MenungguPenerimaan;
@@ -61,9 +67,34 @@ class Procurement extends Model
         return $this->status === ProcurementStatus::Diterima;
     }
 
+    public function isDitolak(): bool
+    {
+        return $this->status === ProcurementStatus::Ditolak;
+    }
+
     public function isDibatalkan(): bool
     {
         return $this->status === ProcurementStatus::Dibatalkan;
+    }
+
+    /**
+     * Masih boleh diubah maupun dibatalkan — lihat ProcurementStatus.
+     */
+    public function masihBerjalan(): bool
+    {
+        return $this->status->masihBerjalan();
+    }
+
+    /**
+     * Sudah pernah diputuskan Kasubbag Umum dan TI, disetujui maupun ditolak.
+     *
+     * Bukan sekadar `! isMenungguPersetujuan()`: realisasi yang ditolak lalu
+     * diperbaiki kembali menunggu persetujuan dengan jejak review yang sudah
+     * dikosongkan, dan saat itu memang belum ada keputusan yang berlaku.
+     */
+    public function sudahDireview(): bool
+    {
+        return $this->reviewed_at !== null;
     }
 
     /**
@@ -156,6 +187,11 @@ class Procurement extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by', 'user_id');
     }
 
     public function cancelledBy(): BelongsTo

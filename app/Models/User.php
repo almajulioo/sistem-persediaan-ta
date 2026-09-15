@@ -120,6 +120,7 @@ class User extends Authenticatable
         'procurements' => 'pengadaan',
         'procurementRequests' => 'usulan pengadaan',
         'procurementReceipts' => 'penerimaan barang pengadaan',
+        'reviewedProcurements' => 'persetujuan realisasi pengadaan',
         'requestDocuments' => 'dokumen permintaan',
     ];
 
@@ -178,6 +179,16 @@ class User extends Authenticatable
     public function procurementReceipts(): HasMany
     {
         return $this->hasMany(ProcurementReceipt::class, 'received_by', 'user_id');
+    }
+
+    /**
+     * Realisasi pengadaan yang diputuskan akun ini sebagai Kasubbag Umum dan TI,
+     * disetujui maupun ditolak. Berbeda lagi dari `procurements()` dan
+     * `procurementReceipts()` — tiga jabatan, tiga relasi (ADR 0030).
+     */
+    public function reviewedProcurements(): HasMany
+    {
+        return $this->hasMany(Procurement::class, 'reviewed_by', 'user_id');
     }
 
     public function auditLogs(): HasMany
