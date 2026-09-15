@@ -174,7 +174,80 @@ describe('membuat realisasi', function () {
         expect(Procurement::count())->toBe(1);
     });
 
-    it('menolak jumlah pesan melebihi jumlah disetujui', function () {
+    it('mengizinkan jumlah pesan melebihi jumlah disetujui usulan', function () {
+        // ADR 0029: Pejabat Pengadaan boleh memesan lebih banyak dari yang
+        // disetujui usulan — keputusan pembelian akhir ada di tangannya.
+        $pejabat = pejabatPengadaan();
+        $item = Item::factory()->create();
+        $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
+            ['item_id' => $item->item_id, 'amount_request' => 10],
+        ]));
+        $detail = $usulan->details->first();
+
+        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create(), [
+            'items' => [[
+                'procurement_request_detail_id' => $detail->procurement_request_detail_id,
+                'amount' => 999,
+                'unit_price' => 5000,
+            ]],
+        ]);
+
+        expect($procurement->details->first()->amount)->toBe(999);
+    });
+
+    it('mengizinkan menambah barang di luar usulan sekaligus melebihi jumlah usulan', function () {
+        $pejabat = pejabatPengadaan();
+        $itemUsulan = Item::factory()->create();
+        $itemTambahan = Item::factory()->create();
+        $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
+            ['item_id' => $itemUsulan->item_id, 'amount_request' => 10],
+        ]));
+        $detail = $usulan->details->first();
+
+        $procurement = buatRealisasi($pejabat, $usulan, Supplier::factory()->create(), [
+            'items' => [
+                [
+                    'procurement_request_detail_id' => $detail->procurement_request_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 5000,
+                ],
+                [
+                    'item_id' => $itemTambahan->item_id,
+                    'amount' => 3,
+                    'unit_price' => 7000,
+                ],
+            ],
+        ]);
+
+        expect($procurement->details)->toHaveCount(2)
+            ->and($procurement->details->firstWhere('item_id', $itemTambahan->item_id)->amount)->toBe(3);
+    });
+
+    it('menolak realisasi yang tidak mencakup seluruh barang usulan yang disetujui', function () {
+        $pejabat = pejabatPengadaan();
+        $gudang = pengelolaGudang();
+        $kertas = Item::factory()->create(['item_name' => 'Kertas HVS A4']);
+        $tinta = Item::factory()->create(['item_name' => 'Tinta Printer']);
+
+        $usulan = setujuiUsulan($pejabat, buatUsulan($gudang, [
+            ['item_id' => $kertas->item_id, 'amount_request' => 10],
+            ['item_id' => $tinta->item_id, 'amount_request' => 5],
+        ]));
+
+        $this->actingAs($pejabat)
+            ->post('/pengadaan', realisasiPayload($usulan, Supplier::factory()->create(), [
+                'items' => [[
+                    'procurement_request_detail_id' => $usulan->details->first()->procurement_request_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 5000,
+                ]],
+            ]))
+            ->assertSessionHasErrors('items');
+
+        expect(Procurement::count())->toBe(0);
+    });
+
+    it('menolak barang tambahan yang sama dengan barang usulan', function () {
         $pejabat = pejabatPengadaan();
         $item = Item::factory()->create();
         $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
@@ -184,13 +257,20 @@ describe('membuat realisasi', function () {
 
         $this->actingAs($pejabat)
             ->post('/pengadaan', realisasiPayload($usulan, Supplier::factory()->create(), [
-                'items' => [[
-                    'procurement_request_detail_id' => $detail->procurement_request_detail_id,
-                    'amount' => 999,
-                    'unit_price' => 5000,
-                ]],
+                'items' => [
+                    [
+                        'procurement_request_detail_id' => $detail->procurement_request_detail_id,
+                        'amount' => 10,
+                        'unit_price' => 5000,
+                    ],
+                    [
+                        'item_id' => $item->item_id,
+                        'amount' => 3,
+                        'unit_price' => 7000,
+                    ],
+                ],
             ]))
-            ->assertSessionHasErrors('items.0.amount');
+            ->assertSessionHasErrors('items.1.item_id');
     });
 
     it('mengarahkan kembali dengan galat bila usulan pada tautan tidak ditemukan', function () {

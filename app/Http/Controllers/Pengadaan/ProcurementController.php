@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\CancelProcurementRequest;
 use App\Http\Requests\Pengadaan\StoreProcurementRequest;
 use App\Http\Requests\Pengadaan\UpdateProcurementRequest;
+use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
@@ -92,6 +93,9 @@ class ProcurementController extends Controller
             'procurementRequest' => $procurementRequest,
             'rincianDisetujui' => $procurementRequest->details->filter(fn ($detail) => $detail->disetujui())->values(),
             'suppliers' => Supplier::aktif()->orderBy('supplier_name')->get(['supplier_id', 'supplier_name']),
+            // Untuk pemilih "barang tambahan" — Pejabat Pengadaan boleh
+            // merealisasikan barang di luar usulan (ADR 0029).
+            'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit']),
         ]);
     }
 
@@ -111,7 +115,12 @@ class ProcurementController extends Controller
 
             $procurement->details()->createMany(
                 array_map(fn (array $item) => [
-                    'item_id' => $rincian->get($item['procurement_request_detail_id'])->item_id,
+                    // Baris usulan mengirim procurement_request_detail_id (item_id
+                    // diturunkan dari sana); baris tambahan mengirim item_id
+                    // langsung — lihat StoreProcurementRequest::withValidator().
+                    'item_id' => empty($item['procurement_request_detail_id'])
+                        ? $item['item_id']
+                        : $rincian->get($item['procurement_request_detail_id'])->item_id,
                     'amount' => $item['amount'],
                     'unit_price' => $item['unit_price'],
                 ], $data['items']),
@@ -173,6 +182,7 @@ class ProcurementController extends Controller
             'title' => "Ubah {$procurement->judul()}",
             'procurement' => $procurement->load(['supplier', 'procurementRequest.details', 'details.item']),
             'suppliers' => Supplier::aktif()->orderBy('supplier_name')->get(['supplier_id', 'supplier_name']),
+            'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit']),
         ]);
     }
 
@@ -193,17 +203,38 @@ class ProcurementController extends Controller
                 'procurement_date' => $data['procurement_date'],
             ])->save();
 
-            // Baris diperbarui di tempat, bukan dihapus lalu dibuat ulang:
-            // susunannya tidak dapat berubah, dan `procurement_detail_id` yang
-            // stabil membuat formulir penerimaan tetap menunjuk baris yang sama.
+            // Baris usulan diperbarui di tempat, bukan dihapus lalu dibuat
+            // ulang: `procurement_detail_id` yang stabil membuat formulir
+            // penerimaan tetap menunjuk baris yang sama. Baris tambahan yang
+            // baru (tanpa procurement_detail_id) dibuat sekarang; yang hilang
+            // dari kiriman berarti sengaja dihapus (ADR 0029) — validasi sudah
+            // memastikan baris dari usulan tidak mungkin hilang di sini.
+            $dikirim = [];
+
             foreach ($data['items'] as $baris) {
+                if (empty($baris['procurement_detail_id'])) {
+                    $baru = $procurement->details()->create([
+                        'item_id' => $baris['item_id'],
+                        'amount' => $baris['amount'],
+                        'unit_price' => $baris['unit_price'],
+                    ]);
+                    $dikirim[] = $baru->procurement_detail_id;
+
+                    continue;
+                }
+
                 $procurement->details
                     ->firstWhere('procurement_detail_id', $baris['procurement_detail_id'])
                     ?->forceFill([
                         'amount' => $baris['amount'],
                         'unit_price' => $baris['unit_price'],
                     ])->save();
+                $dikirim[] = $baris['procurement_detail_id'];
             }
+
+            $procurement->details
+                ->reject(fn (ProcurementDetail $detail) => in_array($detail->procurement_detail_id, $dikirim, true))
+                ->each(fn (ProcurementDetail $detail) => $detail->delete());
         });
 
         AuditLogger::record($request->user(), "Mengubah realisasi pengadaan: {$procurement->judul()}");

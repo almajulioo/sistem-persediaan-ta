@@ -2,10 +2,61 @@
 
 @section('content')
     @php
-        // Batas atas tiap baris tetap jumlah yang disetujui usulan. Dikunci
-        // item_id karena procurement_details tidak menyimpan tautan balik ke
-        // baris usulannya — aman, satu barang hanya muncul sekali per usulan.
-        $disetujui = $procurement->procurementRequest?->details->keyBy('item_id') ?? collect();
+        // Barang dari usulan yang benar-benar disetujui (amount_granted > 0) —
+        // harus sama persis dengan UpdateProcurementRequest::rincianDisetujui(),
+        // karena inilah yang menentukan barang mana yang tidak boleh dihapus.
+        $disetujui = $procurement->procurementRequest?->details
+            ->filter(fn ($detail) => $detail->disetujui())
+            ->keyBy('item_id') ?? collect();
+
+        $usulanDetails = $procurement->details->filter(fn ($detail) => $disetujui->has($detail->item_id))->values();
+        $tambahanDetails = $procurement->details->reject(fn ($detail) => $disetujui->has($detail->item_id))->values();
+
+        // Dihitung dulu di @php, bukan langsung di dalam @json() — lihat
+        // catatan yang sama pada procurements/create.blade.php.
+        $itemPicker = $items->map(fn ($item) => [
+            'item_id' => $item->item_id,
+            'item_code' => $item->item_code,
+            'item_name' => $item->item_name,
+        ])->values();
+
+        $usulanItemIds = $usulanDetails->pluck('item_id')->values();
+
+        $tambahanAwal = old('items') !== null
+            ? collect(old('items', []))
+                ->filter(function ($baris) use ($procurement, $disetujui) {
+                    $detailId = $baris['procurement_detail_id'] ?? null;
+
+                    if (empty($detailId)) {
+                        return ! empty($baris['item_id'] ?? null);
+                    }
+
+                    $detail = $procurement->details->firstWhere('procurement_detail_id', $detailId);
+
+                    return $detail !== null && ! $disetujui->has($detail->item_id);
+                })
+                ->map(function ($baris) use ($procurement, $items) {
+                    $detailId = $baris['procurement_detail_id'] ?? null;
+                    $detail = $detailId ? $procurement->details->firstWhere('procurement_detail_id', $detailId) : null;
+                    $itemId = $detail?->item_id ?? ($baris['item_id'] ?? null);
+                    $item = $detail?->item ?? $items->firstWhere('item_id', $itemId);
+
+                    return [
+                        'procurement_detail_id' => $detailId,
+                        'item_id' => $itemId,
+                        'item_name' => $item ? "{$item->item_code} — {$item->item_name}" : 'Barang tidak dikenal',
+                        'amount' => $baris['amount'] ?? '',
+                        'unit_price' => $baris['unit_price'] ?? '',
+                    ];
+                })
+                ->values()
+            : $tambahanDetails->map(fn ($detail) => [
+                'procurement_detail_id' => $detail->procurement_detail_id,
+                'item_id' => $detail->item_id,
+                'item_name' => ($detail->item?->item_code ?? '?').' — '.($detail->item?->item_name ?? 'Barang tidak dikenal'),
+                'amount' => $detail->amount,
+                'unit_price' => $detail->unit_price,
+            ])->values();
     @endphp
 
     <div class="mb-6">
@@ -18,13 +69,14 @@
 
     <x-ui.flash />
 
-    <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6"
+        x-data="realisasiEditForm()">
         <form action="{{ route('procurements.update', $procurement) }}" method="POST">
             @csrf
             @method('PUT')
 
             {{-- Usulan sumber tidak dapat dipindah: ia mengunci identitas
-                 dokumen ini beserta batas jumlah yang boleh dipesan. --}}
+                 dokumen ini. --}}
             <div class="bg-gray-50 dark:bg-white/[0.03] mb-5 rounded-lg p-4">
                 <p class="text-theme-xs text-gray-500 dark:text-gray-400">Usulan Sumber</p>
                 <p class="text-theme-sm mt-0.5 font-medium text-gray-800 dark:text-white/90">
@@ -46,7 +98,7 @@
 
             <div class="mt-6">
                 <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Barang yang Direalisasikan
+                    Barang dari Usulan
                 </label>
 
                 <div class="custom-scrollbar max-w-full overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
@@ -61,7 +113,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($procurement->details as $index => $detail)
+                            @foreach ($usulanDetails as $index => $detail)
                                 @php $granted = $disetujui->get($detail->item_id)?->amount_granted; @endphp
                                 <tr class="border-b border-gray-100 dark:border-gray-800">
                                     <td class="px-5 py-4 sm:px-6">
@@ -79,7 +131,7 @@
                                         </p>
                                     </td>
                                     <td class="px-5 py-4 sm:px-6">
-                                        <input type="number" min="1" @if ($granted !== null) max="{{ $granted }}" @endif
+                                        <input type="number" min="1"
                                             name="items[{{ $index }}][amount]"
                                             value="{{ old("items.$index.amount", $detail->amount) }}"
                                             class="h-10 w-28 rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
@@ -106,9 +158,98 @@
                 @enderror
 
                 <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
-                    Barang tidak dapat ditambah maupun dihapus di sini &mdash; susunannya ditetapkan usulan yang
-                    sudah disetujui.
+                    Jumlah pesan boleh melebihi jumlah yang disetujui usulan. Barang dari usulan wajib ada dan
+                    tidak dapat dihapus di sini &mdash; tambahkan atau hapus barang di luar usulan lewat bagian
+                    di bawah.
                 </p>
+            </div>
+
+            <div class="mt-8">
+                <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Barang di Luar Usulan
+                </label>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px_160px_auto] sm:items-end">
+                    <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Barang</label>
+
+                        <div @click="open = !open"
+                            class="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+                            <span x-text="selectedItemText || 'Pilih barang'" :class="!selectedItemId ? 'text-gray-400' : ''"></span>
+                            <svg class="size-4 text-gray-500 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+
+                        <div x-show="open" x-transition
+                            class="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900"
+                            style="display: none;">
+                            <div class="p-1">
+                                <input type="text" x-model.debounce.300ms="searchQuery" placeholder="Cari barang..."
+                                    class="h-9 w-full rounded-md border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
+                            </div>
+
+                            <ul class="mt-1 max-h-48 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800">
+                                <template x-for="item in filteredItems" :key="item.item_id">
+                                    <li @click="selectItem(item); open = false"
+                                        class="cursor-pointer rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+                                        <span x-text="`${item.item_code} — ${item.item_name}`"></span>
+                                    </li>
+                                </template>
+
+                                <template x-if="filteredItems.length === 0">
+                                    <li class="px-3 py-2 text-center text-sm text-gray-400">Barang tidak ditemukan.</li>
+                                </template>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Jumlah</label>
+                        <input type="number" min="1" x-model="inputAmount" placeholder="0"
+                            class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Harga Satuan (Rp)</label>
+                        <input type="number" min="0" x-model="inputPrice" placeholder="0"
+                            class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
+                    </div>
+
+                    <button type="button" @click="addItem"
+                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex h-11 items-center justify-center rounded-lg px-4 text-sm font-medium text-white transition">
+                        Tambah
+                    </button>
+                </div>
+
+                <p x-show="errorMessage" x-cloak x-text="errorMessage" class="text-theme-xs text-error-500 mt-2"></p>
+
+                <template x-if="tambahan.length > 0">
+                    <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                        <template x-for="(row, index) in tambahan" :key="row.item_id">
+                            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-white px-4 py-3 last:border-b-0 dark:border-gray-800 dark:bg-gray-900">
+                                <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90" x-text="row.item_name"></p>
+
+                                <div class="flex items-center gap-3">
+                                    <input type="number" min="1" x-model="row.amount"
+                                        :name="`items[${usulanCount + index}][amount]`"
+                                        class="h-9 w-24 rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
+                                    <input type="number" min="0" x-model="row.unit_price"
+                                        :name="`items[${usulanCount + index}][unit_price]`"
+                                        class="h-9 w-28 rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
+                                    <input type="hidden" :name="`items[${usulanCount + index}][item_id]`" :value="row.item_id">
+                                    <template x-if="row.procurement_detail_id">
+                                        <input type="hidden" :name="`items[${usulanCount + index}][procurement_detail_id]`" :value="row.procurement_detail_id">
+                                    </template>
+                                    <button type="button" @click="tambahan.splice(index, 1)"
+                                        class="text-error-500 hover:text-error-600 text-sm">
+                                        Hapus
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
@@ -123,4 +264,72 @@
             </div>
         </form>
     </div>
+
+    <script>
+        function realisasiEditForm() {
+            const items = @json($itemPicker);
+            const usulanItemIds = @json($usulanItemIds);
+            const tambahanAwal = @json($tambahanAwal);
+
+            return {
+                items,
+                usulanCount: {{ $usulanDetails->count() }},
+                selectedItemId: '',
+                selectedItemText: '',
+                searchQuery: '',
+                inputAmount: '',
+                inputPrice: '',
+                errorMessage: '',
+                tambahan: tambahanAwal,
+
+                get filteredItems() {
+                    const dipakai = new Set([...usulanItemIds, ...this.tambahan.map(row => row.item_id)]);
+                    const q = this.searchQuery.toLowerCase();
+
+                    return this.items.filter(item =>
+                        !dipakai.has(item.item_id) &&
+                        (!q || item.item_name.toLowerCase().includes(q) || item.item_code.toLowerCase().includes(q))
+                    );
+                },
+
+                selectItem(item) {
+                    this.selectedItemId = item.item_id;
+                    this.selectedItemText = `${item.item_code} — ${item.item_name}`;
+                },
+
+                addItem() {
+                    this.errorMessage = '';
+
+                    if (!this.selectedItemId) {
+                        this.errorMessage = 'Pilih barang yang akan ditambahkan.';
+                        return;
+                    }
+
+                    if (!this.inputAmount || this.inputAmount <= 0) {
+                        this.errorMessage = 'Isi jumlah pesan dengan benar.';
+                        return;
+                    }
+
+                    if (this.inputPrice === '' || this.inputPrice < 0) {
+                        this.errorMessage = 'Isi harga satuan dengan benar.';
+                        return;
+                    }
+
+                    this.tambahan.push({
+                        procurement_detail_id: null,
+                        item_id: this.selectedItemId,
+                        item_name: this.selectedItemText,
+                        amount: parseInt(this.inputAmount),
+                        unit_price: parseInt(this.inputPrice),
+                    });
+
+                    this.selectedItemId = '';
+                    this.selectedItemText = '';
+                    this.searchQuery = '';
+                    this.inputAmount = '';
+                    this.inputPrice = '';
+                },
+            };
+        }
+    </script>
 @endsection

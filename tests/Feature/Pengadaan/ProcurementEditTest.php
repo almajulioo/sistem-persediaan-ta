@@ -129,9 +129,9 @@ describe('mengubah realisasi', function () {
         expect(AuditLog::where('activity', 'like', 'Mengubah realisasi pengadaan%')->exists())->toBeTrue();
     });
 
-    it('menolak jumlah yang melebihi jumlah disetujui usulan', function () {
-        // Usulannya disetujui 10; mengubah tidak boleh menjadi celah memesan
-        // melebihi persetujuan.
+    it('mengizinkan jumlah melebihi jumlah disetujui usulan', function () {
+        // ADR 0029: batas atas jumlah disetujui dicabut, baik saat dibuat
+        // maupun saat diubah.
         $this->actingAs($this->pejabat)
             ->put($this->url, ubahPayload($this->procurement, [
                 'items' => [[
@@ -140,9 +140,92 @@ describe('mengubah realisasi', function () {
                     'unit_price' => 10000,
                 ]],
             ]))
-            ->assertSessionHasErrors('items.0.amount');
+            ->assertRedirect($this->url);
 
-        expect($this->procurement->fresh()->details->first()->amount)->toBe(10);
+        expect($this->procurement->fresh()->details->first()->amount)->toBe(11);
+    });
+
+    it('mengizinkan menambah barang di luar usulan', function () {
+        $tambahan = Item::factory()->create();
+
+        $this->actingAs($this->pejabat)
+            ->put($this->url, ubahPayload($this->procurement, [
+                'items' => [
+                    [
+                        'procurement_detail_id' => $this->procurement->details->first()->procurement_detail_id,
+                        'amount' => 10,
+                        'unit_price' => 10000,
+                    ],
+                    [
+                        'item_id' => $tambahan->item_id,
+                        'amount' => 4,
+                        'unit_price' => 8000,
+                    ],
+                ],
+            ]))
+            ->assertRedirect($this->url);
+
+        $procurement = $this->procurement->fresh('details');
+
+        expect($procurement->details)->toHaveCount(2)
+            ->and($procurement->details->firstWhere('item_id', $tambahan->item_id)->amount)->toBe(4);
+    });
+
+    it('mengizinkan menghapus kembali barang tambahan yang bukan dari usulan', function () {
+        $tambahan = Item::factory()->create();
+        $detailUsulan = $this->procurement->details->first();
+
+        $this->actingAs($this->pejabat)->put($this->url, ubahPayload($this->procurement, [
+            'items' => [
+                [
+                    'procurement_detail_id' => $detailUsulan->procurement_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 10000,
+                ],
+                [
+                    'item_id' => $tambahan->item_id,
+                    'amount' => 4,
+                    'unit_price' => 8000,
+                ],
+            ],
+        ]));
+
+        expect($this->procurement->fresh('details')->details)->toHaveCount(2);
+
+        // Baris tambahan dihapus dengan cara tidak menyertakannya lagi —
+        // baris usulan tetap wajib dikirim.
+        $this->actingAs($this->pejabat)
+            ->put($this->url, ubahPayload($this->procurement, [
+                'items' => [[
+                    'procurement_detail_id' => $detailUsulan->procurement_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 10000,
+                ]],
+            ]))
+            ->assertRedirect($this->url);
+
+        expect($this->procurement->fresh('details')->details)->toHaveCount(1)
+            ->and($this->procurement->fresh('details')->details->firstWhere('item_id', $tambahan->item_id))->toBeNull();
+    });
+
+    it('menolak menghapus barang yang berasal dari usulan', function () {
+        $usulan = setujuiUsulan($this->pejabat, buatUsulan($this->petugas, [
+            ['item_id' => Item::factory()->create(['item_name' => 'Kertas HVS A4'])->item_id, 'amount_request' => 10],
+            ['item_id' => Item::factory()->create(['item_name' => 'Tinta Printer'])->item_id, 'amount_request' => 5],
+        ]));
+        $procurement = buatRealisasi($this->pejabat, $usulan, Supplier::factory()->create());
+
+        $this->actingAs($this->pejabat)
+            ->put("/pengadaan/{$procurement->procurement_id}", ubahPayload($procurement, [
+                'items' => [[
+                    'procurement_detail_id' => $procurement->details->first()->procurement_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 5000,
+                ]],
+            ]))
+            ->assertSessionHasErrors('items');
+
+        expect($procurement->fresh('details')->details)->toHaveCount(2);
     });
 
     it('menolak kiriman yang tidak mencakup seluruh baris', function () {

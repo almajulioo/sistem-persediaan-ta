@@ -5,6 +5,60 @@ perubahan.
 
 ---
 
+## 13 September 2026 — Realisasi boleh melebihi usulan, dan boleh menambah barang
+
+Permintaan perubahan pada dua titik alur pengadaan: (1) Pejabat Pengadaan
+menyetujui nominal usulan lebih besar dari yang diajukan, dan (2) Pejabat
+Pengadaan mengubah nominal realisasi menjadi lebih besar dari usulan sekaligus
+menambahkan barang sendiri di luar usulan (barang dari usulan tetap wajib ada,
+tidak boleh dihapus). Alasannya: keputusan pembelian akhir ada di tangan
+Pejabat Pengadaan, dan ini langkah awal menuju realisasi yang bisa dibuat
+Pejabat Pengadaan langsung tanpa usulan (rencana lanjutan, belum dikerjakan).
+
+**Rekomendasi yang diberikan sebelum membangun**: hanya kerjakan (2), bukan
+(1). Melonggarkan persetujuan usulan (`amount_granted > amount_request`) tidak
+menambah kemampuan apa pun yang belum bisa dicapai lewat barang tambahan pada
+realisasi, tapi melemahkan makna `amount_granted` sebagai representasi
+kebutuhan Pengelola Gudang. Disetujui pengguna — hanya (2) yang dibangun.
+Keputusan lengkap: [ADR 0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md).
+
+**Yang dikerjakan.**
+
+- `StoreProcurementRequest` dan `UpdateProcurementRequest`: batas
+  `amount ≤ amount_granted` dicabut sepenuhnya. Baris realisasi sekarang punya
+  dua bentuk — baris usulan (mengirim id baris usulan, `item_id` diturunkan
+  server-side seperti sebelumnya) dan baris tambahan (mengirim `item_id`
+  langsung, tanpa id baris usulan apa pun).
+- Kelengkapan rincian usulan (`amount_granted > 0`) ditegakkan sebagai
+  validasi keras di **kedua** form request — sebelumnya di `Store` itu cuma
+  disiplin UI, bukan validasi sungguhan.
+- `procurement_details` tidak bertambah kolom — baris usulan vs tambahan
+  dibedakan lewat keanggotaan `item_id` pada rincian usulan yang disetujui,
+  pola yang sama dengan `UpdateProcurementRequest::rincianDisetujui()` yang
+  sudah ada sebelum perubahan ini.
+- `ProcurementController::update()` sekarang bisa membuat baris tambahan baru
+  dan menghapus baris tambahan yang tidak lagi dikirim — aman karena hapus
+  baris cuma mungkin selama `MenungguPenerimaan`, belum ada stok atau mutasi
+  yang bergantung padanya.
+- `procurements/create.blade.php` dan `edit.blade.php` ditulis ulang: tabel
+  usulan (statis, tanpa `max`, tanpa tombol hapus) dipisah dari bagian
+  "Barang di Luar Usulan" (Alpine.js, pemilih barang bergaya pencarian —
+  pola yang sama dengan pemilih barang `procurement-requests/draft.blade.php`
+  — dengan tombol Tambah/Hapus per baris).
+- Diverifikasi lewat browser sungguhan (Playwright headless, karena
+  `chromium-cli` tak tersedia di lingkungan ini): login sebagai
+  `pengadaan`, buat realisasi dengan jumlah melebihi disetujui sekaligus
+  barang tambahan, submit, buka lagi lewat Ubah Realisasi, tambah satu
+  barang tambahan lagi, simpan — seluruhnya persisten dan tampil benar di
+  halaman detail. Data uji dibersihkan kembali dari database dev setelahnya.
+- 6 test baru di `ProcurementTest.php`/`ProcurementEditTest.php` (jumlah
+  melebihi disetujui diterima, barang tambahan diterima, kelengkapan rincian
+  usulan tetap wajib, barang tambahan boleh dihapus kembali, barang usulan
+  tidak boleh dihapus, barang tambahan dobel dengan barang usulan ditolak).
+  338 pengujian lolos; Pint bersih pada seluruh berkas yang diubah.
+
+---
+
 ## 13 September 2026 — Status usulan "Disetujui" dipecah dua
 
 Permintaan lanjutan setelah sesi draf otomatis di hari yang sama: status

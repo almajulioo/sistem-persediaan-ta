@@ -40,8 +40,13 @@ Admin lolos seluruhnya lewat `Gate::before`.
 ## Aturan bisnis yang ditegakkan
 
 1. Realisasi hanya dari usulan ber-status `Disetujui`.
-2. Barang pada realisasi wajib ada di rincian usulan dengan `amount_granted > 0`.
-3. `procurement_details.amount` ≤ `amount_granted`.
+2. Seluruh rincian usulan dengan `amount_granted > 0` wajib ada di realisasi
+   dan tidak dapat dihapus darinya — tapi Pejabat Pengadaan boleh menambah
+   barang di luar usulan itu sendiri, dan boleh menghapusnya kembali sebelum
+   penerimaan ([ADR 0029](../keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md)).
+3. `procurement_details.amount` **tidak** dibatasi terhadap `amount_granted`
+   — Pejabat Pengadaan boleh memesan lebih banyak dari yang disetujui usulan
+   (ADR 0029; sebelum ADR ini batasnya `amount ≤ amount_granted`).
 4. Satu usulan → paling banyak satu realisasi (`procurement_request_id` unik).
 5. **Stok bertambah sebanyak `amount_received`, bukan `amount`**
    ([ADR 0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
@@ -248,9 +253,13 @@ peristiwa sekali jadi tanpa rute ubah/hapus:
   disetujui (`amount_granted > 0`), karena `procurement_request_id` unik
   berarti satu usulan paling banyak menghasilkan satu realisasi selamanya —
   barang yang dikecualikan sekarang tidak akan pernah punya kesempatan kedua.
-- `item_id` pada rincian realisasi diturunkan server-side dari
+- `item_id` pada baris usulan diturunkan server-side dari
   `procurement_request_detail_id`, bukan dikirim klien — pola yang sama
-  dengan persetujuan usulan Tahap 2.
+  dengan persetujuan usulan Tahap 2. Sejak
+  [ADR 0029](../keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md),
+  Pejabat Pengadaan juga boleh menambahkan baris **di luar** usulan, yang
+  mengirim `item_id` langsung; jumlah pesan pun tidak lagi dibatasi terhadap
+  `amount_granted`.
 - `ProcurementReceiptPoster::post()` mengikuti pola `OpnamePoster`: transaksi
   terkunci, `StockLedger::record(type: Masuk, amount: amount_received)` per
   barang (baris bernilai nol tidak menghasilkan mutasi), referensi menunjuk
@@ -386,14 +395,20 @@ dari usulan baru. Rincian keputusan:
   Selama itu belum ada apa pun yang terjadi secara fisik, sehingga **tidak ada
   satu pun mutasi stok yang perlu disesuaikan**.
 - Yang boleh diubah: `supplier_id`, `procurement_date`, serta `amount` dan
-  `unit_price` tiap baris. Batas `amount ≤ amount_granted` tetap berlaku.
+  `unit_price` tiap baris — jumlah pesan tidak lagi dibatasi terhadap
+  `amount_granted` sejak
+  [ADR 0029](../keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md).
 - Yang **tidak** boleh: `procurement_request_id` (memindahkan realisasi ke usulan
-  lain menabrak indeks unik ADR 0016) dan susunan barangnya (ditetapkan usulan
-  yang disetujui, sehingga aturan ADR 0021 terpenuhi dengan sendirinya).
-- Baris diperbarui **di tempat**, dikunci `procurement_detail_id`, supaya
-  formulir penerimaan tetap menunjuk baris yang sama. Kiriman wajib mencakup
-  seluruh baris — yang hilang akan tertinggal memakai nilai lamanya tanpa
-  disadari siapa pun.
+  lain menabrak indeks unik ADR 0016), dan menghapus baris yang berasal dari
+  usulan (susunannya ditetapkan usulan yang disetujui, sehingga aturan
+  ADR 0021 terpenuhi dengan sendirinya). Baris **di luar** usulan boleh
+  ditambah maupun dihapus kembali di sini (ADR 0029).
+- Baris usulan diperbarui **di tempat**, dikunci `procurement_detail_id`,
+  supaya formulir penerimaan tetap menunjuk baris yang sama; baris tambahan
+  baru dibuat saat disimpan, dan baris tambahan yang hilang dari kiriman
+  berarti sengaja dihapus. Kiriman wajib tetap mencakup seluruh baris
+  usulan — yang hilang di antaranya ditolak validasi, bukan diam-diam
+  tertinggal memakai nilai lamanya.
 - `update()` memanggil `NotificationScanner::periksaRealisasi()` karena isi
   notifikasi `RealisasiMenungguPenerimaan` memuat nama penyedia.
 - Tombol **Ubah Realisasi** diletakkan di atas **Batalkan Realisasi**: urutan

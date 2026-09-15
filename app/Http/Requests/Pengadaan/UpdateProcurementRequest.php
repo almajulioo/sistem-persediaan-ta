@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Pengadaan;
 
+use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequestDetail;
@@ -13,14 +14,13 @@ use Illuminate\Validation\Rule;
 /**
  * Koreksi realisasi pengadaan yang belum dikonfirmasi diterima.
  *
- * Berbeda dari `StoreProcurementRequest`, barisnya **tidak dapat ditambah
- * maupun dihapus**: susunan barang ditetapkan usulan yang disetujui, dan satu
- * usulan hanya menghasilkan satu realisasi selamanya (ADR 0016). Karena itu
- * kunci baris di sini `procurement_detail_id` — baris yang sudah ada — bukan
- * `procurement_request_detail_id` seperti pada pembuatan.
- *
- * Aturan ADR 0021 "wajib mencakup seluruh rincian yang disetujui" terpenuhi
- * dengan sendirinya, jadi yang perlu dijaga tinggal kelengkapan kirimannya.
+ * Baris yang berasal dari usulan (item_id-nya ada pada rincian yang
+ * disetujui) **tidak dapat dihapus** — kunci baris di sini
+ * `procurement_detail_id`, baris yang sudah ada, bukan
+ * `procurement_request_detail_id` seperti pada pembuatan. Tapi Pejabat
+ * Pengadaan boleh menambah barang di luar usulan (kirim `item_id` tanpa
+ * `procurement_detail_id`) maupun menghapusnya kembali, dan jumlah pesan pada
+ * baris mana pun boleh melebihi jumlah yang disetujui (ADR 0029).
  *
  * `procurement_request_id` sengaja tidak ada di sini: memindahkan realisasi ke
  * usulan lain akan menabrak indeks unik dan menghapus jejak asal-usulnya.
@@ -52,7 +52,8 @@ class UpdateProcurementRequest extends FormRequest
             ],
             'procurement_date' => ['required', 'date', 'before_or_equal:today'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.procurement_detail_id' => ['required', 'distinct'],
+            'items.*.procurement_detail_id' => ['nullable', 'distinct'],
+            'items.*.item_id' => ['nullable', 'distinct', Rule::exists('items', 'item_id')],
             'items.*.amount' => ['required', 'integer', 'min:1', 'max:999999'],
             'items.*.unit_price' => ['required', 'integer', 'min:0', 'max:999999999999'],
         ];
@@ -67,45 +68,63 @@ class UpdateProcurementRequest extends FormRequest
                 return;
             }
 
+            $rincian = $this->rincianDisetujui();
             $dikirim = [];
+            $itemTerpakai = [];
 
             foreach ((array) $this->input('items', []) as $index => $baris) {
-                $detailId = (string) ($baris['procurement_detail_id'] ?? '');
-                $detail = $procurement->details->firstWhere('procurement_detail_id', $detailId);
+                $detailId = trim((string) ($baris['procurement_detail_id'] ?? ''));
 
-                if ($detail === null) {
+                if ($detailId !== '') {
+                    $detail = $procurement->details->firstWhere('procurement_detail_id', $detailId);
+
+                    if ($detail === null) {
+                        $validator->errors()->add(
+                            "items.{$index}.procurement_detail_id",
+                            'Barang tidak ditemukan pada realisasi ini.',
+                        );
+
+                        continue;
+                    }
+
+                    $dikirim[] = $detailId;
+                    $itemId = $detail->item_id;
+                } else {
+                    $itemId = trim((string) ($baris['item_id'] ?? ''));
+                    $item = $itemId !== '' ? Item::find($itemId) : null;
+
+                    if ($item === null) {
+                        $validator->errors()->add(
+                            "items.{$index}.item_id",
+                            'Pilih barang yang valid untuk ditambahkan.',
+                        );
+
+                        continue;
+                    }
+                }
+
+                if (in_array($itemId, $itemTerpakai, true)) {
                     $validator->errors()->add(
-                        "items.{$index}.procurement_detail_id",
-                        'Barang tidak ditemukan pada realisasi ini.',
+                        "items.{$index}.item_id",
+                        'Barang ini sudah ada pada daftar realisasi.',
                     );
 
                     continue;
                 }
 
-                $dikirim[] = $detailId;
-
-                // Batas atas tetap jumlah yang disetujui usulan, sama seperti
-                // saat realisasi dibuat — mengubah tidak boleh menjadi celah
-                // untuk memesan melebihi persetujuan.
-                $granted = $this->rincianDisetujui()->get($detail->item_id)?->amount_granted;
-
-                if ($granted !== null && (int) ($baris['amount'] ?? 0) > $granted) {
-                    $validator->errors()->add(
-                        "items.{$index}.amount",
-                        "Jumlah pesan untuk {$detail->item?->item_name} tidak boleh melebihi jumlah disetujui ({$granted}).",
-                    );
-                }
+                $itemTerpakai[] = $itemId;
             }
 
-            // Baris yang hilang dari kiriman akan tertinggal memakai nilai
-            // lamanya tanpa disadari siapa pun, jadi kelengkapannya dituntut
-            // di muka — alasan yang sama dengan konfirmasi penerimaan.
+            // Baris dari usulan wajib tetap ada — hanya baris tambahan (di
+            // luar usulan) yang boleh hilang dari kiriman, artinya sengaja
+            // dihapus. Lihat ADR 0029.
             $hilang = $procurement->details
+                ->filter(fn (ProcurementDetail $detail) => $rincian->has($detail->item_id))
                 ->reject(fn (ProcurementDetail $detail) => in_array($detail->procurement_detail_id, $dikirim, true));
 
             if ($hilang->isNotEmpty()) {
                 $validator->errors()->add('items', sprintf(
-                    'Seluruh barang pada realisasi wajib dikirim. Belum terisi: %s.',
+                    'Barang dari usulan wajib tetap ada pada realisasi. Belum terisi: %s.',
                     $hilang->map(fn (ProcurementDetail $detail) => $detail->item?->item_name ?? 'barang tidak dikenal')
                         ->implode(', '),
                 ));

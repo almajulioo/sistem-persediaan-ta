@@ -55,6 +55,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
 | [0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md) | Realisasi dapat diubah selama belum dikonfirmasi diterima | Diterima |
 | [0026](keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md) | Agregat mencacah pengadaan yang terjadi, bukan dokumen yang pernah dibuat | Diterima |
+| [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Diterima |
+| [0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md) | Status usulan "Disetujui" dipecah menjadi dua | Diterima |
+| [0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md) | Realisasi boleh melebihi usulan, dan boleh menambah barang | Diterima |
 
 ## Cara memelihara dokumentasi ini
 
