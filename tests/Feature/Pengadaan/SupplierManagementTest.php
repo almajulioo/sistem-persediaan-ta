@@ -235,7 +235,9 @@ describe('cacah pengadaan penyedia', function () {
             $usulan = setujuiUsulan($pejabat, buatUsulan($gudang, [
                 ['item_id' => \App\Models\Item::factory()->create()->item_id, 'amount_request' => 10],
             ]));
-            $procurement = buatRealisasi($pejabat, $usulan, $supplier);
+            // Disetujui dulu supaya yang tersisa benar-benar "pengadaan
+            // berjalan", bukan dokumen yang masih menunggu keputusan.
+            $procurement = buatRealisasiDisetujui($pejabat, $usulan, $supplier);
 
             if ($dibatalkan) {
                 test()->actingAs($pejabat)

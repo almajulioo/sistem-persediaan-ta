@@ -40,8 +40,9 @@ class ProcurementRequestSeeder extends Seeder
         $this->ditolak($pengaju);
         $this->disetujuiPenuh($pengaju);
         $this->disetujuiMenganggur($pengaju);
+        $this->disetujuiUntukPersetujuanKasubbag($pengaju);
 
-        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (5 usulan).');
+        $this->command?->info('Usulan pengadaan contoh berhasil dibuat (6 usulan).');
     }
 
     /**
@@ -168,6 +169,42 @@ class ProcurementRequestSeeder extends Seeder
                 'item_id' => $item->item_id,
                 'amount_request' => 15,
                 'amount_granted' => 15,
+            ]);
+        }
+    }
+
+    /**
+     * Usulan yang khusus disediakan untuk realisasi yang berhenti di
+     * `MenungguPersetujuan` (ADR 0030), supaya layar Kasubbag Umum dan TI punya
+     * antrean yang benar-benar berisi pada data awal.
+     *
+     * Dibuat tersendiri, bukan memakai ulang usulan yang sudah ada: "Disetujui
+     * Penuh" (ATK-012) mendemokan tombol Realisasikan dan "Disetujui
+     * Menganggur" (ATK-007) mendemokan notifikasi `UsulanBelumDirealisasi` —
+     * merealisasikan salah satunya justru merusak demo yang lain.
+     *
+     * Umurnya dua hari supaya tetap lebih muda daripada usulan "disetujui
+     * sebagian" yang sepuluh hari; ProcurementSeeder memilih usulan tertua
+     * lebih dulu, dan urutan itu tidak boleh terganggu.
+     */
+    private function disetujuiUntukPersetujuanKasubbag(User $pengaju): void
+    {
+        $usulan = ProcurementRequest::create([
+            'procurement_request_id' => (string) Str::uuid(),
+            'user_id' => $pengaju->user_id,
+            'source' => ProcurementRequestSource::Manual,
+            'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
+        ]);
+        $usulan->forceFill([
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ])->save();
+
+        if ($item = Item::where('item_code', 'ATK-005')->first()) {
+            $usulan->details()->create([
+                'item_id' => $item->item_id,
+                'amount_request' => 25,
+                'amount_granted' => 25,
             ]);
         }
     }

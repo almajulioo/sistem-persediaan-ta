@@ -34,15 +34,24 @@ memanggilnya untuk mengurangi stok saat barang diserahkan. Lihat
 
 | Peran | Nilai enum | Kewenangan |
 |---|---|---|
-| **Admin** | `admin` | Tertinggi. Lolos seluruh pemeriksaan otorisasi lewat `Gate::before`, termasuk manajemen pengguna |
+| **Admin** | `admin` | Tertinggi. Lolos seluruh pemeriksaan otorisasi lewat `Gate::before`, termasuk manajemen pengguna. Di lapangan dipegang staf TI |
+| **Kasubbag Umum dan TI** | `kasubbag_umum_ti` | Menyetujui atau menolak realisasi pengadaan sebelum barang dipesan |
 | **Pengelola Gudang** | `pengelola_gudang` | Master barang, mutasi stok, stock opname, konfirmasi penerimaan barang, penyerahan atas permintaan |
 | **Pejabat Pengadaan** | `pejabat_pengadaan` | Usulan dan realisasi pengadaan |
 
 Didefinisikan pada [app/Enums/UserRole.php](../app/Enums/UserRole.php).
 
-Catatan: peran pemohon/pegawai untuk sub sistem permintaan belum ada di enum.
-Bila diperlukan, penambahannya harus disepakati kedua pengembang karena `users`
-adalah tabel bersama.
+Catatan: `kasubbag_umum_ti` ditambahkan 15 September 2026 atas permintaan
+langsung pejabatnya di lapangan
+([ADR 0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)).
+Karena `users` adalah tabel bersama, penambahannya perlu disepakati kedua
+pengembang — dan peran ini memang berguna bagi kedua sub sistem: transisi final
+permintaan barang saat ini masih di-*hardcode* ke Admin, padahal secara jabatan
+itu Kasubbag Umum dan TI.
+
+Enum juga memuat `kepala_unit` dan `pengguna` untuk sub sistem permintaan.
+`kepala_unit` adalah kepala unit **pemohon** dan tidak dapat dipertukarkan
+dengan `kasubbag_umum_ti`, yang menaungi gudang.
 
 ## Tumpukan teknologi
 

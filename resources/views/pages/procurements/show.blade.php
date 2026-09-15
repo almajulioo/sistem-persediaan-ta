@@ -27,10 +27,14 @@
 
     <x-ui.flash />
 
-    {{-- Dialog pembatalan dibuka kembali sendiri bila validasinya gagal,
-         supaya pesan galatnya tidak tersembunyi di balik dialog tertutup. --}}
+    {{-- Dialog pembatalan dan penolakan dibuka kembali sendiri bila validasinya
+         gagal, supaya pesan galatnya tidak tersembunyi di balik dialog
+         tertutup. --}}
     <div class="grid grid-cols-12 gap-4 md:gap-6"
-        x-data="{ batalTerbuka: @js($errors->hasAny(['cancel_reason', 'cancel_note'])) }">
+        x-data="{
+            batalTerbuka: @js($errors->hasAny(['cancel_reason', 'cancel_note'])),
+            tolakTerbuka: @js($errors->has('review_note')),
+        }">
         {{-- Identitas realisasi --}}
         <div class="col-span-12 space-y-4 md:space-y-6 xl:col-span-4">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -49,6 +53,26 @@
                     @endforeach
                 </dl>
 
+                {{-- Keputusan Kasubbag Umum dan TI: dua tombol, tidak lebih
+                     dari itu (ADR 0030). --}}
+                @if ($procurement->isMenungguPersetujuan())
+                    @can('setujui-pengadaan')
+                        <form method="POST" action="{{ route('procurements.approve', $procurement) }}" class="mt-4">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit"
+                                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                                Setujui Realisasi
+                            </button>
+                        </form>
+
+                        <button type="button" @click="tolakTerbuka = true"
+                            class="text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
+                            Tolak Realisasi
+                        </button>
+                    @endcan
+                @endif
+
                 @if ($procurement->isMenungguPenerimaan())
                     @can('kelola-gudang')
                         <a href="{{ route('procurement-receipts.create', $procurement) }}"
@@ -56,20 +80,25 @@
                             Konfirmasi Penerimaan
                         </a>
                     @endcan
+                @endif
 
+                @if ($procurement->masihBerjalan())
                     {{-- Koreksi didahulukan atas pembatalan: salah ketik
                          diperbaiki di sini, bukan dengan membatalkan lalu
-                         mengulang dari usulan baru (ADR 0025). --}}
+                         mengulang dari usulan baru (ADR 0025). Sejak ADR 0030
+                         tombol ini merangkap "ajukan ulang" bagi realisasi yang
+                         ditolak — menyimpan perubahan itulah pengajuannya. --}}
                     @can('kelola-pengadaan')
                         <a href="{{ route('procurements.edit', $procurement) }}"
                             class="mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                            Ubah Realisasi
+                            {{ $procurement->isDitolak() ? 'Perbaiki & Ajukan Ulang' : 'Ubah Realisasi' }}
                         </a>
                     @endcan
 
                     {{-- Jalan keluar bagi pengadaan yang tidak akan pernah
-                         sampai ke penerimaan, mis. penyedia gagal kirim.
-                         Tanpa ini realisasinya terkunci selamanya (ADR 0024). --}}
+                         sampai ke penerimaan, mis. penyedia gagal kirim atau
+                         penolakan yang tidak akan diperbaiki. Tanpa ini
+                         realisasinya terkunci selamanya (ADR 0024). --}}
                     @can('kelola-pengadaan')
                         <button type="button" @click="batalTerbuka = true"
                             class="text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
@@ -78,6 +107,49 @@
                     @endcan
                 @endif
             </div>
+
+            {{-- Hasil review Kasubbag Umum dan TI. Jejaknya dikosongkan setiap
+                 kali realisasi diubah, jadi kartu ini hilang sendiri ketika
+                 dokumennya kembali menunggu persetujuan (ADR 0030). --}}
+            @if ($procurement->sudahDireview())
+                <div @class([
+                    'rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6',
+                    'border-error-200 dark:border-error-500/30' => $procurement->isDitolak(),
+                    'border-gray-200 dark:border-gray-800' => ! $procurement->isDitolak(),
+                ])>
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
+                        {{ $procurement->isDitolak() ? 'Ditolak' : 'Disetujui' }}
+                    </h3>
+
+                    <dl class="mt-3 space-y-3">
+                        @foreach ([
+                            'Ditinjau Oleh' => $procurement->reviewedBy?->fullname ?? '—',
+                            'Tanggal' => $procurement->reviewed_at?->translatedFormat('d F Y H:i') ?? '—',
+                        ] as $label => $value)
+                            <div class="flex items-start justify-between gap-4">
+                                <dt class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                                <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">{{ $value }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+
+                    @if ($procurement->review_note)
+                        <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                            {{ $procurement->review_note }}
+                        </p>
+                    @endif
+
+                    {{-- Tanpa kalimat ini, halaman yang ditolak dan tidak punya
+                         tombol "ajukan ulang" terbaca seperti bug. --}}
+                    @if ($procurement->isDitolak())
+                        <p class="text-theme-xs bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400 mt-4 rounded-lg p-3">
+                            Penolakan ini tidak mengakhiri realisasi. Pejabat Pengadaan dapat memperbaiki penyedia,
+                            barang, atau harganya lalu menyimpannya — penyimpanan itulah yang mengajukannya ulang ke
+                            Kasubbag Umum dan TI. Bila pengadaannya memang tidak jadi, batalkan realisasi ini.
+                        </p>
+                    @endif
+                </div>
+            @endif
 
             @if ($procurement->isDibatalkan())
                 <div class="border-error-200 dark:border-error-500/30 rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6">
@@ -320,9 +392,64 @@
             </div>
         </div>
 
+        {{-- Konfirmasi penolakan. Alasannya teks bebas, bukan enum baku seperti
+             pembatalan: daftar alasan penolakan yang sebenarnya dipakai di
+             lapangan belum pernah ditanyakan (ADR 0030). --}}
+        @if ($procurement->isMenungguPersetujuan())
+            @can('setujui-pengadaan')
+                <div x-show="tolakTerbuka" x-cloak @keydown.escape.window="tolakTerbuka = false"
+                    class="fixed inset-0 z-99999 flex items-center justify-center p-5">
+                    <div @click="tolakTerbuka = false" class="fixed inset-0 bg-gray-900/50"></div>
+
+                    <div @click.stop class="relative w-full max-w-lg rounded-2xl bg-white p-6 dark:bg-gray-900">
+                        <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
+                            Tolak {{ $procurement->judul() }}?
+                        </h3>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Barang tidak akan dipesan sampai realisasi ini disetujui. Penolakan
+                            <strong class="font-medium text-gray-700 dark:text-gray-300">tidak mengakhiri</strong>
+                            realisasinya &mdash; Pejabat Pengadaan dapat memperbaiki lalu mengajukannya ulang kepada Anda.
+                        </p>
+
+                        <form method="POST" action="{{ route('procurements.reject', $procurement) }}" class="mt-5">
+                            @csrf
+                            @method('PATCH')
+
+                            <div>
+                                <label for="review_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                    Alasan Penolakan<span class="text-error-500">*</span>
+                                </label>
+                                <textarea id="review_note" name="review_note" rows="3" required
+                                    placeholder="Mis. harga satuan kertas A4 di atas harga pasar, mintakan penawaran pembanding dari penyedia lain"
+                                    class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('review_note') }}</textarea>
+                                @error('review_note')
+                                    <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                                @enderror
+                                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
+                                    Wajib diisi. Inilah satu-satunya petunjuk yang diterima Pejabat Pengadaan tentang
+                                    apa yang harus diperbaiki.
+                                </p>
+                            </div>
+
+                            <div class="mt-6 flex justify-end gap-3">
+                                <button type="button" @click="tolakTerbuka = false"
+                                    class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                    Tutup
+                                </button>
+                                <button type="submit"
+                                    class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                                    Ya, tolak
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endcan
+        @endif
+
         {{-- Konfirmasi pembatalan. Alasan baku berpasangan keterangan wajib,
              pola yang sama dengan penyesuaian selisih opname (ADR 0011). --}}
-        @if ($procurement->isMenungguPenerimaan())
+        @if ($procurement->masihBerjalan())
             @can('kelola-pengadaan')
                 <div x-show="batalTerbuka" x-cloak @keydown.escape.window="batalTerbuka = false"
                     class="fixed inset-0 z-99999 flex items-center justify-center p-5">

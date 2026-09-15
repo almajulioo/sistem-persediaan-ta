@@ -178,7 +178,8 @@
                                         </div>
                                     @else
                                         <!-- Simple Menu Item -->
-                                        <a href="{{ $item['path'] }}" class="menu-item group"
+                                        {{-- `query` dipisah dari `path`: isActive() mencocokkan path saja. --}}
+                                        <a href="{{ $item['path'] }}{{ $item['query'] ?? '' }}" class="menu-item group"
                                             :class="[
                                                 isActive('{{ $item['path'] }}') ? 'menu-item-active' :
                                                 'menu-item-inactive',

@@ -20,9 +20,14 @@ Tidak ada rute pendaftaran mandiri — sistem tertutup, akun dibuat Admin.
 
 | Peran | Nilai | Keterangan |
 |---|---|---|
-| Admin | `admin` | Tertinggi; lolos seluruh gate lewat `Gate::before` |
+| Admin | `admin` | Tertinggi; lolos seluruh gate lewat `Gate::before`. Di lapangan dipegang staf TI |
+| Kasubbag Umum dan TI | `kasubbag_umum_ti` | Menyetujui atau menolak realisasi pengadaan ([ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)) |
 | Pengelola Gudang | `pengelola_gudang` | Stok, permintaan, opname |
 | Pejabat Pengadaan | `pejabat_pengadaan` | Usulan dan realisasi pengadaan |
+
+Dua peran lain — `kepala_unit` dan `pengguna` — dipakai sub sistem permintaan
+barang. `kepala_unit` adalah kepala unit **pemohon**, bukan atasan gudang;
+keduanya sengaja tidak dipertukarkan dengan `kasubbag_umum_ti`.
 
 ## Gate
 
@@ -32,6 +37,16 @@ Tidak ada rute pendaftaran mandiri — sistem tertutup, akun dibuat Admin.
 | `kelola-gudang` | Pengelola Gudang (+ Admin) |
 | `kelola-pengadaan` | Pejabat Pengadaan (+ Admin) |
 | `kelola-permintaan` | Pengelola Gudang (+ Admin) |
+| `setujui-pengadaan` | Kasubbag Umum dan TI (+ Admin) |
+| `akses-pengadaan` | Pejabat Pengadaan, Pengelola Gudang, Kasubbag Umum dan TI (+ Admin) |
+
+`akses-pengadaan` ada karena middleware `can:` yang ditumpuk bersifat **DAN**,
+bukan ATAU — beberapa halaman pengadaan harus terbuka bagi beberapa peran
+sekaligus.
+
+Admin lolos `setujui-pengadaan` juga. Pemisahan staf TI dari pemberi persetujuan
+karena itu bersifat organisasional, bukan ditegakkan sistem — keputusan sadar
+yang dicatat di ADR 0030.
 
 ## Aturan yang berlaku
 

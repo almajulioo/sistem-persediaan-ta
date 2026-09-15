@@ -23,6 +23,12 @@
             'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
         ],
         [
+            'name' => 'Persetujuan Pengadaan',
+            'description' => 'Menilai realisasi pengadaan yang diajukan Pejabat Pengadaan sebelum barang dipesan.',
+            'roles' => [UserRole::Admin, UserRole::KasubbagUmumTi],
+            'route' => 'procurements.index',
+        ],
+        [
             'name' => 'Manajemen Gudang',
             'description' => 'Stok, mutasi barang, dan stock opname persediaan.',
             'roles' => [UserRole::Admin, UserRole::PengelolaGudang],

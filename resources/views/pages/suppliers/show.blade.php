@@ -72,6 +72,10 @@
                         {{ $supplier->procurements_cancelled_count }} lainnya dibatalkan sebelum barang diterima,
                         dan tetap ditampilkan di bawah tanpa ikut dihitung.
                     @endif
+                    @if ($supplier->procurements_rejected_count > 0)
+                        {{ $supplier->procurements_rejected_count }} ditolak Kasubbag Umum dan TI dan belum
+                        diperbaiki, jadi belum ikut dihitung juga.
+                    @endif
                 </p>
             </div>
 

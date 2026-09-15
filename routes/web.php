@@ -7,6 +7,7 @@ use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\ProcurementApprovalController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
 use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
 use App\Http\Controllers\Pengadaan\ProcurementDraftController;
@@ -220,6 +221,26 @@ Route::middleware('auth')->group(function () {
         // tersimpan sebagai bukti bahwa pengadaan itu pernah berjalan.
         Route::patch('pengadaan/{procurement}/batal', [ProcurementController::class, 'cancel'])
             ->name('procurements.cancel');
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Persetujuan realisasi — Kasubbag Umum dan TI
+    |----------------------------------------------------------------------
+    |
+    | Jenjang keempat alur pengadaan (ADR 0030). Keduanya PATCH, sehingga bebas
+    | dari jebakan urutan rute yang mengenai GET segmen statis versus GET
+    | wildcard di grup-grup sebelumnya.
+    |
+    | Tidak ada rute "ajukan ulang": realisasi yang ditolak diperbaiki lewat
+    | `procurements.update` milik Pejabat Pengadaan, dan penyimpanan perubahan
+    | itulah pengajuan ulangnya.
+    */
+    Route::middleware('can:setujui-pengadaan')->group(function () {
+        Route::patch('pengadaan/{procurement}/setujui', [ProcurementApprovalController::class, 'approve'])
+            ->name('procurements.approve');
+        Route::patch('pengadaan/{procurement}/tolak', [ProcurementApprovalController::class, 'reject'])
+            ->name('procurements.reject');
     });
 
     Route::middleware('can:akses-pengadaan')->group(function () {

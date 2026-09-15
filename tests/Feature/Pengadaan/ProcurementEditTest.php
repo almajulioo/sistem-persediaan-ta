@@ -303,9 +303,11 @@ describe('batas keadaan yang boleh diubah', function () {
 });
 
 describe('notifikasi setelah pengubahan', function () {
-    it('menyegarkan nama penyedia pada keadaan menunggu penerimaan', function () {
-        // Isi RealisasiMenungguPenerimaan memuat nama penyedia, sehingga ia
+    it('menyegarkan nama penyedia pada keadaan menunggu persetujuan', function () {
+        // Isi RealisasiMenungguPersetujuan memuat nama penyedia, sehingga ia
         // basi begitu penyedianya diganti.
+        $kasubbag = kasubbagUmumTi();
+
         $usulan = setujuiUsulan($this->pejabat, buatUsulan($this->petugas, [
             ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
         ]));
@@ -316,9 +318,9 @@ describe('notifikasi setelah pengubahan', function () {
         );
 
         $kabar = fn () => Notification::query()
-            ->where('type', NotificationType::RealisasiMenungguPenerimaan)
+            ->where('type', NotificationType::RealisasiMenungguPersetujuan)
             ->where('subject_id', $procurement->procurement_id)
-            ->where('user_id', $this->petugas->user_id)
+            ->where('user_id', $kasubbag->user_id)
             ->first();
 
         expect($kabar()->body)->toContain('CV Penyedia Lama');

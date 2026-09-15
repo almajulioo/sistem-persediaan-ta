@@ -95,14 +95,20 @@
                                 </td>
                                 <td class="px-5 py-4 sm:px-6">
                                     {{-- Hanya pengadaan yang benar-benar berjalan.
-                                         Yang dibatalkan dicacah terpisah, bukan
-                                         disembunyikan (ADR 0026). --}}
+                                         Yang dibatalkan dan yang ditolak dicacah
+                                         terpisah, bukan disembunyikan
+                                         (ADR 0026, ADR 0030). --}}
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                         {{ $row->procurements_count }}&times;
                                     </p>
                                     @if ($row->procurements_cancelled_count > 0)
                                         <p class="text-theme-xs mt-0.5 text-gray-400 dark:text-gray-500">
                                             {{ $row->procurements_cancelled_count }} dibatalkan
+                                        </p>
+                                    @endif
+                                    @if ($row->procurements_rejected_count > 0)
+                                        <p class="text-theme-xs mt-0.5 text-gray-400 dark:text-gray-500">
+                                            {{ $row->procurements_rejected_count }} menunggu perbaikan
                                         </p>
                                     @endif
                                 </td>

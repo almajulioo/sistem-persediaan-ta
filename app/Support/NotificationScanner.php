@@ -451,16 +451,41 @@ class NotificationScanner
      * penerimaannya dikonfirmasi, atau berkasnya diunggah/dihapus supaya
      * notifikasinya muncul dan menghilang seketika.
      *
-     * Kedua keadaan tidak akan pernah berlaku bersamaan: yang pertama menuntut
-     * status MenungguPenerimaan, yang kedua menuntut sudah Diterima.
+     * Ketiga keadaan tidak akan pernah berlaku bersamaan: masing-masing
+     * menuntut status yang berbeda — MenungguPersetujuan, MenungguPenerimaan,
+     * dan sudah Diterima.
+     *
+     * Penerimanya pun berbeda, karena itu dua koleksi: persetujuan ditagih ke
+     * Kasubbag Umum dan TI, penerimaan dan berkas BAST ke pengawas gudang.
      *
      * @param  EloquentCollection<int, User>|null  $penerima
+     * @param  EloquentCollection<int, User>|null  $pemberiPersetujuan
      */
-    public static function periksaRealisasi(Procurement $procurement, ?EloquentCollection $penerima = null): void
-    {
+    public static function periksaRealisasi(
+        Procurement $procurement,
+        ?EloquentCollection $penerima = null,
+        ?EloquentCollection $pemberiPersetujuan = null,
+    ): void {
         $penerima ??= self::pengawasGudang();
+        $pemberiPersetujuan ??= self::pemberiPersetujuan();
 
         $judul = $procurement->judul();
+
+        Notifier::terapkanKeadaan(
+            berlaku: $procurement->isMenungguPersetujuan(),
+            penerima: $pemberiPersetujuan,
+            type: NotificationType::RealisasiMenungguPersetujuan,
+            dedupKey: NotificationType::RealisasiMenungguPersetujuan->dedupKey($procurement->procurement_id),
+            title: "Realisasi menunggu persetujuan: {$judul}",
+            body: sprintf(
+                '%s dari %s senilai Rp%s menunggu keputusan Anda. Periksa penyedia, barang, dan harganya, lalu setujui atau tolak sebelum barang dipesan.',
+                $judul,
+                $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
+                number_format($procurement->nilaiTotal(), 0, ',', '.'),
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
 
         Notifier::terapkanKeadaan(
             berlaku: $procurement->isMenungguPenerimaan(),
@@ -527,12 +552,17 @@ class NotificationScanner
     public static function periksaSeluruhRealisasi(): void
     {
         $penerima = self::pengawasGudang();
+        $pemberiPersetujuan = self::pemberiPersetujuan();
 
-        Procurement::query()->with('supplier', 'receipt')->chunk(100, function ($procurements) use ($penerima) {
-            foreach ($procurements as $procurement) {
-                self::periksaRealisasi($procurement, $penerima);
-            }
-        });
+        // `details` ikut dimuat karena isi notifikasi persetujuan menyebut nilai
+        // total realisasinya.
+        Procurement::query()
+            ->with('supplier', 'receipt', 'details')
+            ->chunk(100, function ($procurements) use ($penerima, $pemberiPersetujuan) {
+                foreach ($procurements as $procurement) {
+                    self::periksaRealisasi($procurement, $penerima, $pemberiPersetujuan);
+                }
+            });
     }
 
     /**
@@ -568,6 +598,60 @@ class NotificationScanner
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia',
             ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
+    }
+
+    /**
+     * Peristiwa: realisasi pengadaan diputuskan Kasubbag Umum dan TI.
+     *
+     * Penerimanya Pejabat Pengadaan yang membuat realisasi itu — dialah yang
+     * harus memesan barang bila disetujui, atau memperbaiki dokumennya bila
+     * ditolak. Pelakunya sendiri tidak diberi tahu; Admin yang memutuskan
+     * sebagai pengganti pun tidak mengirimi dirinya sendiri.
+     *
+     * Memanggil `periksaRealisasi()` lebih dulu supaya tagihan
+     * RealisasiMenungguPersetujuan tertutup seketika, dan — bila disetujui —
+     * tagihan RealisasiMenungguPenerimaan langsung terbit ke gudang.
+     *
+     * Lihat ADR 0030.
+     */
+    public static function catatRealisasiDiputuskan(Procurement $procurement, User $pelaku): void
+    {
+        self::periksaRealisasi($procurement);
+
+        $procurement->loadMissing('user', 'supplier');
+        $perealisasi = $procurement->user;
+
+        if ($perealisasi === null || $perealisasi->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        $judul = $procurement->judul();
+        $disetujui = $procurement->isMenungguPenerimaan();
+        $type = $disetujui ? NotificationType::RealisasiDisetujui : NotificationType::RealisasiDitolak;
+
+        Notifier::catatPeristiwa(
+            penerima: new EloquentCollection([$perealisasi]),
+            type: $type,
+            dedupKey: $type->dedupKey($procurement->procurement_id),
+            title: $disetujui ? "Disetujui: {$judul}" : "Ditolak: {$judul}",
+            body: $disetujui
+                ? sprintf(
+                    '%s menyetujui %s dari %s. Barang sudah boleh dipesan, dan gudang menunggu konfirmasi penerimaannya.%s',
+                    $pelaku->fullname,
+                    $judul,
+                    $procurement->supplier?->supplier_name ?? 'penyedia',
+                    $procurement->review_note ? ' Catatan: '.$procurement->review_note : '',
+                )
+                : sprintf(
+                    '%s menolak %s dari %s. Alasan: %s. Perbaiki realisasinya lalu simpan untuk mengajukannya ulang.',
+                    $pelaku->fullname,
+                    $judul,
+                    $procurement->supplier?->supplier_name ?? 'penyedia',
+                    $procurement->review_note ?? '-',
+                ),
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,
         );
@@ -887,6 +971,18 @@ class NotificationScanner
     private static function pejabatPengadaan(): EloquentCollection
     {
         return Notifier::penerimaBerperan(UserRole::PejabatPengadaan, UserRole::Admin);
+    }
+
+    /**
+     * Kasubbag Umum dan TI beserta Admin — penerima baku antrean persetujuan
+     * realisasi pengadaan. Admin ikut karena `Gate::before` memang meloloskannya
+     * pada `setujui-pengadaan` (ADR 0030).
+     *
+     * @return EloquentCollection<int, User>
+     */
+    private static function pemberiPersetujuan(): EloquentCollection
+    {
+        return Notifier::penerimaBerperan(UserRole::KasubbagUmumTi, UserRole::Admin);
     }
 
     /**

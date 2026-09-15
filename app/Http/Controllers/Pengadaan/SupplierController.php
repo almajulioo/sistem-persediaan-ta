@@ -144,7 +144,7 @@ class SupplierController extends Controller
     }
 
     /**
-     * Dua cacah pengadaan per penyedia, dipakai bersama daftar dan detail.
+     * Cacah pengadaan per penyedia, dipakai bersama daftar dan detail.
      *
      * Angka utama hanya menghitung pengadaan yang benar-benar berjalan;
      * realisasi yang dibatalkan dicacah terpisah, tidak pernah dilebur ke
@@ -152,13 +152,20 @@ class SupplierController extends Controller
      * tidak pernah menjadi transaksi, sehingga menghitungnya sebagai
      * "pengadaan ke sekian" pada penyedia itu menyesatkan. Lihat ADR 0026.
      *
+     * Sejak ADR 0030 realisasi yang **ditolak** Kasubbag Umum dan TI ikut
+     * dikeluarkan dari angka utama, dengan alasan yang sama. Cacahnya berdiri
+     * sendiri, bukan dilebur ke dalam cacah pembatalan: penolakan tidak
+     * terminal — dokumennya masih boleh diperbaiki lalu diajukan ulang —
+     * sehingga menyebutnya "dibatalkan" sama menyesatkannya.
+     *
      * @return array<string, \Closure>
      */
     private function cacahPengadaan(): array
     {
         return [
-            'procurements as procurements_count' => fn ($query) => $query->where('status', '!=', ProcurementStatus::Dibatalkan),
+            'procurements as procurements_count' => fn ($query) => $query->whereNotIn('status', ProcurementStatus::takPernahJadiTransaksi()),
             'procurements as procurements_cancelled_count' => fn ($query) => $query->where('status', ProcurementStatus::Dibatalkan),
+            'procurements as procurements_rejected_count' => fn ($query) => $query->where('status', ProcurementStatus::Ditolak),
         ];
     }
 }

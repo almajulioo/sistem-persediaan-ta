@@ -26,6 +26,13 @@ class UserSeeder extends Seeder
                 'role' => UserRole::Admin,
             ],
             [
+                'username' => 'kasubbag',
+                'email' => 'kasubbag@bpk.go.id',
+                'fullname' => 'Kepala Subbagian Umum dan TI',
+                'unit' => 'Subbagian Umum dan TI',
+                'role' => UserRole::KasubbagUmumTi,
+            ],
+            [
                 'username' => 'gudang',
                 'email' => 'gudang@bpk.go.id',
                 'fullname' => 'Pengelola Gudang Persediaan',

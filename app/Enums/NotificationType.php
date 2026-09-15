@@ -46,6 +46,7 @@ enum NotificationType: string
     case UsulanBelumDirealisasi = 'usulan_belum_direalisasi';
 
     // --- Keadaan realisasi pengadaan ---
+    case RealisasiMenungguPersetujuan = 'realisasi_menunggu_persetujuan';
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
     case BastBelumDiunggah = 'bast_belum_diunggah';
 
@@ -56,6 +57,8 @@ enum NotificationType: string
     case UsulanDisetujui = 'usulan_disetujui';
     case UsulanDitolak = 'usulan_ditolak';
     case PenerimaanDikonfirmasi = 'penerimaan_dikonfirmasi';
+    case RealisasiDisetujui = 'realisasi_disetujui';
+    case RealisasiDitolak = 'realisasi_ditolak';
     case RealisasiDibatalkan = 'realisasi_dibatalkan';
 
     // --- Permintaan ---
@@ -80,6 +83,7 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan => 'Usulan Menunggu Persetujuan',
             self::UsulanMenggantung => 'Usulan Pengadaan Menggantung',
             self::UsulanBelumDirealisasi => 'Usulan Disetujui Belum Direalisasi',
+            self::RealisasiMenungguPersetujuan => 'Realisasi Menunggu Persetujuan',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
             self::BastBelumDiunggah => 'BAST Belum Diunggah',
             self::OpnameDiposting => 'Opname Diposting',
@@ -88,6 +92,8 @@ enum NotificationType: string
             self::UsulanDisetujui => 'Usulan Pengadaan Disetujui',
             self::UsulanDitolak => 'Usulan Pengadaan Ditolak',
             self::PenerimaanDikonfirmasi => 'Penerimaan Barang Dikonfirmasi',
+            self::RealisasiDisetujui => 'Realisasi Pengadaan Disetujui',
+            self::RealisasiDitolak => 'Realisasi Pengadaan Ditolak',
             self::RealisasiDibatalkan => 'Realisasi Pengadaan Dibatalkan',
             self::PermintaanDiajukan => 'Permintaan Diajukan',
             self::PermintaanDisetujuiKepalaUnit => 'Permintaan Disetujui Kepala Unit',
@@ -112,6 +118,7 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
             self::UsulanMenggantung => 'Usulan pengadaan sudah lama diajukan tanpa disetujui maupun ditolak.',
             self::UsulanBelumDirealisasi => 'Usulan sudah disetujui tetapi belum ditindaklanjuti menjadi realisasi pengadaan.',
+            self::RealisasiMenungguPersetujuan => 'Realisasi pengadaan menunggu keputusan Kasubbag Umum dan TI sebelum barang dipesan.',
             self::RealisasiMenungguPenerimaan => 'Realisasi pengadaan menunggu konfirmasi barang diterima Pengelola Gudang.',
             self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
@@ -120,6 +127,8 @@ enum NotificationType: string
             self::UsulanDisetujui => 'Usulan pengadaan yang diajukan telah disetujui, sebagian atau seluruhnya.',
             self::UsulanDitolak => 'Usulan pengadaan yang diajukan tidak dilanjutkan ke realisasi.',
             self::PenerimaanDikonfirmasi => 'Barang pengadaan telah dikonfirmasi diterima gudang; stok sudah bertambah.',
+            self::RealisasiDisetujui => 'Realisasi pengadaan disetujui Kasubbag Umum dan TI; barang sudah boleh dipesan.',
+            self::RealisasiDitolak => 'Realisasi pengadaan ditolak Kasubbag Umum dan TI; masih dapat diperbaiki lalu diajukan ulang.',
             self::RealisasiDibatalkan => 'Realisasi pengadaan tidak dilanjutkan, sehingga barangnya tidak akan datang.',
             self::PermintaanDiajukan => 'Permintaan barang dari unit kerja telah diajukan ke gudang.',
             self::PermintaanDisetujuiKepalaUnit => 'Permintaan barang dari unit kerja telah disetujui oleh Kepala Unit.',
@@ -142,6 +151,8 @@ enum NotificationType: string
             self::UsulanDisetujui,
             self::UsulanDitolak,
             self::PenerimaanDikonfirmasi,
+            self::RealisasiDisetujui,
+            self::RealisasiDitolak,
             self::RealisasiDibatalkan => false,
             self::PermintaanDiajukan,
             self::PermintaanDisetujuiKepalaUnit,
@@ -167,9 +178,11 @@ enum NotificationType: string
             self::UsulanMenungguPersetujuan,
             self::UsulanMenggantung,
             self::UsulanBelumDirealisasi,
+            self::RealisasiMenungguPersetujuan,
             self::RealisasiMenungguPenerimaan,
             self::BastBelumDiunggah,
             self::UsulanDitolak,
+            self::RealisasiDitolak,
             self::RealisasiDibatalkan => NotificationLevel::Perhatian,
             self::PermintaanDiajukan => NotificationLevel::Perhatian,
             self::PermintaanDisetujuiKepalaUnit => NotificationLevel::Perhatian,
@@ -181,6 +194,7 @@ enum NotificationType: string
             self::BarangTidakBergerak,
             self::OpnameDiposting,
             self::UsulanDisetujui,
+            self::RealisasiDisetujui,
             self::PenerimaanDikonfirmasi => NotificationLevel::Info,
         };
     }

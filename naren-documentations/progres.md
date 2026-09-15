@@ -5,6 +5,118 @@ perubahan.
 
 ---
 
+## 15 September 2026 — Peran Kasubbag Umum dan TI dan jenjang persetujuan realisasi
+
+Permintaan langsung dari **Kasubbag Umum dan TI** saat presentasi prototipe di
+lapangan: ia ingin meninjau realisasi pengadaan yang dibuat Pejabat Pengadaan
+sebelum berjalan — cukup terima atau tolak. Sekaligus permintaan memecah peran
+`admin`, karena di lapangan Admin akan dipegang **staf TI**. Bukan belokan
+mendadak: [ADR 0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md)
+sudah menutup dirinya dengan mencatat jenjang ini sebagai langkah berikutnya
+yang belum dikerjakan.
+
+**Rekomendasi yang diberikan sebelum membangun.** Pertanyaan pengguna
+"persetujuan sebelum atau sesudah realisasi dibuat?" diluruskan lebih dulu:
+dokumennya **harus** tersimpan agar dapat ditinjau — penyedia, barang, dan
+harganya justru yang dinilai — yang dimaksud sebenarnya adalah *belum berlaku
+sampai disetujui*. Bentuknya jadi status kelahiran baru
+`MenungguPersetujuan`, pola yang sama dengan `ProcurementRequestStatus::Draf`
+(ADR 0027). Dua lubang alur diangkat sebelum dibangun, keduanya disetujui
+pengguna: (1) `Ditolak` **tidak boleh** terminal, karena indeks unik
+`procurement_request_id` akan membuat usulan asalnya ikut mati permanen —
+jalan buntu yang sama persis dengan yang diperbaiki ADR 0024; (2)
+[ADR 0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md)
+membuka celah tata kelola, karena harga dapat diubah setelah persetujuan terbit.
+Keduanya ditutup satu aturan: **setiap penyimpanan perubahan mengembalikan
+realisasi ke `MenungguPersetujuan`** dan mengosongkan jejak review — itu
+sekaligus menjadi mekanisme "ajukan ulang" sehingga tidak perlu rute tersendiri.
+
+**Keputusan pengguna yang berbeda dari rekomendasi.** Diusulkan mengecualikan
+Admin dari gate persetujuan supaya staf TI tidak pernah bisa menyetujui belanja;
+pengguna memilih **membiarkan `Gate::before` apa adanya** demi jalan darurat dan
+konsistensi konvensi uji "Admin → 200". Keterbatasan itu dicatat terus terang di
+ADR, bukan didiamkan. Untuk tampilan, dipilih **grup menu "Persetujuan"** berisi
+tautan ke daftar terfilter alih-alih layar "Kotak Persetujuan" tersendiri —
+nol controller baru, dan grup menunya menjadi titik komposisi murah untuk
+menampung tautan persetujuan sub sistem permintaan kelak tanpa kopling data.
+
+**Yang dikerjakan.**
+
+- `UserRole::KasubbagUmumTi` baru; gate `setujui-pengadaan` baru dan
+  `akses-pengadaan` diperluas ke peran itu.
+- `ProcurementStatus` dari tiga menjadi lima case
+  (`MenungguPersetujuan`, `Ditolak`), plus helper `masihBerjalan()` dan
+  `takPernahJadiTransaksi()`.
+- Migrasi `add_approval_to_procurements_table`: `reviewed_at`, `reviewed_by`,
+  `review_note`. Satu set kolom untuk keputusan terakhir, sejajar pola
+  `cancelled_*`; riwayat lengkapnya tetap di `audit_logs` yang immutable.
+- `ProcurementApprovalController` baru dengan `approve()`/`reject()`, dua form
+  request (`...RealizationRequest`, dinamai begitu karena
+  `ApproveProcurementRequestRequest` sudah dipakai persetujuan usulan), dan grup
+  rute `can:setujui-pengadaan` berisi dua rute PATCH.
+- `ProcurementController`: status kelahiran berubah; `edit()`, `update()`, dan
+  `cancel()` berpindah ke `masihBerjalan()`; `update()` menyetel ulang status dan
+  jejak review; `summary()` memakai invarian baru
+  `total = menunggu_persetujuan + menunggu + diterima`.
+- Tiga tipe notifikasi baru; `NotificationScanner::periksaRealisasi()` menerima
+  koleksi penerima kedua karena antrean persetujuan ditagih ke jabatan berbeda.
+- Tampilan: grup menu Persetujuan, tombol Setujui dan modal Tolak di halaman
+  detail, kartu "Hasil Review", kartu rekap 5 → 6, plus kolom pada laporan PDF.
+- Seeder: akun `kasubbag`, satu usulan tambahan, dan satu realisasi contoh yang
+  berhenti di `MenungguPersetujuan` supaya layar pemutus tidak kosong.
+- Dokumentasi: [ADR 0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md),
+  `modul/pengadaan.md`, `modul/autentikasi.md`, `ikhtisar-sistem.md`, dan
+  `erd/penyelarasan-erd.md` — tabel penyimpangan yang terakhir itu sekalian
+  disusulkan untuk ADR 0024, 0027, dan 0028 yang sebelumnya belum tercatat.
+
+**Temuan penting.** Sisipan ini jauh lebih murah dari dugaan karena arsitektur
+"status sebagai penjaga" yang sudah terbangun menutup sendiri sebagian besar
+risikonya: `ProcurementReceiptController::create()`,
+`ProcurementReceiptPoster::pastikanSiap()`, dan keadaan
+`RealisasiMenungguPenerimaan` semuanya sudah berkunci pada
+`isMenungguPenerimaan()`, sehingga realisasi yang belum disetujui otomatis tidak
+dapat diterima dan stok tidak mungkin bertambah — **ketiganya tidak diubah satu
+baris pun**, dan tetap diberi uji tersendiri. Dua gotcha lama juga terbukti
+masih hidup: dua realisasi di seeder lahir dengan prefiks `judul()` identik
+(UUID v7 berurut) sampai diberi UUID v4 eksplisit, dan `MenuHelper::isActive()`
+mencocokkan path saja sehingga query string harus dipisah ke kunci `query`
+tersendiri agar penandaan menu aktif tidak meleset.
+
+**Catatan.** Ditemukan sambil jalan, **di luar cakupan dan belum diperbaiki**:
+relasi `cancelledBy` tidak terdaftar di `User::RESTRICTED_RELATIONS` padahal
+FK-nya `restrictOnDelete()`, sehingga menghapus akun yang pernah membatalkan
+realisasi akan meledak jadi 500 alih-alih pesan validasi ADR 0003. Celah itu ada
+sejak ADR 0024; relasi `reviewedProcurements` yang baru sengaja langsung
+didaftarkan supaya tidak mengulanginya. Juga: `app/Helpers/MenuHelper.php` gagal
+`pint --test` karena *trailing whitespace* pada blok menu Permintaan Barang —
+sudah ada sebelum sesi ini (terbukti identik saat perubahan sesi ini di-stash)
+dan sengaja tidak diperbaiki agar tidak menimbulkan diff di area Alma.
+
+**Masih menunggu.** Penambahan case enum menyentuh `users`, **tabel bersama**,
+jadi perlu disepakati dengan Alma. Tawarannya dua arah: transisi final permintaan
+(`processed_by_staff → completed`) saat ini di-*hardcode* ke Admin pada
+`RequestController`, padahal secara jabatan itu Kasubbag Umum dan TI — jadi ia
+mendapat case enum yang memang dibutuhkannya. Tidak ada satu pun berkas sub
+sistem permintaan yang disentuh sesi ini. Perlu dikonfirmasi juga ke lapangan:
+kolom `unit` pada akun seed lama tertulis "Subbagian Umum dan TU", sedangkan
+nama peran yang diminta berbunyi "Umum dan **TI**"; akun `kasubbag` baru memakai
+ejaan yang konsisten dengan nama perannya.
+
+**Verifikasi.** 365 pengujian lolos (sebelumnya 338 — 27 uji baru, sebagian besar
+di `ProcurementApprovalTest.php`: matriks hak akses termasuk Admin → 200,
+persetujuan, penolakan berikut alasan wajib, penerimaan yang ditolak sebelum
+disetujui beserta bukti `stock_mutations` tetap kosong, perbaikan setelah
+ditolak, gugurnya persetujuan setelah realisasi diubah, dan keempat jalur
+notifikasinya). `migrate:fresh --seed` bersih pada MySQL; `npm run build`
+bersih; `pint --test` bersih pada seluruh berkas yang diubah kecuali temuan lama
+di atas. Alur ujung-ke-ujung juga diperiksa langsung terhadap basis data
+pengembangan dengan akun seed: sidebar `kasubbag` memuat grup Persetujuan
+beserta tautan terfilternya, daftar tersaring menampilkan realisasi yang
+mengantre, halaman detail menampilkan tombol Setujui/Tolak, dan halaman yang
+sama untuk `gudang` tidak memunculkan jalan apa pun menuju formulir penerimaan.
+
+---
+
 ## 13 September 2026 — Realisasi boleh melebihi usulan, dan boleh menambah barang
 
 Permintaan perubahan pada dua titik alur pengadaan: (1) Pejabat Pengadaan

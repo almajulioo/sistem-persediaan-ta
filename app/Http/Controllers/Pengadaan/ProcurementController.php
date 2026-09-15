@@ -109,7 +109,10 @@ class ProcurementController extends Controller
                 'procurement_request_id' => $data['procurement_request_id'],
                 'supplier_id' => $data['supplier_id'],
                 'procurement_date' => $data['procurement_date'],
-                'status' => ProcurementStatus::MenungguPenerimaan,
+                // Dokumennya tersimpan, tetapi belum berlaku: penyedia, barang,
+                // dan harganya justru yang dinilai Kasubbag Umum dan TI lebih
+                // dulu (ADR 0030).
+                'status' => ProcurementStatus::MenungguPersetujuan,
                 'user_id' => $request->user()->user_id,
             ]);
 
@@ -147,7 +150,7 @@ class ProcurementController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} berhasil dibuat dan menunggu penerimaan barang.");
+            ->with('status', "{$procurement->judul()} berhasil dibuat dan menunggu persetujuan Kasubbag Umum dan TI.");
     }
 
     public function show(Procurement $procurement): View
@@ -156,7 +159,7 @@ class ProcurementController extends Controller
             'title' => $procurement->judul(),
             'procurement' => $procurement->load([
                 'user', 'supplier', 'procurementRequest', 'details.item',
-                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy',
+                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy', 'reviewedBy',
             ]),
         ]);
     }
@@ -164,15 +167,19 @@ class ProcurementController extends Controller
     /**
      * Koreksi realisasi yang belum dikonfirmasi diterima.
      *
-     * Selama status masih MenungguPenerimaan belum ada apa pun yang terjadi
-     * secara fisik — barang belum diterima, stok belum bertambah, tidak ada
-     * mutasi maupun BAST — sehingga dokumennya masih boleh diperbaiki. Pola
-     * yang sama dengan draf opname yang boleh diubah sampai diposting
-     * (ADR 0010). Lihat ADR 0025.
+     * Selama barang belum dikonfirmasi diterima belum ada apa pun yang terjadi
+     * secara fisik — stok belum bertambah, tidak ada mutasi maupun BAST —
+     * sehingga dokumennya masih boleh diperbaiki. Pola yang sama dengan draf
+     * opname yang boleh diubah sampai diposting (ADR 0010). Lihat ADR 0025.
+     *
+     * Sejak ADR 0030 pintu ini melebar ke dua keadaan baru sekaligus: realisasi
+     * yang masih menunggu persetujuan, dan realisasi yang **ditolak** —
+     * memperbaiki lalu menyimpannya adalah satu-satunya cara mengajukannya
+     * ulang.
      */
     public function edit(Procurement $procurement): View|RedirectResponse
     {
-        if (! $procurement->isMenungguPenerimaan()) {
+        if (! $procurement->masihBerjalan()) {
             return redirect()
                 ->route('procurements.show', $procurement)
                 ->with('error', "{$procurement->judul()} tidak dapat diubah karena sudah dikonfirmasi diterima atau dibatalkan.");
@@ -188,7 +195,7 @@ class ProcurementController extends Controller
 
     public function update(UpdateProcurementRequest $request, Procurement $procurement): RedirectResponse
     {
-        if (! $procurement->isMenungguPenerimaan()) {
+        if (! $procurement->masihBerjalan()) {
             return back()->with(
                 'error',
                 "{$procurement->judul()} tidak dapat diubah karena sudah dikonfirmasi diterima atau dibatalkan.",
@@ -196,11 +203,24 @@ class ProcurementController extends Controller
         }
 
         $data = $request->validated();
+        $sebelumnyaDisetujui = $procurement->isMenungguPenerimaan();
 
         DB::transaction(function () use ($procurement, $data) {
             $procurement->forceFill([
                 'supplier_id' => $data['supplier_id'],
                 'procurement_date' => $data['procurement_date'],
+
+                // Satu aturan menutup dua lubang sekaligus (ADR 0030).
+                // Pertama: realisasi yang ditolak tidak punya rute "ajukan
+                // ulang" tersendiri — menyimpan perbaikannya itulah
+                // pengajuan ulangnya. Kedua: tanpa ini, persetujuan dapat
+                // diakali — mintakan persetujuan atas harga yang wajar, lalu
+                // ubah harganya setelah disetujui. Isi dokumen berubah,
+                // penilaiannya pun harus diulang.
+                'status' => ProcurementStatus::MenungguPersetujuan,
+                'reviewed_at' => null,
+                'reviewed_by' => null,
+                'review_note' => null,
             ])->save();
 
             // Baris usulan diperbarui di tempat, bukan dihapus lalu dibuat
@@ -240,28 +260,36 @@ class ProcurementController extends Controller
         AuditLogger::record($request->user(), "Mengubah realisasi pengadaan: {$procurement->judul()}");
 
         // Isi notifikasi RealisasiMenungguPenerimaan memuat nama penyedia,
-        // sehingga ia basi begitu penyedianya diganti.
+        // sehingga ia basi begitu penyedianya diganti. Pemeriksaan ini sekaligus
+        // menutup tagihan penerimaan yang sudah tidak berlaku dan membuka
+        // tagihan persetujuan yang baru.
         NotificationScanner::periksaRealisasi($procurement->fresh(['supplier', 'receipt']));
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} berhasil diperbarui.");
+            ->with('status', $sebelumnyaDisetujui
+                ? "{$procurement->judul()} berhasil diperbarui. Karena isinya berubah, persetujuan Kasubbag Umum dan TI harus diulang."
+                : "{$procurement->judul()} berhasil diperbarui dan diajukan ke Kasubbag Umum dan TI.");
     }
 
     /**
      * Membatalkan realisasi yang tidak akan pernah sampai ke penerimaan.
      *
-     * Hanya mungkin selama masih `MenungguPenerimaan`. Begitu barang diterima,
-     * stoknya sudah bertambah lewat mutasi yang immutable (ADR 0005) dan tidak
-     * ada lagi yang boleh dibatalkan — karena itu tidak ada satu pun mutasi
-     * yang perlu dibalik di sini, dan `StockLedger` tidak tersentuh sama
+     * Hanya mungkin selama barang belum dikonfirmasi diterima. Begitu barang
+     * diterima, stoknya sudah bertambah lewat mutasi yang immutable (ADR 0005)
+     * dan tidak ada lagi yang boleh dibatalkan — karena itu tidak ada satu pun
+     * mutasi yang perlu dibalik di sini, dan `StockLedger` tidak tersentuh sama
      * sekali. Lihat ADR 0024.
+     *
+     * Sejak ADR 0030 inilah jalan keluar bagi realisasi yang **ditolak** dan
+     * memang tidak akan diperbaiki: penolakan sendiri tidak terminal, jadi
+     * tanpa pembatalan dokumennya akan menggantung selamanya.
      */
     public function cancel(CancelProcurementRequest $request, Procurement $procurement): RedirectResponse
     {
         // Ditolak dengan pesan, bukan 500 — pola yang sama dengan penjaga
         // keputusan ganda pada ProcurementRequestController::approve().
-        if (! $procurement->isMenungguPenerimaan()) {
+        if (! $procurement->masihBerjalan()) {
             return back()->with(
                 'error',
                 "{$procurement->judul()} tidak dapat dibatalkan karena sudah dikonfirmasi diterima atau sudah dibatalkan sebelumnya.",
@@ -444,11 +472,12 @@ class ProcurementController extends Controller
      * adalah kekurangan kiriman penyedia, angka yang justru hilang bila
      * keduanya dilebur jadi satu. Lihat ADR 0017.
      *
-     * Realisasi yang dibatalkan **tidak ikut dihitung** pada `total` maupun
-     * `nilai`: ia dokumen yang pernah ada tetapi tidak pernah menjadi
-     * transaksi. Cacahnya berdiri sendiri di `dibatalkan`, sehingga tidak ada
+     * Realisasi yang dibatalkan **maupun ditolak** tidak ikut dihitung pada
+     * `total` maupun `nilai`: keduanya dokumen yang pernah ada tetapi tidak
+     * pernah menjadi transaksi. Cacahnya berdiri sendiri, sehingga tidak ada
      * yang disembunyikan sekaligus menyisakan invarian yang enak dibaca —
-     * `total = menunggu + diterima`. Lihat ADR 0026.
+     * `total = menunggu_persetujuan + menunggu + diterima`. Lihat ADR 0026 dan
+     * ADR 0030.
      *
      * @param  array<string, string>  $filters
      * @return array<string, int>
@@ -456,6 +485,7 @@ class ProcurementController extends Controller
     private function summary(array $filters): array
     {
         $base = Procurement::query()->filter($filters);
+        $gagal = ProcurementStatus::takPernahJadiTransaksi();
 
         // Subkueri, bukan daftar id yang ditarik lebih dulu: jumlah realisasi
         // yang tersaring tidak dibatasi apa pun di layar daftar.
@@ -463,14 +493,16 @@ class ProcurementController extends Controller
             'procurement_id',
             Procurement::query()
                 ->filter($filters)
-                ->where('status', '!=', ProcurementStatus::Dibatalkan)
+                ->whereNotIn('status', $gagal)
                 ->select('procurement_id'),
         );
 
         return [
-            'total' => (clone $base)->where('status', '!=', ProcurementStatus::Dibatalkan)->count(),
+            'total' => (clone $base)->whereNotIn('status', $gagal)->count(),
+            'menunggu_persetujuan' => (clone $base)->where('status', ProcurementStatus::MenungguPersetujuan)->count(),
             'menunggu' => (clone $base)->where('status', ProcurementStatus::MenungguPenerimaan)->count(),
             'diterima' => (clone $base)->where('status', ProcurementStatus::Diterima)->count(),
+            'ditolak' => (clone $base)->where('status', ProcurementStatus::Ditolak)->count(),
             'dibatalkan' => (clone $base)->where('status', ProcurementStatus::Dibatalkan)->count(),
             'nilai' => (int) $rincian()->sum(DB::raw('amount * unit_price')),
             'nilai_diterima' => (int) $rincian()->sum(DB::raw('COALESCE(amount_received, 0) * unit_price')),

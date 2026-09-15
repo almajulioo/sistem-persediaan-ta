@@ -12,16 +12,17 @@ barangnya sendiri — mencari penyedia, menawar, membayar — terjadi **di luar
 sistem**, di antara realisasi dan penerimaan.
 
 ```
-Pengelola Gudang       Pejabat Pengadaan        [LUAR SISTEM]      Pengelola Gudang
-      │                        │                      │                    │
-  Usulan  ──disetujui──▶  Realisasi  ──────▶  pembelian nyata  ──▶  Penerimaan
-                                                                          │
-                                                                    stok bertambah
-                                                                          │
-                                                                    BAST dicetak
+Pengelola Gudang    Pejabat Pengadaan    Kasubbag Umum & TI    [LUAR SISTEM]    Pengelola Gudang
+      │                     │                     │                   │                  │
+  Usulan ──disetujui──▶ Realisasi ──ditinjau──▶ disetujui ────▶ pembelian nyata ──▶ Penerimaan
+                            ▲                     │                                      │
+                            └────── ditolak ──────┘                                stok bertambah
+                          (diperbaiki, diajukan ulang)                                   │
+                                                                                   BAST dicetak
 ```
 
-Rincian keputusan: [ADR 0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md).
+Rincian keputusan: [ADR 0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md)
+dan [ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md).
 
 ## Pemisahan tugas
 
@@ -30,12 +31,20 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Tahap | Pelaku | Tercatat di |
 |---|---|---|
 | Mengusulkan | Pengelola Gudang | `procurement_requests.user_id` |
-| Menyetujui / menolak | Pejabat Pengadaan | `procurement_requests.status` |
+| Menyetujui / menolak usulan | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
+| **Menyetujui / menolak realisasi** | **Kasubbag Umum dan TI** | `procurements.reviewed_by` |
 | Membatalkan realisasi | Pejabat Pengadaan | `procurements.cancelled_by` |
 | Mengonfirmasi diterima | Pengelola Gudang | `procurement_receipts.received_by` |
 
-Admin lolos seluruhnya lewat `Gate::before`.
+Sejak [ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)
+siklusnya bertangan empat: jenjang persetujuan realisasi disisipkan antara
+"merealisasi" dan "mengonfirmasi diterima", supaya ada pihak yang menilai
+penyedia, barang, dan harganya sebelum barang benar-benar dipesan.
+
+Admin lolos seluruhnya lewat `Gate::before`, **termasuk `setujui-pengadaan`**.
+Pemisahan staf TI dari pemberi persetujuan karena itu bersifat organisasional,
+bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 0030.
 
 ## Aturan bisnis yang ditegakkan
 
@@ -52,9 +61,16 @@ Admin lolos seluruhnya lewat `Gate::before`.
    ([ADR 0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
 6. `MutationType::Masuk` ber-`isManual() === false`, sehingga penerimaan
    pengadaan adalah satu-satunya sumber sah stok masuk.
-7. Realisasi hanya dapat dibatalkan selama masih `MenungguPenerimaan`, sehingga
-   pembatalan tidak pernah perlu membalik mutasi stok
+7. Realisasi hanya dapat dibatalkan selama barang belum dikonfirmasi diterima,
+   sehingga pembatalan tidak pernah perlu membalik mutasi stok
    ([ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md)).
+8. **Barang tidak boleh dipesan sebelum realisasinya disetujui Kasubbag Umum dan
+   TI**, dan penerimaan hanya mungkin atas realisasi ber-status
+   `MenungguPenerimaan` (ADR 0030).
+9. **Setiap perubahan pada realisasi menggugurkan persetujuannya** dan
+   mengembalikannya ke antrean Kasubbag Umum dan TI. Aturan ini sekaligus
+   menjadi mekanisme "ajukan ulang" bagi realisasi yang ditolak — tidak ada rute
+   tersendiri untuk itu (ADR 0030).
 
 ## Tabel
 
@@ -63,7 +79,7 @@ Admin lolos seluruhnya lewat `Gate::before`.
 | `suppliers` | Data induk penyedia; identitasnya dicetak di BAST |
 | `procurement_requests` | Usulan pengadaan; `source` membedakan tiga asal-usul |
 | `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
-| `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia |
+| `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia. `reviewed_at`/`reviewed_by`/`review_note` menampung keputusan **terakhir** Kasubbag Umum dan TI — persetujuan maupun penolakan, karena statusnya yang membedakan |
 | `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_received` datang, `unit_price` harga satuan |
 | `procurement_receipts` | Peristiwa penerimaan: siapa, kapan, nomor BAST |
 | `procurement_documents` | Berkas BAST pindai dan SPK/kontrak, di disk privat |
@@ -235,10 +251,23 @@ penerimaan barang yang menambah stok lewat `StockLedger`. Rincian keputusan:
 | GET | `/pengadaan` | `procurements.index` | `akses-pengadaan` | Daftar, penyaring status |
 | GET | `/pengadaan/create` | `procurements.create` | `kelola-pengadaan` | Menerima `?procurement_request_id=` dari halaman usulan |
 | POST | `/pengadaan` | `procurements.store` | `kelola-pengadaan` | |
-| GET | `/pengadaan/{procurement}` | `procurements.show` | `akses-pengadaan` | Detail + tombol Konfirmasi Penerimaan bila masih Menunggu Penerimaan |
+| GET | `/pengadaan/{procurement}` | `procurements.show` | `akses-pengadaan` | Detail; tombol aksinya menyesuaikan status dan peran |
+
+**Rute persetujuan** — `ProcurementApprovalController`, gate
+`setujui-pengadaan`, hanya berlaku selama status `MenungguPersetujuan`
+(ADR 0030):
+
+| Metode | URL | Nama | Keterangan |
+|---|---|---|---|
+| PATCH | `/pengadaan/{procurement}/setujui` | `procurements.approve` | Catatan opsional; status menjadi `MenungguPenerimaan` |
+| PATCH | `/pengadaan/{procurement}/tolak` | `procurements.reject` | Alasan **wajib**; status menjadi `Ditolak`, masih dapat diperbaiki |
+
+Tidak ada rute "ajukan ulang": perbaikan dikirim lewat `procurements.update`
+milik Pejabat Pengadaan, dan penyimpanan perubahan itulah pengajuan ulangnya.
 
 **Rute penerimaan** — `ProcurementReceiptController`, gate `kelola-gudang`,
-peristiwa sekali jadi tanpa rute ubah/hapus:
+peristiwa sekali jadi tanpa rute ubah/hapus. Hanya terbuka untuk realisasi yang
+sudah disetujui:
 
 | Metode | URL | Nama | Keterangan |
 |---|---|---|---|
@@ -273,6 +302,13 @@ peristiwa sekali jadi tanpa rute ubah/hapus:
 **Notifikasi baru**: `RealisasiMenungguPenerimaan` (keadaan, ke Pengelola
 Gudang + Admin) dan `PenerimaanDikonfirmasi` (peristiwa, ke Pejabat Pengadaan
 yang merealisasi).
+
+**Sejak ADR 0030**, `RealisasiMenungguPenerimaan` baru terbit setelah Kasubbag
+Umum dan TI menyetujui — tanpa mengubah satu baris pun pada kode notifikasinya,
+karena keadaan itu memang sudah berkunci pada status `MenungguPenerimaan`.
+Tiga tipe baru menyertainya: `RealisasiMenungguPersetujuan` (keadaan, ke
+Kasubbag Umum dan TI + Admin), serta `RealisasiDisetujui` dan `RealisasiDitolak`
+(peristiwa, ke Pejabat Pengadaan yang merealisasi).
 
 **Belum dikerjakan di tahap ini**: status `ProcurementStatus::Dibatalkan`
 masih tanpa pemicu. Diselesaikan 7 September 2026 — lihat
@@ -377,6 +413,53 @@ imbangan dari kelonggaran ADR 0018 — penerimaan sengaja tidak menunggu berkas
 supaya stok tidak tertahan, dan justru karena itu ketiadaan berkas perlu
 ditagih.
 
+## Persetujuan realisasi oleh Kasubbag Umum dan TI
+
+Ditambahkan 15 September 2026 atas permintaan langsung Kasubbag Umum dan TI saat
+presentasi prototipe di lapangan: ia ingin meninjau realisasi yang dibuat Pejabat
+Pengadaan sebelum barang dipesan — cukup terima atau tolak. Rincian keputusan:
+[ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md).
+
+Peran `kasubbag_umum_ti` dipisahkan dari `admin` justru karena ini: di lapangan
+Admin dipegang staf TI, dan `Gate::before` meloloskan Admin pada seluruh gate.
+
+**Lima status realisasi:**
+
+| Status | Arti | Boleh diubah / dibatalkan |
+|---|---|---|
+| `MenungguPersetujuan` | Keadaan kelahiran. Barang belum boleh dipesan | Ya |
+| `MenungguPenerimaan` | Disetujui; menunggu konfirmasi barang diterima | Ya (persetujuannya gugur) |
+| `Diterima` | Final; stok sudah bertambah | Tidak |
+| `Ditolak` | Ditolak, masih dapat diperbaiki lalu diajukan ulang | Ya |
+| `Dibatalkan` | Terminal; usulan asalnya ikut selesai riwayatnya | Tidak |
+
+**Aturan.**
+
+- Realisasi lahir sebagai `MenungguPersetujuan`, bukan `MenungguPenerimaan`.
+  Dokumennya memang sudah tersimpan saat dinilai — penyedia, barang, dan
+  harganya justru yang jadi bahan penilaian — tetapi belum berlaku sampai
+  disetujui. Pola yang sama dengan `ProcurementRequestStatus::Draf` (ADR 0027).
+- **Penjagaan penerimaan tidak perlu diubah sama sekali.**
+  `ProcurementReceiptController::create()`, `ProcurementReceiptPoster::pastikanSiap()`,
+  dan keadaan `RealisasiMenungguPenerimaan` sudah berkunci pada status
+  `MenungguPenerimaan`, sehingga realisasi yang belum disetujui otomatis tidak
+  dapat diterima dan stok tidak mungkin bertambah.
+- `Ditolak` **bukan** keadaan terminal. Kalau dibuat terminal, indeks unik
+  `procurements.procurement_request_id` membuat usulan asalnya ikut mati
+  permanen — jalan buntu yang sama persis dengan yang diperbaiki ADR 0024.
+- Alasan penolakan **wajib** diisi, berupa teks bebas dan bukan enum baku
+  seperti `AlasanPembatalan`: daftar alasan yang sebenarnya dipakai di lapangan
+  belum pernah ditanyakan.
+- Transisi usulan `DisetujuiMenungguRealisasi → DisetujuiSelesai` tetap terjadi
+  saat realisasi **dibuat**, bukan saat disetujui (ADR 0028).
+- Agregat memperlakukan `Ditolak` sama dengan `Dibatalkan`: ditampilkan, tidak
+  pernah dihitung (`ProcurementStatus::takPernahJadiTransaksi()`). Invarian rekap
+  menjadi `total = menunggu_persetujuan + menunggu + diterima`.
+- Tempat kerjanya adalah grup menu **Persetujuan** berisi tautan ke
+  `/pengadaan?status=menunggu_persetujuan`, bukan layar tersendiri. Keputusannya
+  diambil dari halaman detail realisasi, pola yang sama dengan cara Pejabat
+  Pengadaan memutuskan usulan.
+
 ## Mengubah realisasi
 
 Ditambahkan 7 September 2026. Salah ketik pada realisasi — salah penyedia, harga,
@@ -391,9 +474,17 @@ dari usulan baru. Rincian keputusan:
 
 **Aturan.**
 
-- Hanya dari status `MenungguPenerimaan` — batas yang sama dengan pembatalan.
-  Selama itu belum ada apa pun yang terjadi secara fisik, sehingga **tidak ada
-  satu pun mutasi stok yang perlu disesuaikan**.
+- Hanya selama barang belum dikonfirmasi diterima — batas yang sama dengan
+  pembatalan, dinyatakan oleh `ProcurementStatus::masihBerjalan()` yang mencakup
+  `MenungguPersetujuan`, `Ditolak`, dan `MenungguPenerimaan` (ADR 0030; sebelum
+  ADR itu hanya `MenungguPenerimaan`). Selama itu belum ada apa pun yang terjadi
+  secara fisik, sehingga **tidak ada satu pun mutasi stok yang perlu
+  disesuaikan**.
+- **Setiap penyimpanan mengembalikan status ke `MenungguPersetujuan`** dan
+  mengosongkan `reviewed_at`/`reviewed_by`/`review_note`. Satu aturan untuk dua
+  keperluan: ia menjadi mekanisme "ajukan ulang" bagi realisasi yang ditolak,
+  sekaligus menutup celah tata kelola — tanpa itu, persetujuan dapat diminta
+  atas harga yang wajar lalu harganya diubah setelah disetujui (ADR 0030).
 - Yang boleh diubah: `supplier_id`, `procurement_date`, serta `amount` dan
   `unit_price` tiap baris — jumlah pesan tidak lagi dibatasi terhadap
   `amount_granted` sejak
@@ -410,7 +501,8 @@ dari usulan baru. Rincian keputusan:
   usulan — yang hilang di antaranya ditolak validasi, bukan diam-diam
   tertinggal memakai nilai lamanya.
 - `update()` memanggil `NotificationScanner::periksaRealisasi()` karena isi
-  notifikasi `RealisasiMenungguPenerimaan` memuat nama penyedia.
+  notifikasi memuat nama penyedia. Panggilan itu sekaligus menutup tagihan
+  penerimaan yang sudah tidak berlaku dan membuka tagihan persetujuan yang baru.
 - Tombol **Ubah Realisasi** diletakkan di atas **Batalkan Realisasi**: urutan
   tombol adalah anjuran tentang mana yang seharusnya lebih sering dipakai.
 
@@ -429,10 +521,13 @@ penerimaan barang yang tidak pernah datang. Rincian keputusan:
 
 **Aturan.**
 
-- Hanya dari status `MenungguPenerimaan`. Begitu barang diterima, stoknya sudah
-  bertambah lewat mutasi yang immutable dan tidak ada lagi yang boleh
-  dibatalkan — sehingga **tidak ada satu pun mutasi yang perlu dibalik**, dan
-  `StockLedger` tidak tersentuh sama sekali oleh fitur ini.
+- Hanya selama barang belum dikonfirmasi diterima (`masihBerjalan()`). Begitu
+  barang diterima, stoknya sudah bertambah lewat mutasi yang immutable dan tidak
+  ada lagi yang boleh dibatalkan — sehingga **tidak ada satu pun mutasi yang
+  perlu dibalik**, dan `StockLedger` tidak tersentuh sama sekali oleh fitur ini.
+- Sejak ADR 0030 inilah pula jalan keluar bagi realisasi yang **ditolak** dan
+  tidak akan diperbaiki: penolakan sendiri tidak terminal, jadi tanpa pembatalan
+  dokumennya akan menggantung selamanya.
 - `cancel_reason` memakai enum `AlasanPembatalan` (`PenyediaGagalKirim`,
   `PenyediaMembatalkan`, `KebutuhanBerubah`, `KesalahanPencatatan`, `Lainnya`)
   dan `cancel_note` **wajib diisi** apa pun alasannya, pola yang sama dengan
