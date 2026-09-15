@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use App\Models\Item;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
+use App\Models\RequestDocument;
 use App\Support\RequestDocumentGenerator;
 use App\Support\NotificationScanner;
 use Illuminate\Support\Facades\DB;
@@ -42,8 +43,7 @@ class RequestController extends Controller
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('date', '>=', $dateFrom))
             ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo))
             ->when($isKepalaUnit, function ($query) use ($request) {
-                $query->where('status', 'submitted')
-                    ->whereHas('user', fn ($userQuery) => $userQuery->where('unit', $request->user()->unit));
+                $query->whereHas('user', fn ($userQuery) => $userQuery->where('unit', $request->user()->unit));
             })
             ->when($isPengelolaGudang, fn ($query) => $query->where('status', 'approved_by_head'))
             ->when($isUser, fn ($query) => $query->where('user_id', $request->user()->user_id))
@@ -102,10 +102,15 @@ class RequestController extends Controller
     public function show(ModelsRequest $request)
     {
         $request->load(['user', 'item']);
+        $notaDinas = $request->requestDocuments()
+            ->where('document_type', 'nota_dinas')
+            ->latest('created_at')
+            ->first();
 
         return view('pages.request.show', [
             'title' => 'Detail Permintaan',
             'requestData' => $request,
+            'hasNotaDinas' => $notaDinas && Storage::disk('local')->exists($notaDinas->file_path),
         ]);
     }
 
@@ -133,6 +138,23 @@ class RequestController extends Controller
         return response()->file(Storage::disk('local')->path($notaDinas->file_path), [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$notaDinas->document_number.'.pdf"',
+        ]);
+    }
+
+    public function verifyNotaDinas(RequestDocument $requestDocument, string $token)
+    {
+        abort_unless(
+            $requestDocument->document_type === 'nota_dinas'
+                && filled($requestDocument->verification_token_hash)
+                && hash_equals($requestDocument->verification_token_hash, hash('sha256', $token)),
+            404,
+        );
+
+        $requestDocument->load(['request.user', 'approvedBy']);
+
+        return view('pages.request.verify-nota-dinas', [
+            'title' => 'Verifikasi Nota Dinas',
+            'document' => $requestDocument,
         ]);
     }
 
@@ -167,7 +189,6 @@ class RequestController extends Controller
             return $itemRequest;
         });
 
-        $documentGenerator->generateNotaDinas($itemRequest);
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
 
         return redirect()->route('request.index')->with('status', 'Permintaan barang berhasil dibuat.');
@@ -206,7 +227,11 @@ class RequestController extends Controller
             ->with('status', 'Permintaan barang berhasil diperbarui.');
     }
 
-    public function respondByRole(ModelsRequest $request, Request $httpRequest)
+    public function respondByRole(
+        ModelsRequest $request,
+        Request $httpRequest,
+        RequestDocumentGenerator $documentGenerator,
+    )
     {
         $action = $httpRequest->input('action');
         $user = $httpRequest->user();
@@ -236,6 +261,7 @@ class RequestController extends Controller
         if($action === 'approve') {
             if ($user->hasRole(UserRole::KepalaUnit)) {
                 $request->update(['status' => 'approved_by_head']);
+                $documentGenerator->generateNotaDinas($request, $user);
             } elseif ($user->hasRole(UserRole::PengelolaGudang)) {
                 $request->update(['status' => 'processed_by_staff']);
             } elseif ($user->isAdmin()) {

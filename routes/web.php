@@ -32,6 +32,10 @@ Route::middleware('guest')->group(function () {
 | Rute Terautentikasi
 |--------------------------------------------------------------------------
 */
+Route::get('/verifikasi/nota-dinas/{requestDocument}/{token}', [RequestController::class, 'verifyNotaDinas'])
+    ->whereUuid('requestDocument')
+    ->name('request.nota-dinas.verify');
+
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
