@@ -56,4 +56,34 @@ class RequestDocumentGenerator
 
         return $document;
     }
+
+    public function generateBast(ModelsRequest $request, User $issuer): RequestDocument
+    {
+        $request->loadMissing(['user', 'item']);
+        $issuedAt = now();
+        $filePath = 'bast-permintaan/'.$request->request_id.'.pdf';
+        $document = RequestDocument::query()->firstOrNew([
+            'request_id' => $request->request_id,
+            'document_type' => 'bast',
+        ]);
+        $document->fill([
+            'user_id' => $request->user_id,
+            'document_number' => 'BAST-'.$request->request_number,
+            'file_path' => $filePath,
+            'approved_by_user_id' => $issuer->user_id,
+            'approved_at' => $issuedAt,
+        ]);
+        $document->save();
+
+        $pdf = Pdf::loadView('pdf.bast-permintaan', [
+            'request' => $request,
+            'issuer' => $issuer,
+            'issuedAt' => $issuedAt,
+            'document' => $document,
+        ])->setPaper('a4', 'portrait');
+
+        Storage::disk('local')->put($filePath, $pdf->output());
+
+        return $document;
+    }
 }

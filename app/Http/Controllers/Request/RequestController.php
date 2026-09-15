@@ -107,11 +107,16 @@ class RequestController extends Controller
             ->where('document_type', 'nota_dinas')
             ->latest('created_at')
             ->first();
+        $bast = $request->requestDocuments()
+            ->where('document_type', 'bast')
+            ->latest('created_at')
+            ->first();
 
         return view('pages.request.show', [
             'title' => 'Detail Permintaan',
             'requestData' => $request,
             'hasNotaDinas' => $notaDinas && Storage::disk('local')->exists($notaDinas->file_path),
+            'hasBast' => $bast && Storage::disk('local')->exists($bast->file_path),
         ]);
     }
 
@@ -139,6 +144,31 @@ class RequestController extends Controller
         return response()->file(Storage::disk('local')->path($notaDinas->file_path), [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$notaDinas->document_number.'.pdf"',
+        ]);
+    }
+
+    public function bast(ModelsRequest $request)
+    {
+        $bast = $request->requestDocuments()
+            ->where('document_type', 'bast')
+            ->with('user')
+            ->latest('created_at')
+            ->first();
+
+        $viewer = auth()->user();
+        $canView = $viewer->isAdmin()
+            || $viewer->hasRole(UserRole::PengelolaGudang)
+            || ($viewer->hasRole(UserRole::Pengguna) && $bast?->user_id === $viewer->user_id)
+            || ($viewer->hasRole(UserRole::KepalaUnit)
+                && filled($viewer->unit)
+                && $viewer->unit === $bast?->user?->unit);
+
+        abort_unless($canView, 403);
+        abort_unless($bast && Storage::disk('local')->exists($bast->file_path), 404);
+
+        return response()->file(Storage::disk('local')->path($bast->file_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$bast->document_number.'.pdf"',
         ]);
     }
 
@@ -270,12 +300,18 @@ class RequestController extends Controller
                         ? 'processed_by_staff'
                         : 'completed',
                 ]);
+                if ($request->status === 'completed') {
+                    $documentGenerator->generateBast($request, $user);
+                }
             } elseif ($user->isAdmin()) {
                 $request->update([
                     'status' => $request->status === 'processed_by_staff'
                         ? 'in_issuance'
                         : 'completed',
                 ]);
+                if ($request->status === 'completed') {
+                    $documentGenerator->generateBast($request, $user);
+                }
             }
         }
         NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));

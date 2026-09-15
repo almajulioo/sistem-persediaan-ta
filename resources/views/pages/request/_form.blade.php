@@ -101,15 +101,17 @@
 
                 <template x-if="requestedList.length > 0">
                     <div class="divide-y divide-gray-200 dark:divide-gray-800">
-                        <template x-for="(item, index) in requestedList" :key="index">
+                        <template x-for="(item, index) in requestedList" :key="item.item_id">
                             <div class="flex items-center justify-between bg-white px-4 py-3 dark:bg-gray-900">
                                 <div>
                                     <span class="font-medium text-gray-800 dark:text-white" x-text="item.item_name"></span>
                                     <input type="hidden" :name="`items[${index}][item_id]`" :value="item.item_id">
                                 </div>
                                 <div class="flex items-center gap-4">
-                                    <span class="text-sm text-gray-600 dark:text-gray-400" x-text="`Jumlah ${item.qty}`"></span>
-                                    <input type="hidden" :name="`items[${index}][qty]`" :value="item.qty">
+                                    <input type="number" min="1" max="999999" :name="`items[${index}][qty]`"
+                                        x-model.number="item.qty" @change="updateQty(index, item.qty)"
+                                        class="h-9 w-24 rounded-md border border-gray-300 px-3 text-right text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
+                                        aria-label="Jumlah barang">
                                     
                                     <button type="button" @click="removeItem(index)" class="text-error-500 hover:text-error-600 text-sm">
                                         Hapus
@@ -158,8 +160,23 @@
             selectedItemText: '',
             searchQuery: '',
             inputQty: '',
-            requestedList: [],
             requestedList: @json($existingItems),
+
+            init() {
+                const mergedItems = new Map();
+                this.requestedList.forEach(item => {
+                    const current = mergedItems.get(item.item_id);
+                    if (current) {
+                        current.qty += parseInt(item.qty, 10) || 0;
+                    } else {
+                        mergedItems.set(item.item_id, {
+                            ...item,
+                            qty: parseInt(item.qty, 10) || 0,
+                        });
+                    }
+                });
+                this.requestedList = Array.from(mergedItems.values());
+            },
 
             get filteredItems() {
                 if (!this.searchQuery) return this.items;
@@ -214,6 +231,13 @@
 
             removeItem(index) {
                 this.requestedList.splice(index, 1);
+            },
+
+            updateQty(index, value) {
+                const qty = parseInt(value, 10);
+                if (!Number.isInteger(qty) || qty < 1) {
+                    this.requestedList[index].qty = 1;
+                }
             }
         }
     }

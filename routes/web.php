@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
+    Route::get('/permintaan/{request}/bast', [RequestController::class, 'bast'])->name('request.bast');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
 
     Route::middleware('role:kepala_unit,pengelola_gudang,admin')->group(function () {

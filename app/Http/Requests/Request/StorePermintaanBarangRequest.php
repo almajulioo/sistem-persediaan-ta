@@ -30,15 +30,24 @@ class StorePermintaanBarangRequest extends FormRequest
     {
         // Memastikan item_id terformat uppercase & kuantitas berupa integer
         if ($this->has('items') && is_array($this->items)) {
-            $formattedItems = array_map(function ($item) {
+            $mergedItems = [];
+            foreach ($this->items as $item) {
                 if (isset($item['item_id'])) {
                     $item['item_id'] = mb_strtoupper(trim((string) $item['item_id']));
                 }
                 if (isset($item['qty'])) {
                     $item['qty'] = (int) $item['qty'];
                 }
-                return $item;
-            }, $this->items);
+                if (isset($item['item_id'], $item['qty'])) {
+                    $mergedItems[$item['item_id']] = ($mergedItems[$item['item_id']] ?? 0) + $item['qty'];
+                }
+            }
+
+            $formattedItems = array_map(
+                fn ($itemId, $qty) => ['item_id' => $itemId, 'qty' => $qty],
+                array_keys($mergedItems),
+                array_values($mergedItems),
+            );
 
             $this->merge([
                 'items' => $formattedItems,
