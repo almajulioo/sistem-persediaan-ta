@@ -47,6 +47,7 @@
                             'submitted' => 'Terkirim',
                             'approved_by_head' => 'Disetujui Kepala Unit',
                             'processed_by_staff' => 'Disetujui Staff Umum',
+                            'in_issuance' => 'Dalam Proses Pengeluaran',
                             'completed' => 'Selesai',
                             'rejected' => 'Ditolak',
                         ][$requestData->status] ?? ucfirst(str_replace('_', ' ', $requestData->status)) }}

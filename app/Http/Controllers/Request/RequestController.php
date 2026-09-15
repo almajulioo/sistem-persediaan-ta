@@ -45,7 +45,7 @@ class RequestController extends Controller
             ->when($isKepalaUnit, function ($query) use ($request) {
                 $query->whereHas('user', fn ($userQuery) => $userQuery->where('unit', $request->user()->unit));
             })
-            ->when($isPengelolaGudang, fn ($query) => $query->where('status', 'approved_by_head'))
+            ->when($isPengelolaGudang, fn ($query) => $query->whereIn('status', ['approved_by_head', 'in_issuance']))
             ->when($isUser, fn ($query) => $query->where('user_id', $request->user()->user_id))
             ->latest('date')
             ->latest('created_at')
@@ -56,7 +56,8 @@ class RequestController extends Controller
             'pending' => ModelsRequest::whereIn('status', [
                 'submitted', 
                 'approved_by_head', 
-                'processed_by_staff'
+                'processed_by_staff',
+                'in_issuance'
             ])->count(),
             'bulan_ini' => ModelsRequest::whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])->count(),
             'selesai_bulan_ini' => ModelsRequest::whereIn('status', ['completed'])
@@ -245,8 +246,9 @@ class RequestController extends Controller
                 && $request->status === 'submitted'
                 && $user->unit === $request->user->unit)
             || ($user->hasRole(UserRole::PengelolaGudang)
-                && $request->status === 'approved_by_head')
-            || ($user->isAdmin() && $request->status === 'processed_by_staff');
+                && in_array($request->status, ['approved_by_head', 'in_issuance'], true))
+            || ($user->isAdmin()
+                && in_array($request->status, ['processed_by_staff', 'in_issuance'], true));
 
         if (!$canRespond) {
             return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk memproses permintaan ini.');
@@ -263,9 +265,17 @@ class RequestController extends Controller
                 $request->update(['status' => 'approved_by_head']);
                 $documentGenerator->generateNotaDinas($request, $user);
             } elseif ($user->hasRole(UserRole::PengelolaGudang)) {
-                $request->update(['status' => 'processed_by_staff']);
+                $request->update([
+                    'status' => $request->status === 'approved_by_head'
+                        ? 'processed_by_staff'
+                        : 'completed',
+                ]);
             } elseif ($user->isAdmin()) {
-                $request->update(['status' => 'completed']);
+                $request->update([
+                    'status' => $request->status === 'processed_by_staff'
+                        ? 'in_issuance'
+                        : 'completed',
+                ]);
             }
         }
         NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));

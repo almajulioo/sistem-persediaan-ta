@@ -51,6 +51,7 @@
                     'submitted' => 'Submitted',
                     'approved_by_head' => 'Disetujui Kepala Unit',
                     'processed_by_staff' => 'Disetujui Staff Umum',
+                    'in_issuance' => 'Dalam Proses Pengeluaran',
                     'completed' => 'Completed',
                     'rejected' => 'Rejected',
                 ]" :selected="$status" placeholder="Semua status" />
@@ -107,7 +108,7 @@
                                 <td class="px-5 py-4 sm:px-6">
                                     <span @class([
                                         'text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium',
-                                        'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500' => in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff'], true),
+                                        'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500' => in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true),
                                         'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500' => $row->status === 'rejected',
                                         'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' => $row->status === 'completed',
                                     ])>
@@ -115,6 +116,7 @@
                                             'submitted' => 'Terkirim',
                                             'approved_by_head' => 'Disetujui Kepala Unit',
                                             'processed_by_staff' => 'Disetujui Staff Umum',
+                                            'in_issuance' => 'Dalam Proses Pengeluaran',
                                             'completed' => 'Selesai',
                                             'rejected' => 'Ditolak',
                                         ][$row->status] ?? ucfirst(str_replace('_', ' ', $row->status)) }}
@@ -135,8 +137,8 @@
 
                                     @php
                                         $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
-                                                    ($row->status === 'approved_by_head' && $isPengelolaGudang) ||
-                                                    ($row->status === 'processed_by_staff' && $isAdmin);
+                                                    (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
+                                                    (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) && $isAdmin);
                                     @endphp
 
                                     @if ($canRespond)
@@ -145,7 +147,7 @@
                                             @csrf
                                             <button type="submit" 
                                                 class="text-theme-xs text-success-600 dark:text-success-500 ring-success-200 dark:ring-success-500/30 hover:bg-success-50 dark:hover:bg-success-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
-                                                Setujui
+                                                {{ $row->status === 'in_issuance' ? 'Selesaikan' : ($row->status === 'processed_by_staff' ? 'Mulai Pengeluaran' : 'Setujui') }}
                                             </button>
                                         </form>
 

@@ -706,7 +706,7 @@ class NotificationScanner
         $penerima = match ($request->status) {
             'approved_by_head' => self::pengawasGudang(),
             'processed_by_staff' => Notifier::penerimaBerperan(UserRole::Admin),
-            'rejected', 'completed' => $request->user !== null
+            'in_issuance', 'completed' => $request->user !== null
                 ? new EloquentCollection([$request->user])
                 : new EloquentCollection,
             default => new EloquentCollection,
@@ -715,6 +715,7 @@ class NotificationScanner
         $type = match ($request->status) {
             'approved_by_head' => NotificationType::PermintaanDisetujuiKepalaUnit,
             'processed_by_staff' => NotificationType::PermintaanDisetujuiPengelolaGudang,
+            'in_issuance' => NotificationType::PermintaanDalamPengeluaran,
             'rejected' => NotificationType::PermintaanDitolak,
             'completed' => NotificationType::PermintaanSelesai,
             default => null,
