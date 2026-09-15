@@ -5,14 +5,25 @@
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Realisasi Pengadaan</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Pengadaan yang direalisasikan Pejabat Pengadaan dari usulan yang sudah disetujui, menunggu
-                konfirmasi penerimaan Pengelola Gudang.
+                Pengadaan yang direalisasikan Pejabat Pengadaan, dari usulan yang sudah disetujui maupun
+                langsung tanpa usulan, menunggu persetujuan Kasubbag Umum dan TI lalu konfirmasi penerimaan
+                Pengelola Gudang.
             </p>
         </div>
 
         {{-- Kedua tautan cetak membawa penyaring yang sedang aktif, supaya isi
              laporan selalu sama persis dengan yang terlihat di layar. --}}
         <div class="flex flex-wrap items-center gap-3">
+            @can('kelola-pengadaan')
+                <a href="{{ route('procurements.create') }}"
+                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                    <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 3.75a.75.75 0 01.75.75v4.75h4.75a.75.75 0 010 1.5H10.75v4.75a.75.75 0 01-1.5 0V10.75H4.5a.75.75 0 010-1.5h4.75V4.5a.75.75 0 01.75-.75z" />
+                    </svg>
+                    Buat Realisasi Langsung
+                </a>
+            @endcan
+
             <a href="{{ route('procurements.csv', request()->query()) }}"
                 class="inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                 <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -40,6 +51,17 @@
             $summary['dibatalkan'] > 0 ? number_format($summary['dibatalkan'], 0, ',', '.').' dibatalkan' : null,
             $summary['ditolak'] > 0 ? number_format($summary['ditolak'], 0, ',', '.').' ditolak' : null,
         ])->filter()->implode(', ') ?: null;
+
+        // Dua baris catatan terpisah, bukan satu yang digabung: "tanpa usulan"
+        // adalah irisan dari angka besarnya, sedangkan "dibatalkan/ditolak"
+        // justru yang tidak ikut dihitung — menyandingkannya dalam satu baris
+        // akan membuat keduanya terbaca sebagai hal yang sejenis.
+        $catatanTotal = collect([
+            $summary['langsung'] > 0
+                ? number_format($summary['langsung'], 0, ',', '.').' tanpa usulan'
+                : null,
+            $catatanGagal,
+        ])->filter()->values()->all();
     @endphp
 
     {{-- Rekap mengikuti penyaring, bukan seluruh basis data: angka di kartu
@@ -50,19 +72,19 @@
          disembunyikan (ADR 0026, ADR 0030). --}}
     <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-6">
         @foreach ([
-            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $catatanGagal],
-            ['label' => 'Menunggu Persetujuan', 'value' => number_format($summary['menunggu_persetujuan'], 0, ',', '.'), 'class' => 'text-purple-600 dark:text-purple-400', 'catatan' => null],
-            ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400', 'catatan' => null],
-            ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => null],
-            ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => null],
-            ['label' => 'Nilai Diterima', 'value' => 'Rp' . number_format($summary['nilai_diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => null],
+            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $catatanTotal],
+            ['label' => 'Menunggu Persetujuan', 'value' => number_format($summary['menunggu_persetujuan'], 0, ',', '.'), 'class' => 'text-purple-600 dark:text-purple-400', 'catatan' => []],
+            ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400', 'catatan' => []],
+            ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => []],
+            ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => []],
+            ['label' => 'Nilai Diterima', 'value' => 'Rp' . number_format($summary['nilai_diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => []],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
                 <h4 class="text-title-sm mt-2 font-bold {{ $card['class'] }}">{{ $card['value'] }}</h4>
-                @if ($card['catatan'])
-                    <p class="text-theme-xs mt-1 text-gray-400 dark:text-gray-500">{{ $card['catatan'] }}</p>
-                @endif
+                @foreach ($card['catatan'] as $catatan)
+                    <p class="text-theme-xs mt-1 text-gray-400 dark:text-gray-500">{{ $catatan }}</p>
+                @endforeach
             </div>
         @endforeach
     </div>
@@ -70,10 +92,15 @@
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         {{-- Penyaring --}}
         <form method="GET" action="{{ route('procurements.index') }}"
-            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-4 dark:border-gray-800 sm:p-6">
+            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-5 dark:border-gray-800 sm:p-6">
             <x-form.select-field name="status" label="Status Realisasi"
                 :options="\App\Enums\ProcurementStatus::options()" :selected="$filters['status']"
                 placeholder="Semua status" />
+
+            {{-- Dasar pengadaan: langsung versus dari usulan (ADR 0031). --}}
+            <x-form.select-field name="sumber" label="Dasar Pengadaan"
+                :options="['usulan' => 'Dari usulan', 'langsung' => 'Langsung (tanpa usulan)']"
+                :selected="$filters['sumber']" placeholder="Semua dasar" />
 
             <x-form.select-field name="supplier" label="Penyedia" :options="$suppliers"
                 :selected="$filters['supplier']" placeholder="Semua penyedia" />
@@ -82,7 +109,7 @@
 
             <x-form.text-field name="to" label="Tanggal Akhir" type="date" :value="$filters['to']" />
 
-            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-4">
+            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-5">
                 <button type="submit"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Terapkan
@@ -119,6 +146,14 @@
                                 <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
                                     {{ $row->procurement_date->translatedFormat('d M Y') }}
                                 </p>
+
+                                {{-- Penanda ringkas, bukan kolom tersendiri: tabelnya sudah
+                                     enam kolom, dan pertanyaannya cuma ya/tidak (ADR 0031). --}}
+                                @if ($row->tanpaUsulan())
+                                    <span class="text-theme-xs mt-1 inline-block rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-white/[0.06] dark:text-gray-400">
+                                        Langsung
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">

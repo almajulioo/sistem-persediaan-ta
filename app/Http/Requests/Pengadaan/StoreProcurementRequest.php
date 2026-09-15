@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Pengadaan;
 
+use App\Enums\AlasanPengadaan;
 use App\Models\Item;
 use App\Models\ProcurementRequest;
 use App\Models\ProcurementRequestDetail;
@@ -11,14 +12,19 @@ use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 
 /**
- * Realisasi pengadaan dari satu usulan yang sudah disetujui.
+ * Realisasi pengadaan, dari satu usulan yang sudah disetujui maupun langsung
+ * tanpa usulan sama sekali (ADR 0031).
  *
  * Dua bentuk baris: baris usulan mengirim `procurement_request_detail_id`
  * (item_id diturunkan server-side lewat `rincianDisetujui()`), baris tambahan
  * mengirim `item_id` langsung — Pejabat Pengadaan boleh menambah barang di
  * luar usulan, dan jumlah pesan boleh melebihi jumlah yang disetujui (ADR
- * 0029). Yang tetap wajib: seluruh rincian usulan yang disetujui harus
- * tercakup, tidak boleh ada yang hilang dari kiriman.
+ * 0029). Yang tetap wajib selama usulannya ada: seluruh rincian usulan yang
+ * disetujui harus tercakup, tidak boleh ada yang hilang dari kiriman.
+ *
+ * Realisasi langsung adalah kasus batas dari bentuk yang sama — seluruh
+ * barisnya baris tambahan, aturan cakupan tidak punya apa pun untuk ditagih.
+ * Gantinya ia wajib membawa dasarnya sendiri: `basis_reason` dan `basis_note`.
  */
 class StoreProcurementRequest extends FormRequest
 {
@@ -35,14 +41,41 @@ class StoreProcurementRequest extends FormRequest
     }
 
     /**
+     * Usulan yang dikirim kosong disamakan dengan tidak dikirim, supaya
+     * formulir yang menyertakan input tersembunyi bernilai kosong tidak jatuh
+     * ke aturan `exists` dan menghasilkan galat yang membingungkan.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (trim((string) $this->input('procurement_request_id', '')) === '') {
+            $this->merge(['procurement_request_id' => null]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         return [
             'procurement_request_id' => [
-                'required',
+                'nullable',
                 Rule::exists('procurement_requests', 'procurement_request_id'),
+            ],
+
+            // Dasar pengadaan wajib justru ketika usulannya tidak ada: tanpa
+            // itu Kasubbag Umum dan TI tidak punya bahan penilaian apa pun
+            // selain penyedia, barang, dan harga (ADR 0031).
+            'basis_reason' => [
+                'required_without:procurement_request_id',
+                'nullable',
+                Rule::enum(AlasanPengadaan::class),
+            ],
+            'basis_note' => [
+                'required_without:procurement_request_id',
+                'nullable',
+                'string',
+                'max:500',
             ],
             'supplier_id' => [
                 'required',
@@ -62,22 +95,30 @@ class StoreProcurementRequest extends FormRequest
         $validator->after(function (Validator $validator) {
             $procurementRequest = $this->usulan();
 
-            if ($procurementRequest === null) {
+            // Usulan dikirim tetapi tidak ditemukan — aturan `exists` sudah
+            // mengeluhkannya, tidak perlu diperiksa dua kali. Berbeda dari
+            // usulan yang memang tidak dikirim: itu realisasi langsung, dan
+            // pemeriksaan barisnya di bawah tetap harus jalan.
+            if ($this->punyaUsulan() && $procurementRequest === null) {
                 return;
             }
 
-            if ($procurementRequest->isDisetujuiSelesai()) {
-                $validator->errors()->add('procurement_request_id', 'Usulan ini sudah memiliki realisasi.');
+            if ($procurementRequest !== null) {
+                if ($procurementRequest->isDisetujuiSelesai()) {
+                    $validator->errors()->add('procurement_request_id', 'Usulan ini sudah memiliki realisasi.');
 
-                return;
+                    return;
+                }
+
+                if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
+                    $validator->errors()->add('procurement_request_id', 'Realisasi hanya dapat dibuat dari usulan yang sudah disetujui.');
+
+                    return;
+                }
             }
 
-            if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
-                $validator->errors()->add('procurement_request_id', 'Realisasi hanya dapat dibuat dari usulan yang sudah disetujui.');
-
-                return;
-            }
-
+            // Kosong pada realisasi langsung, sehingga aturan cakupan di bawah
+            // tidak punya apa pun untuk ditagih.
             $rincian = $this->rincianDisetujui();
             $usulanTerkirim = [];
             $itemTerpakai = [];
@@ -86,6 +127,15 @@ class StoreProcurementRequest extends FormRequest
                 $detailId = trim((string) ($baris['procurement_request_detail_id'] ?? ''));
 
                 if ($detailId !== '') {
+                    if ($procurementRequest === null) {
+                        $validator->errors()->add(
+                            "items.{$index}.procurement_request_detail_id",
+                            'Realisasi langsung tidak boleh memuat barang dari usulan.',
+                        );
+
+                        continue;
+                    }
+
                     $detail = $rincian->get($detailId);
 
                     if ($detail === null) {
@@ -138,22 +188,40 @@ class StoreProcurementRequest extends FormRequest
         });
     }
 
+    /**
+     * Apakah kiriman ini menyebut sebuah usulan, terlepas dari sah atau tidak.
+     */
+    private function punyaUsulan(): bool
+    {
+        return trim((string) $this->input('procurement_request_id', '')) !== '';
+    }
+
     private function usulan(): ?ProcurementRequest
     {
-        $id = (string) $this->input('procurement_request_id', '');
-
-        if ($id === '') {
+        if (! $this->punyaUsulan()) {
             return null;
         }
 
-        return ProcurementRequest::find($id);
+        return ProcurementRequest::find((string) $this->input('procurement_request_id'));
     }
 
     /**
+     * Rincian usulan yang disetujui, atau koleksi kosong pada realisasi
+     * langsung.
+     *
+     * Guard-nya eksplisit dan bukan sekadar kehati-hatian: tanpa itu kueri
+     * berjalan dengan `procurement_request_id` null, yang oleh Laravel diubah
+     * menjadi `where ... is null`. Kebetulan hasilnya kosong karena kolom itu
+     * NOT NULL, tetapi bersandar pada kebetulan semacam itu rapuh.
+     *
      * @return Collection<string, ProcurementRequestDetail>
      */
     public function rincianDisetujui(): Collection
     {
+        if (! $this->punyaUsulan()) {
+            return $this->rincianDisetujui ??= new Collection;
+        }
+
         return $this->rincianDisetujui ??= ProcurementRequestDetail::query()
             ->with('item')
             ->where('procurement_request_id', (string) $this->input('procurement_request_id'))
@@ -170,6 +238,8 @@ class StoreProcurementRequest extends FormRequest
         return [
             'supplier_id' => 'penyedia',
             'procurement_date' => 'tanggal realisasi',
+            'basis_reason' => 'dasar pengadaan',
+            'basis_note' => 'keterangan dasar pengadaan',
             'items' => 'daftar barang',
             'items.*.amount' => 'jumlah pesan',
             'items.*.unit_price' => 'harga satuan',
@@ -182,7 +252,9 @@ class StoreProcurementRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'procurement_request_id.required' => 'Usulan pengadaan tidak ditemukan.',
+            'procurement_request_id.exists' => 'Usulan pengadaan tidak ditemukan.',
+            'basis_reason.required_without' => 'Pilih dasar pengadaan. Realisasi tanpa usulan wajib menyebutkan dasarnya.',
+            'basis_note.required_without' => 'Jelaskan dasar pengadaannya. Keterangan ini yang dinilai Kasubbag Umum dan TI.',
             'items.required' => 'Tambahkan minimal satu barang ke realisasi.',
             'items.min' => 'Tambahkan minimal satu barang ke realisasi.',
             'items.*.amount.min' => 'Jumlah pesan minimal 1.',

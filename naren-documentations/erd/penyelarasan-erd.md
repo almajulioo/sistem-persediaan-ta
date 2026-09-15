@@ -31,7 +31,17 @@ orang pada tabel yang sama rawan bentrok saat merge.
 
 `procurements`, `procurement_details`, `procurement_requests`,
 `procurement_request_details`, `procurement_receipts`, `procurement_documents`,
-`suppliers`, `stock_opnames`, `opname_details`
+`suppliers`, `stock_opnames`, `opname_details`, `item_proposals`
+
+`item_proposals` (sejak 16 September 2026,
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md)) perlu satu catatan
+tersendiri: bentuknya **sengaja netral peran** — pengusulnya cukup seorang
+`users`, dan perannya sendiri sudah menjelaskan asal usulannya. Maksudnya supaya
+sub sistem permintaan barang dapat memakai tabel yang sama bila kelak butuh
+"pengguna meminta barang yang belum ada di sistem", **tanpa perubahan skema**.
+Selama hanya Naren yang memakainya, tabel ini miliknya sendiri; begitu Alma
+menulis ke sana, sifatnya berubah menjadi tabel bersama dan perlu disepakati.
+Jadi ini **ditawarkan, bukan diasumsikan**.
 
 ### Milik Alma — bebas diubah sendiri
 
@@ -128,6 +138,9 @@ ERD pada naskah Naren diperbarui.
 | `procurement_requests` | `user_id` menjadi **nullable** — draf otomatis tidak punya pengaju | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
 | `procurement_request_details` | Tambah `is_auto` — menandai baris yang masih dikelola draf otomatis | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
 | `procurements` | Tambah `reviewed_at`, `reviewed_by`, `review_note` — keputusan terakhir Kasubbag Umum dan TI; statusnya yang membedakan setuju dari tolak | [0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) |
+| `procurements` | `procurement_request_id` menjadi **nullable**, indeks uniknya **dipertahankan** — realisasi tanpa usulan boleh banyak (NULL berulang diizinkan), tetapi satu usulan tetap paling banyak satu realisasi | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
+| `procurements` | Tambah `basis_reason`, `basis_note` — dasar pengadaan, wajib pada realisasi tanpa usulan; NULL berarti dasarnya adalah usulannya | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
+| `item_proposals` | Tabel baru — usulan barang baru; `item_id` nullable terisi saat Pengelola Gudang mendaftarkan barangnya | [0032](../keputusan/0032-usulan-barang-baru.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

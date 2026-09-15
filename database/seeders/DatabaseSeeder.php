@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             StockOpnameSeeder::class,
             ProcurementRequestSeeder::class,
             ProcurementSeeder::class,
+            ItemProposalSeeder::class,
         ]);
     }
 }

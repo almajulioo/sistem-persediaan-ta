@@ -42,6 +42,7 @@ class MenuHelper
                 'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
                 'subItems' => [
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
+                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang'],
                     ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
                     ['name' => 'Penyedia Barang', 'path' => '/penyedia'],
                 ],
@@ -52,6 +53,7 @@ class MenuHelper
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
+                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang'],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stok Opname', 'path' => '/opname'],
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],

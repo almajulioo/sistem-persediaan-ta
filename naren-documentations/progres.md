@@ -5,6 +5,191 @@ perubahan.
 
 ---
 
+## 16 September 2026 — Realisasi pengadaan tanpa usulan, dan pintu depan katalog
+
+Dua permintaan **Kasubbag Umum dan TI** dari presentasi prototipe yang sama
+dengan sesi 15 September: (1) Pejabat Pengadaan perlu dapat membuat realisasi
+sendiri tanpa menunggu usulan Pengelola Gudang, dan (2) ia perlu dapat
+mengadakan barang yang belum ada datanya di master barang. Permintaan ketiga —
+pengguna dapat meminta barang yang belum ada di sistem — bentuknya berbeda
+tetapi kebutuhannya sama dengan yang kedua, dan dijawab mekanisme yang sama.
+Sekali lagi bukan belokan mendadak:
+[ADR 0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md)
+sudah menutup dirinya dengan mencatat realisasi tanpa usulan sebagai langkah
+berikutnya yang belum dikerjakan.
+
+**Rekomendasi yang diberikan sebelum membangun.** Empat hal diluruskan lebih
+dulu, dan keempatnya disetujui pengguna apa adanya.
+
+Pertama, **mengapa permintaan (1) baru layak sekarang**: sebelum
+[ADR 0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md),
+realisasi tanpa usulan akan membuat satu peran menjalankan separuh siklus
+sendirian — memilih barang, penyedia, dan harga tanpa dokumen hulu maupun
+pemutus, sehingga pemisahan tugas ADR 0016 bolong. Dengan jenjang Kasubbag,
+trionya tetap tiga orang berbeda. Instingnya sendiri ("karena sekarang sudah ada
+peran KUT") justru itulah inti argumennya, dan itu yang ditulis di ADR.
+
+Kedua, **pertanyaan pengguna sendiri** "apakah perlu alasan, padahal rancangan
+awal menaruh alasan di usulan?" dijawab: perlu, wajib, dan bukan konsep baru.
+Rancangan awal bukan "tanpa alasan" — alasannya ada, tempatnya di dokumen usulan
+beserta pengaju dan `source`-nya. Aturannya jadi satu kalimat: *alasan tidak
+pernah hilang dari sistem, ia hanya pindah ke dokumen yang tidak punya hulu.*
+Tiga urgensinya: layar persetujuan KUT kehilangan satu-satunya bahan penilaian
+tanpa itu; `audit_logs` mencatat siapa dan kapan, tidak pernah mengapa; dan
+bentuk berenum dapat direkap sehingga kebiasaan memakai pintu langsung terlihat
+angkanya. Bentuknya mengikuti pola yang proyek ini sudah pakai dua kali — enum
+baku berpasangan keterangan wajib, seperti ADR 0011 dan ADR 0024.
+
+Ketiga, untuk permintaan (2) bentuk yang diusulkan pengguna sudah benar arahnya
+tetapi digeser dua hal. **Nama barang bebas pada rincian pengadaan ditolak
+karena mustahil, bukan karena selera**: stok tidak dapat diposting ke sebuah
+string — `StockLedger::record()` menuntut sebuah `Item` dan
+`procurement_details.item_id` adalah FK NOT NULL. **Kolom `verified_at` pada
+`items` juga ditolak**: `items` tabel bersama dengan Alma, dan jangkauannya
+besar — barang stok nol yang belum diverifikasi akan langsung memicu `StokHabis`
+sekaligus tersedot ke draf usulan otomatis, jadi enam titik harus diaudit lebih
+dulu. Gantinya satu tabel kecil `item_proposals` yang nol dampak ke `items` dan
+nol ketergantungan ke Alma.
+
+Keempat, penilaian pengguna atas permintaan (3) — "meminta barang yang tidak ada
+itu desain jelek, apa bedanya dengan mulut ke mulut?" — dinyatakan **separuh
+benar**, dan separuh yang lain justru kunci penyelesaiannya. Membiarkan baris
+`requests` menunjuk barang yang tidak ada memang harus ditolak. Tetapi "apa
+bedanya dengan mulut ke mulut" punya jawaban: usulan adalah **dokumen** —
+bertuan, bertanggal, berkeputusan, beralasan, terhitung; percakapan lisan tidak
+punya kelimanya. Yang membuat sesuatu terstruktur bukan "barangnya sudah ada di
+master", melainkan "permintaannya punya dokumen dan ada pihak yang wajib
+menjawabnya". Jadi permintaan KUT dapat dipenuhi utuh asal disalurkan ke dokumen
+yang benar — dan dokumen itu sama dengan jawaban permintaan (2). Satu konsep,
+dua pintu masuk, satu layar keputusan milik gudang: **katalog punya pintu
+depan**.
+
+**Yang dikerjakan — ADR 0031, realisasi tanpa usulan.**
+
+- Migrasi `allow_procurements_without_request`: `procurement_request_id` menjadi
+  nullable, **indeks uniknya dipertahankan**. MySQL dan SQLite mengizinkan
+  banyak baris NULL pada indeks unik, jadi satu perubahan ini melayani dua
+  kebutuhan — realisasi langsung boleh banyak, sementara "satu usulan satu
+  realisasi" tetap dijaga basis data, bukan kode.
+- Migrasi `add_basis_to_procurements_table`: `basis_reason`, `basis_note`.
+  Sejajar pola `cancel_*` dan `review_*`.
+- `AlasanPengadaan` baru: `KebutuhanMendesak`, `BarangBaru`, `ArahanPimpinan`,
+  `BelanjaRutinNilaiKecil`, `Lainnya`.
+- `Procurement`: `tanpaUsulan()` dan `dasarRingkas()`, plus penyaring `sumber`
+  pada `scopeFilter()`. Keadaan "tanpa usulan" **diturunkan** dari satu kolom di
+  baris yang sama, bukan disimpan sebagai kolom `source` tersendiri.
+- `ProcurementController::create()` melayani dua pintu; `store()` melewati
+  transisi ADR 0028 dan `periksaUsulan()` bila tidak ada usulan; `summary()`
+  mendapat `langsung` sebagai **irisan**, bukan penjumlah, sehingga invarian
+  ADR 0030 tidak terganggu.
+- Validasi: jalan keluar `withValidator()` dipecah dua supaya pemeriksaan per
+  baris **selalu** jalan, dan baris yang mengaku berasal dari usulan ditolak
+  pada realisasi langsung. `rincianDisetujui()` di kedua form request diberi
+  guard eksplisit.
+- Tampilan: satu blade dengan dua rupa (bukan berkas kedua), kartu Dasar
+  Pengadaan di formulir dan halaman detail, tombol "Buat Realisasi Langsung",
+  penyaring dasar, label "Langsung" pada tabel, kolom **Dasar** di CSV, dan
+  baris kedua di sel Realisasi pada PDF.
+- Isi notifikasi `RealisasiMenungguPersetujuan` menyebut dasarnya bila tanpa
+  usulan — pada realisasi langsung, dasar itulah yang justru dinilai.
+
+**Yang dikerjakan — ADR 0032, usulan barang baru.**
+
+- Tabel `item_proposals` beserta `ItemProposalStatus`, model `ItemProposal`, dan
+  `Gudang\ItemProposalController` (index, create, store, show, reject).
+- **Tidak ada rute "setujui".** Menyetujui berarti mendaftarkan barangnya:
+  tombolnya menuju `items.create?item_proposal_id=…`, dan
+  `ItemController::store()` yang menutup usulannya **di dalam transaksi yang
+  sama** — sehingga tidak mungkin ada usulan `Disetujui` tanpa barang, atau
+  sebaliknya. Polanya sama dengan ADR 0030: menyimpan perbaikan *adalah*
+  pengajuan ulangnya.
+- Tiga tipe notifikasi baru beserta `periksaUsulanBarang()`,
+  `periksaSeluruhUsulanBarang()` (disambung ke `periksaSemua()`), dan
+  `catatUsulanBarangDiputuskan()`.
+- Menu "Usulan Barang Baru" pada grup Pengadaan **dan** grup Manajemen Gudang.
+- Seeder baru `ItemProposalSeeder` (1 menunggu keputusan, 1 disetujui, 1
+  ditolak) dan satu realisasi langsung contoh di `ProcurementSeeder`.
+
+**Temuan penting.** Tiga hal.
+
+Pertama, **migrasi nullability tidak perlu melepas FK-nya**. Rencana awal
+menyiapkan jalur mundur `dropForeign` → `change()` → pasang ulang, karena
+mengubah kolom ber-FK di MySQL sering ditolak. Ternyata yang ditolak adalah
+perubahan **tipe**, bukan nullability: `$table->uuid(...)->nullable()->change()`
+cukup, dan SQLite menanganinya dengan membangun ulang tabel beserta seluruh
+constraint-nya. Diperiksa langsung ke basis data — `Null: YES`, indeks
+`procurements_procurement_request_id_unique` tetap unik, FK tetap ada.
+
+Kedua, **ADR 0029 ternyata sudah membangun separuh pekerjaan ADR 0031 tanpa
+menyadarinya**. "Baris di luar usulan" sudah punya bentuk yang mengirim
+`item_id` langsung, validasi yang memilah dua bentuk baris, dan `update()` yang
+tahu baris tambahan boleh dihapus. Realisasi langsung hanyalah kasus batas dari
+bentuk yang sama — seluruh barisnya baris tambahan. Yang terasa seperti fitur
+besar sebenarnya pelonggaran satu kendala.
+
+Ketiga, `edit.blade.php` sempat dicurigai akan meledak pada realisasi langsung
+karena `$procurement->procurementRequest?->details->filter(...)->keyBy(...)`.
+Ternyata **sudah aman**: operator `?->` memutus seluruh rantai, bukan hanya satu
+langkah, sehingga `?? collect()` di ujungnya memang bekerja. Kecurigaan itu
+salah, dan tidak ada yang perlu diubah di sana.
+
+**Catatan.** Tiga hal ditemukan sambil jalan dan **sekalian diperbaiki**, karena
+ketiganya berada di blok yang memang sedang disunting:
+
+1. `cancelledBy` akhirnya terdaftar di `User::RESTRICTED_RELATIONS` lewat relasi
+   `cancelledProcurements()`. Celah ini butir terbuka sejak ADR 0024 —
+   menghapus akun yang pernah membatalkan realisasi meledak jadi 500 alih-alih
+   pesan validasi ADR 0003. Dua baris, di konstanta yang sedang ditambahi dua
+   relasi baru; meninggalkannya justru lebih buruk.
+2. `modul/notifikasi.md` ternyata belum memuat tiga tipe milik ADR 0030
+   (`RealisasiMenungguPersetujuan`, `RealisasiDisetujui`, `RealisasiDitolak`)
+   walau tipenya sudah hidup sejak sesi sebelumnya. Katalognya dilengkapi.
+3. Seluruh berkas yang disunting lewat skrip Python sempat berubah menjadi CRLF
+   — `pathlib.write_text()` menerjemahkan `\n` ke `os.linesep` di Windows,
+   sedangkan repositori ini `eol=lf`. Terdeteksi sebagai 13 temuan `line_ending`
+   pada `pint --test` dan dinormalkan ulang. Layak diingat: gejalanya muncul
+   sebagai temuan gaya, bukan sebagai galat.
+
+Temuan lama *trailing whitespace* di `app/Helpers/MenuHelper.php` tetap
+dibiarkan — sudah dipastikan hanya menyentuh blok menu Permintaan Barang
+(baris 31-38, area Alma), bukan dua baris menu yang ditambahkan sesi ini.
+
+**Masih menunggu.** Tabel `item_proposals` sengaja dibentuk netral peran supaya
+sub sistem permintaan dapat memakainya tanpa perubahan skema — itu **tawaran**
+untuk Alma, bukan asumsi, dan perlu dikabari. Selama hanya Naren yang memakai,
+tabelnya miliknya sendiri. Butir lama juga masih berdiri: kesepakatan enum
+`kasubbag_umum_ti` pada tabel bersama `users`, dan ejaan `unit` akun Kasubbag.
+
+Satu butir baru untuk lapangan: **arti "barang kosong"** pada permintaan KUT
+sebenarnya dua hal yang mungkin tertukar — barang yang ada di katalog tetapi
+stoknya nol (sudah didukung, bahkan sudah otomatis menjadi draf usulan) versus
+barang yang tidak ada di katalog sama sekali (yang dijawab ADR 0032). Perlu
+dipastikan yang mana, karena bila yang pertama, sisanya hanya soal apakah sub
+sistem permintaan mengizinkan permintaan atas barang berstok nol — wilayah Alma.
+
+**Verifikasi.** 410 pengujian lolos (sebelumnya 365 — 45 uji baru: 22 di
+`ProcurementDirectTest.php`, 23 di `ItemProposalTest.php`). Yang paling
+menentukan di antaranya: dua realisasi langsung dapat berdiri bersama (inti
+migrasi indeks unik), persetujuan gugur setelah dasar pengadaannya diubah,
+penerimaan realisasi langsung tetap memposting stok lewat `StockLedger`,
+pendaftaran barang dari usulan lahir berstok nol tanpa baris mutasi, penutupan
+tagihan keputusan pada kedua jalur, dan jahitan ujung ke ujung usulan barang →
+realisasi langsung. `migrate:fresh --seed` bersih pada MySQL; `npm run build`
+bersih; `pint --test` bersih pada 26 berkas yang disunting kecuali temuan lama
+MenuHelper di atas; `notifikasi:periksa` idempoten (18 notifikasi aktif pada
+jalannya yang pertama maupun kedua).
+
+Dua gotcha lama terbukti masih hidup dan keduanya menjatuhkan uji lebih dulu
+sebelum diperbaiki: prefiks `judul()` yang identik untuk dua baris yang lahir
+pada milidetik yang sama (UUID v7 berurut), sehingga penyaring dibuktikan
+dengan kunci penuh, bukan judul; dan `assertDontSee` atas nama barang yang
+meleset karena **pesan flash** dari permintaan sebelumnya masih terbawa dan
+memuat nama itu — yang terakhir ini baru, dan layak diingat karena gejalanya
+menyesatkan: terlihat seperti penyaring yang tidak bekerja padahal penyaringnya
+benar.
+
+---
+
 ## 15 September 2026 — Peran Kasubbag Umum dan TI dan jenjang persetujuan realisasi
 
 Permintaan langsung dari **Kasubbag Umum dan TI** saat presentasi prototipe di

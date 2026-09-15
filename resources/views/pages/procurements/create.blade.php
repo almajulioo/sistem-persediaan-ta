@@ -2,10 +2,18 @@
 
 @section('content')
     <div class="mb-6">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Realisasi Pengadaan</h2>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">
+            {{ $procurementRequest ? 'Realisasi Pengadaan' : 'Realisasi Pengadaan Langsung' }}
+        </h2>
         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Merealisasikan {{ $procurementRequest->judul() }} kepada penyedia. Pembelian barangnya sendiri
-            terjadi di luar sistem; realisasi ini akan menunggu konfirmasi penerimaan dari Pengelola Gudang.
+            @if ($procurementRequest)
+                Merealisasikan {{ $procurementRequest->judul() }} kepada penyedia. Pembelian barangnya sendiri
+                terjadi di luar sistem; realisasi ini akan menunggu konfirmasi penerimaan dari Pengelola Gudang.
+            @else
+                Pengadaan tanpa usulan dari Pengelola Gudang. Karena tidak ada dokumen usulan yang dapat
+                dinilai, dasar pengadaannya wajib dijelaskan di sini — itulah yang ditinjau Kasubbag Umum
+                dan TI sebelum barang dipesan.
+            @endif
         </p>
     </div>
 
@@ -45,7 +53,9 @@
         x-data="realisasiForm()">
         <form action="{{ route('procurements.store') }}" method="POST">
             @csrf
-            <input type="hidden" name="procurement_request_id" value="{{ $procurementRequest->procurement_request_id }}">
+            @if ($procurementRequest)
+                <input type="hidden" name="procurement_request_id" value="{{ $procurementRequest->procurement_request_id }}">
+            @endif
 
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <x-form.select-field name="supplier_id" label="Penyedia"
@@ -56,6 +66,35 @@
                     :value="now()->toDateString()" required />
             </div>
 
+            @unless ($procurementRequest)
+                {{-- Dasar pengadaan hanya ada di sini. Pada realisasi berusulan
+                     tempatnya dokumen usulan itu sendiri (ADR 0031). --}}
+                <div class="mt-6 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
+                    <h4 class="text-theme-sm font-medium text-gray-800 dark:text-white/90">Dasar Pengadaan</h4>
+                    <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
+                        Wajib diisi. Realisasi tanpa usulan harus menyebutkan atas dasar apa belanja ini dilakukan.
+                    </p>
+
+                    <div class="mt-4">
+                        <x-form.select-field name="basis_reason" label="Alasan" required
+                            :options="\App\Enums\AlasanPengadaan::options()" placeholder="Pilih dasar pengadaan" />
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="basis_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Keterangan<span class="text-error-500">*</span>
+                        </label>
+                        <textarea id="basis_note" name="basis_note" rows="3" required
+                            placeholder="Mis. spidol untuk rapat pleno tanggal 20 September, stok habis dan belum masuk usulan bulan ini"
+                            class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('basis_note') }}</textarea>
+                        @error('basis_note')
+                            <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            @endunless
+
+            @if ($procurementRequest)
             <div class="mt-6">
                 <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
                     Barang dari Usulan
@@ -111,19 +150,16 @@
                     </table>
                 </div>
 
-                @error('items')
-                    <p class="text-theme-xs text-error-500 mt-2">{{ $message }}</p>
-                @enderror
-
                 <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
                     Jumlah pesan boleh melebihi jumlah yang disetujui usulan. Barang dari usulan wajib ada dan
                     tidak dapat dihapus di sini.
                 </p>
             </div>
+            @endif
 
             <div class="mt-8">
                 <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Tambah Barang di Luar Usulan
+                    {{ $procurementRequest ? 'Tambah Barang di Luar Usulan' : 'Daftar Barang' }}
                 </label>
 
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px_160px_auto] sm:items-end">
@@ -204,10 +240,24 @@
                         </template>
                     </div>
                 </template>
+
+                {{-- Satu tempat untuk galat `items`, terlihat pada kedua rupa
+                     formulir: aturan cakupan usulan maupun "minimal satu
+                     barang" pada realisasi langsung. --}}
+                @error('items')
+                    <p class="text-theme-xs text-error-500 mt-3">{{ $message }}</p>
+                @enderror
+
+                @unless ($procurementRequest)
+                    <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
+                        Tambahkan minimal satu barang. Barang yang belum ada di master barang harus diusulkan
+                        lebih dulu lewat Usulan Barang Baru, lalu didaftarkan Pengelola Gudang.
+                    </p>
+                @endunless
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
-                <a href="{{ route('procurement-requests.show', $procurementRequest) }}"
+                <a href="{{ $procurementRequest ? route('procurement-requests.show', $procurementRequest) : route('procurements.index') }}"
                     class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                     Batal
                 </a>

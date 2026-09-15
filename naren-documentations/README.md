@@ -59,6 +59,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md) | Status usulan "Disetujui" dipecah menjadi dua | Diterima |
 | [0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md) | Realisasi boleh melebihi usulan, dan boleh menambah barang | Diterima |
 | [0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) | Persetujuan realisasi pengadaan oleh Kasubbag Umum dan TI | Diterima |
+| [0031](keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) | Realisasi pengadaan tanpa usulan, berbekal dasar pengadaan | Diterima |
+| [0032](keputusan/0032-usulan-barang-baru.md) | Usulan barang baru: pintu depan katalog | Diterima |
 
 ## Cara memelihara dokumentasi ini
 
