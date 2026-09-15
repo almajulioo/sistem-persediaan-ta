@@ -16,7 +16,10 @@ return new class extends Migration
             $table->foreignUuid('user_id')
                 ->constrained('users', 'user_id')
                 ->restrictOnDelete();
-            $table->string('document_type');
+            $table->enum('document_type', [
+               'nota_dinas',
+               'bast',
+            ]);
             $table->string('document_number')->nullable();
             $table->string('file_path');
             $table->timestamps();

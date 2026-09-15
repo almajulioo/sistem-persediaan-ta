@@ -70,6 +70,7 @@ enum NotificationType: string
     case PermintaanDiajukan = 'permintaan_diajukan';
     case PermintaanDisetujuiKepalaUnit = 'permintaan_disetujui_kepala_unit';
     case PermintaanDisetujuiPengelolaGudang = 'permintaan_disetujui_pengelola_gudang';
+    case PermintaanDalamPengeluaran = 'permintaan_dalam_pengeluaran';
     case PermintaanDitolak = 'permintaan_ditolak';
     case PermintaanSelesai = 'permintaan_selesai';
 
@@ -105,6 +106,7 @@ enum NotificationType: string
             self::PermintaanDiajukan => 'Permintaan Diajukan',
             self::PermintaanDisetujuiKepalaUnit => 'Permintaan Disetujui Kepala Unit',
             self::PermintaanDisetujuiPengelolaGudang => 'Permintaan Disetujui Pengelola Gudang',
+            self::PermintaanDalamPengeluaran => 'Permintaan Dalam Proses Pengeluaran',
             self::PermintaanDitolak => 'Permintaan Ditolak',
             self::PermintaanSelesai => 'Permintaan Selesai',
         };
@@ -142,6 +144,7 @@ enum NotificationType: string
             self::PermintaanDiajukan => 'Permintaan barang dari unit kerja telah diajukan ke gudang.',
             self::PermintaanDisetujuiKepalaUnit => 'Permintaan barang dari unit kerja telah disetujui oleh Kepala Unit.',
             self::PermintaanDisetujuiPengelolaGudang => 'Permintaan barang dari unit kerja telah disetujui oleh Pengelola Gudang dan siap diambil/dikirim.',
+            self::PermintaanDalamPengeluaran => 'Permintaan barang dari unit kerja sedang dalam proses pengeluaran dari gudang.',
             self::PermintaanDitolak => 'Permintaan barang dari unit kerja tidak disetujui.',
             self::PermintaanSelesai => 'Permintaan barang dari unit kerja telah selesai diproses dan ditutup.',
         };
@@ -167,6 +170,7 @@ enum NotificationType: string
             self::PermintaanDiajukan,
             self::PermintaanDisetujuiKepalaUnit,
             self::PermintaanDisetujuiPengelolaGudang,
+            self::PermintaanDalamPengeluaran,
             self::PermintaanDitolak,
             self::PermintaanSelesai => false,
             default => true,
@@ -198,6 +202,7 @@ enum NotificationType: string
             self::PermintaanDiajukan => NotificationLevel::Perhatian,
             self::PermintaanDisetujuiKepalaUnit => NotificationLevel::Perhatian,
             self::PermintaanDisetujuiPengelolaGudang => NotificationLevel::Perhatian,
+            self::PermintaanDalamPengeluaran => NotificationLevel::Perhatian,
             self::PermintaanDitolak => NotificationLevel::Info,
             self::PermintaanSelesai => NotificationLevel::Info,
             self::StokBerlebih,

@@ -5,6 +5,65 @@ perubahan.
 
 ---
 
+## 16 September 2026 (lanjutan) — Merge dengan Alma: `item_proposals` jadi tabel bersama
+
+`git pull` dari repositori Alma ternyata bercabang dari commit yang sama dengan
+sesi ADR 0031/0032 (`e887695`), dan riwayatnya berisi `feat: add item proposal`
+(15 September 23:47) — Alma membangun fitur usulan barang barunya sendiri untuk
+sub sistem Permintaan secara paralel, tanpa tahu tabel `item_proposals` ini baru
+saja dirancang. Kasubbag Umum dan TI rupanya menyampaikan permintaan ketiganya
+ke kedua pengembang secara terpisah pada sesi presentasi yang sama. Lihat
+[ADR 0033](keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md)
+untuk detail lengkap keputusannya.
+
+**Yang ditemukan.** Satu konflik nyata ditandai git: `app/Models/ItemProposal.php`
+(`both added`), dua desain berbeda untuk kebutuhan serupa — skema Alma
+(`user_id`/`reason`/status `ditindaklanjuti`) tidak menyambung balik ke
+pembuatan barangnya, berhenti di ubah status saja. Dua hal **tidak** ditandai
+git tetapi sama fatalnya: `routes/web.php` berisi dua `use ...ItemProposalController`
+(folder `Gudang` dan `Request`) dengan nama pendek sama — auto-merge tekstual
+menggabungnya tanpa keributan, padahal PHP akan berhenti dengan fatal error
+begitu dieksekusi; dan dua migrasi nama berkas berbeda sama-sama membuat tabel
+`item_proposals`, yang akan gagal pada `migrate` kedua meski git tidak
+melihatnya sebagai konflik.
+
+**Keputusan pengguna** (ditanya lewat opsi eksplisit): satukan ke satu tabel
+bersama memakai skema ADR 0032 — yang lebih lengkap, karena menyetujui usulan
+di situ berarti benar-benar mendaftarkan barangnya lewat `items.store()`.
+
+**Yang dikerjakan.** Migrasi duplikat Alma dihapus; model diselesaikan memakai
+versi ADR 0032 penuh; sisi Permintaan (`Request\ItemProposalController`,
+`Request\StoreItemProposalRequest`, dua view) diadaptasi memakai nama kolom
+skema bersama, dengan `method decide()` dan rutenya dihapus — digantikan dua
+jalur yang sudah ada dan dipakai bersama: tolak lewat `item-proposals.reject`
+(gate `kelola-gudang`), setuju lewat `items.create?item_proposal_id=…`. Alasan
+tidak membuat jalur keputusan kedua: usulan dari pintu mana pun harus diputuskan
+lewat satu jalur yang sama, atau dua jalur itu cepat atau lambat berselisih
+perilaku. `use` di `routes/web.php` diberi alias untuk menghindar tabrakan
+nama. Empat skenario ujung ke ujung diverifikasi lewat berkas uji sementara
+(ditulis, dijalankan, lalu dihapus — menambah uji permanen di wilayah Alma
+bukan keputusan yang dibuat di sesi ini): mengusulkan lewat pintu Permintaan,
+indeks menampilkan usulan sendiri dan tautan tinjau bagi Gudang, penolakan lewat
+rute bersama, dan persetujuan lewat `items.store` yang menautkan `item_id`.
+
+**Yang tidak disentuh.** Tidak satu pun berkas di `app/Http/Controllers/Gudang/`,
+`app/Http/Requests/Gudang/`, `app/Models/ItemProposal.php`, atau
+`app/Enums/ItemProposalStatus.php` diubah. `composer.json`/`composer.lock`
+bertambah `endroid/qr-code` dari fitur QR Alma yang tidak terkait sama sekali,
+dibiarkan apa adanya lalu `composer install` dijalankan.
+
+**Masih menunggu.** Alma perlu dikabari: tombol "Selesaikan" pada halamannya
+sudah tidak ada, dan tabel `item_proposals` sekarang tabel bersama yang
+perubahan skemanya butuh kesepakatan (menutup butir terbuka lama di
+`erd/penyelarasan-erd.md`). Menambah uji otomatis permanen untuk pintu
+Permintaan adalah keputusannya, bukan yang dibuat di sini.
+
+**Verifikasi.** `php artisan migrate:fresh --seed` bersih di MySQL dengan satu
+tabel `item_proposals`; `php artisan test` tetap 410 lolos; `npm run build`
+bersih; Pint bersih pada seluruh berkas yang disentuh.
+
+---
+
 ## 16 September 2026 — Realisasi pengadaan tanpa usulan, dan pintu depan katalog
 
 Dua permintaan **Kasubbag Umum dan TI** dari presentasi prototipe yang sama

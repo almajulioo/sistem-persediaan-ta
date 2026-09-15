@@ -104,6 +104,15 @@
             object-fit: contain;
         }
 
+        .verification-qr {
+            display: block;
+            height: 82px;
+            position: relative;
+            left: 50px;
+            margin: 7px auto 5px;
+            width: 82px;
+        }
+
         .signature-name {
             font-weight: bold;
             text-decoration: underline;
@@ -173,10 +182,10 @@
     </div>
 
     <div class="signature-container">
-        <div>Kepala Bidang Pemeriksaan Lampung I,</div>
-        <img class="signature-image" src="{{ public_path('images/requestdocument/ttd.png') }}" alt="Tanda tangan">
-        <div class="signature-name">{{ $request->user?->fullname ?? '-' }}</div>
-        <div>NIP 197507212002121003</div>
+        <div>Kepala  {{$approvedBy->unit ?? '-' }},</div>
+        <img class="verification-qr" src="{{ $qrCodeDataUri }}" alt="QR verifikasi persetujuan">
+        <div class="signature-name">{{ $approvedBy->fullname ?? '-' }}</div>
+        <div>Disetujui pada {{ $approvedAt?->translatedFormat('j F Y H:i') ?? '-' }}</div>
     </div>
 
 </body>

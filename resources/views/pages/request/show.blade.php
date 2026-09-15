@@ -19,10 +19,20 @@
                 </ol>
             </nav>
         </div>
-        <a href="{{ route('request.nota-dinas', $requestData) }}" target="_blank" rel="noopener"
-            class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600">
-            Lihat Nota Dinas PDF
-        </a>
+        <div class="flex flex-wrap gap-2">
+            @if ($hasNotaDinas)
+                <a href="{{ route('request.nota-dinas', $requestData) }}" target="_blank" rel="noopener"
+                    class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600">
+                    Lihat Nota Dinas PDF
+                </a>
+            @endif
+            @if ($hasBast)
+                <a href="{{ route('request.bast', $requestData) }}" target="_blank" rel="noopener"
+                    class="rounded-lg bg-success-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-success-600">
+                    Lihat BAST PDF
+                </a>
+            @endif
+        </div>
     </div>
 
     <div class="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
@@ -45,6 +55,7 @@
                             'submitted' => 'Terkirim',
                             'approved_by_head' => 'Disetujui Kepala Unit',
                             'processed_by_staff' => 'Disetujui Staff Umum',
+                            'in_issuance' => 'Dalam Proses Pengeluaran',
                             'completed' => 'Selesai',
                             'rejected' => 'Ditolak',
                         ][$requestData->status] ?? ucfirst(str_replace('_', ' ', $requestData->status)) }}

@@ -15,6 +15,7 @@ use App\Http\Controllers\Pengadaan\ProcurementDraftController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
+use App\Http\Controllers\Request\ItemProposalController as RequestItemProposalController;
 use App\Http\Controllers\Request\RequestController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,6 +35,10 @@ Route::middleware('guest')->group(function () {
 | Rute Terautentikasi
 |--------------------------------------------------------------------------
 */
+Route::get('/verifikasi/nota-dinas/{requestDocument}/{token}', [RequestController::class, 'verifyNotaDinas'])
+    ->whereUuid('requestDocument')
+    ->name('request.nota-dinas.verify');
+
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
@@ -45,9 +50,21 @@ Route::middleware('auth')->group(function () {
     })->name('profile');
 
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
+
+    // Usulan barang baru dari sub sistem permintaan: pintu depan kedua ke
+    // tabel `item_proposals` yang sama dengan milik Pengadaan (ADR 0032).
+    // Siapa pun yang login boleh mengusulkan lewat sini — otorisasinya ada
+    // di StoreItemProposalRequest, bukan di rute. Tidak ada rute keputusan
+    // di sini: menolak memakai rute bersama `item-proposals.reject` (gate
+    // `kelola-gudang`), menyetujui memakai `items.create` — sama seperti
+    // pintu depan Pengadaan, supaya hanya ada satu jalur keputusan.
+    Route::get('/permintaan/usulan-barang', [RequestItemProposalController::class, 'index'])->name('request.item-proposals.index');
+    Route::get('/permintaan/usulan-barang/create', [RequestItemProposalController::class, 'create'])->name('request.item-proposals.create');
+    Route::post('/permintaan/usulan-barang', [RequestItemProposalController::class, 'store'])->name('request.item-proposals.store');
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
+    Route::get('/permintaan/{request}/bast', [RequestController::class, 'bast'])->name('request.bast');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
 
     Route::middleware('role:kepala_unit,pengelola_gudang,admin')->group(function () {

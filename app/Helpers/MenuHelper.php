@@ -30,10 +30,12 @@ class MenuHelper
                 'path' => '#',
                 'subItems' => [
                     ['name' => 'Buat Permintaan', 'path' => '/permintaan/create'],
+                    ['name' => 'Usulkan Barang Baru', 'path' => '/permintaan/usulan-barang/create'],
                     [
                         'name' => 'Daftar Permintaan', 
                         'path' => '/permintaan'
                     ],
+                    ['name' => 'Usulan Tambah Barang', 'path' => '/permintaan/usulan-barang'],
                 ],
             ],
             [

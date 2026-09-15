@@ -19,7 +19,7 @@ return new class extends Migration
             $table->date('date');
             $table->string('request_number')->unique();
             $table->string('type');
-            $table->enum('status', ['submitted', 'approved_by_head', 'processed_by_staff', 'completed', 'rejected'])->default('submitted');
+            $table->enum('status', ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance', 'completed', 'rejected'])->default('submitted');
             $table->string('bast_number')->nullable();
             $table->string('nd_number')->nullable();
             $table->timestamps();
