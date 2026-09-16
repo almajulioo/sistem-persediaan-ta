@@ -40,7 +40,7 @@
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Nomor Permintaan</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->request_number }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Nama Pemohon</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->user?->fullname ?? '-' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tanggal</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->date?->translatedFormat('d F Y') ?? '-' }}</dd></div>
-            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tipe</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ ucfirst($requestData->type) }}</dd></div>
+            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tipe</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->type === 'emergency' ? 'Darurat' : 'Normal' }}</dd></div>
             <div>
                 <dt class="text-sm text-gray-500 dark:text-gray-400">Status</dt>
                 <dd>

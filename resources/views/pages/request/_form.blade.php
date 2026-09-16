@@ -1,5 +1,7 @@
 @php
     $isEdit = $isEdit ?? false;
+    $canCreateEmergency = $canCreateEmergency ?? false;
+    $users = $users ?? collect();
     $existingItems = $isEdit && isset($request)
         ? $request->item->map(fn ($detail) => [
             'item_id' => $detail->item_id,
@@ -20,6 +22,44 @@
     </h2>
 
     <div class="space-y-6">
+        @if ($canCreateEmergency && !$isEdit)
+            <div class="rounded-lg border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
+                <input type="hidden" name="emergency" :value="isEmergency ? '1' : '0'">
+                <label class="flex cursor-pointer items-start gap-3">
+                    <input type="checkbox" x-model="isEmergency" class="mt-0.5 size-4 rounded border-gray-300 text-warning-500 focus:ring-warning-500">
+                    <span>
+                        <span class="block text-sm font-medium text-gray-800 dark:text-white/90">Permintaan darurat</span>
+                        <span class="mt-1 block text-xs text-gray-600 dark:text-gray-400">Centang jika permintaan dibuat atas nama peminta lain.</span>
+                    </span>
+                </label>
+
+                <div x-show="isEmergency" x-transition class="relative mt-4" x-data="{ open: false }" @click.outside="open = false" style="display: none;">
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                        Peminta <span class="text-error-500">*</span>
+                    </label>
+                    <input type="hidden" name="requester_id" :value="selectedRequesterId">
+                    <div @click="open = !open" class="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+                        <span x-text="selectedRequesterText || 'Pilih peminta'" :class="!selectedRequesterId ? 'text-gray-400' : ''"></span>
+                        <span class="text-gray-500">&#9662;</span>
+                    </div>
+                    <div x-show="open" x-transition class="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900" style="display: none;">
+                        <input type="text" x-model="requesterSearch" placeholder="Cari nama, username, atau unit..." class="h-9 w-full rounded-md border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90">
+                        <ul class="mt-1 max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+                            <template x-for="user in filteredRequesters" :key="user.user_id">
+                                <li @click="selectRequester(user); open = false" class="cursor-pointer rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+                                    <span class="block" x-text="user.fullname"></span>
+                                    <span class="text-xs text-gray-400" x-text="`@${user.username} - ${user.unit}`"></span>
+                                </li>
+                            </template>
+                            <template x-if="filteredRequesters.length === 0">
+                                <li class="px-3 py-2 text-center text-sm text-gray-400">Peminta tidak ditemukan.</li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         <!-- Input Form Section -->
         <div class="grid grid-cols-1 gap-5">
             
@@ -156,6 +196,11 @@
     function requestForm() {
         return {
             items: @json($items),
+            requesters: @json($users),
+            isEmergency: false,
+            selectedRequesterId: '',
+            selectedRequesterText: '',
+            requesterSearch: '',
             selectedItemCode: '',
             selectedItemText: '',
             searchQuery: '',
@@ -184,6 +229,21 @@
                     item.item_name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
                     item.item_id.toLowerCase().includes(this.searchQuery.toLowerCase())
                 );
+            },
+
+            get filteredRequesters() {
+                const query = this.requesterSearch.toLowerCase().trim();
+                if (!query) return this.requesters;
+                return this.requesters.filter(user =>
+                    [user.fullname, user.username, user.unit].some(value =>
+                        (value || '').toLowerCase().includes(query)
+                    )
+                );
+            },
+
+            selectRequester(user) {
+                this.selectedRequesterId = user.user_id;
+                this.selectedRequesterText = `${user.fullname} (${user.unit})`;
             },
 
             selectItem(item) {

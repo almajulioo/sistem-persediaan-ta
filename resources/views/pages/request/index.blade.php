@@ -43,7 +43,7 @@
             class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-5 dark:border-gray-800 sm:p-6">
             <x-form.text-field name="q" label="Cari" :value="$keyword" placeholder="Nomor atau nama pemohon" />
 
-            <x-form.select-field name="type" label="Tipe" :options="['normal' => 'Normal']"
+            <x-form.select-field name="type" label="Tipe" :options="['normal' => 'Normal', 'emergency' => 'Darurat']"
                 :selected="$type" placeholder="Semua tipe" />
 
             <x-form.select-field name="status" label="Status"
@@ -128,7 +128,7 @@
                                         Detail
                                     </a>
 
-                                    @if ($row->status === 'approved_by_head' && $isPengelolaGudang)
+                                    @if ($row->status === 'approved_by_head' && $row->type !== 'emergency' && $isPengelolaGudang)
                                         <a href="{{ route('request.edit', $row) }}"
                                             class="text-theme-xs text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
                                             Ubah Kuantitas
@@ -136,9 +136,11 @@
                                     @endif
 
                                     @php
+                                        $isEmergencyReadyToComplete = $row->type === 'emergency' && $row->status === 'approved_by_head';
                                         $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
                                                     (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
-                                                    (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) && $isAdmin);
+                                                    (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) && $isAdmin) ||
+                                                    ($isEmergencyReadyToComplete && $isAdmin);
                                     @endphp
 
                                     @if ($canRespond)
@@ -147,18 +149,20 @@
                                             @csrf
                                             <button type="submit" 
                                                 class="text-theme-xs text-success-600 dark:text-success-500 ring-success-200 dark:ring-success-500/30 hover:bg-success-50 dark:hover:bg-success-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
-                                                {{ $row->status === 'in_issuance' ? 'Selesaikan' : ($row->status === 'processed_by_staff' ? 'Mulai Pengeluaran' : 'Setujui') }}
+                                                {{ $isEmergencyReadyToComplete || $row->status === 'in_issuance' ? 'Selesaikan' : ($row->status === 'processed_by_staff' ? 'Mulai Pengeluaran' : 'Setujui') }}
                                             </button>
                                         </form>
 
                                         <!-- Tombol Tolak -->
-                                        <form action="{{ route('request.respond', ['request' => $row, 'action' => 'reject']) }}" method="POST" class="inline">
-                                            @csrf
-                                            <button type="submit" 
-                                                class="text-theme-xs text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
-                                                Tolak
-                                            </button>
-                                        </form>
+                                        @unless ($isEmergencyReadyToComplete)
+                                            <form action="{{ route('request.respond', ['request' => $row, 'action' => 'reject']) }}" method="POST" class="inline">
+                                                @csrf
+                                                <button type="submit" 
+                                                    class="text-theme-xs text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                                    Tolak
+                                                </button>
+                                            </form>
+                                        @endunless
                                     @endif
                                 </td>
                             </tr>

@@ -6,12 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
 use App\Http\Requests\Request\StorePermintaanBarangRequest;
 use App\Http\Requests\Request\UpdatePermintaanBarangRequest;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use App\Models\Item;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
 use App\Models\RequestDocument;
-use App\Support\RequestDocumentGenerator;
+use App\Models\User;
+use App\Services\RequestWorkflowService;
 use App\Support\NotificationScanner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -45,7 +47,6 @@ class RequestController extends Controller
             ->when($isKepalaUnit, function ($query) use ($request) {
                 $query->whereHas('user', fn ($userQuery) => $userQuery->where('unit', $request->user()->unit));
             })
-            ->when($isPengelolaGudang, fn ($query) => $query->whereIn('status', ['approved_by_head', 'in_issuance']))
             ->when($isUser, fn ($query) => $query->where('user_id', $request->user()->user_id))
             ->latest('date')
             ->latest('created_at')
@@ -80,12 +81,19 @@ class RequestController extends Controller
             'isUser' => $isUser,
         ]);
     }
-    public function create()
+    public function create(Request $request)
     {
         $items = Item::where('is_active', true)->get();
+        $canCreateEmergency = $request->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang);
+        $users = $canCreateEmergency
+            ? User::query()->where('is_active', true)->orderBy('fullname')->get(['user_id', 'fullname', 'username', 'unit'])
+            : collect();
+
         return view('pages.request.create', [
             'title' => 'Request',
-            'items' => $items
+            'items' => $items,
+            'users' => $users,
+            'canCreateEmergency' => $canCreateEmergency,
         ]);
     }
 
@@ -189,15 +197,19 @@ class RequestController extends Controller
         ]);
     }
 
-    public function store(StorePermintaanBarangRequest $request, RequestDocumentGenerator $documentGenerator)
+    public function store(StorePermintaanBarangRequest $request)
     {
         $validatedData = $request->validated();
         
         $itemRequest = DB::transaction(function () use ($request, $validatedData) {
+            $isEmergency = (bool) ($validatedData['emergency'] ?? false);
+
             $itemRequest = ModelsRequest::create([
-                'user_id' => $request->user()->user_id,
+                'user_id' => $isEmergency
+                    ? $validatedData['requester_id']
+                    : $request->user()->user_id,
                 'date' => now(),
-                'type' => 'normal',
+                'type' => $isEmergency ? 'emergency' : 'normal',
                 'status' => 'submitted',
                 'request_number' => 'REQ-' . time(),
             ]);
@@ -261,61 +273,25 @@ class RequestController extends Controller
     public function respondByRole(
         ModelsRequest $request,
         Request $httpRequest,
-        RequestDocumentGenerator $documentGenerator,
+        RequestWorkflowService $workflow,
     )
     {
         $action = $httpRequest->input('action');
         $user = $httpRequest->user();
-        $request->loadMissing('user');
 
         if (!in_array($action, ['approve', 'reject'])) {
             return redirect()->back()->with('error', 'Aksi tidak valid.');
         }
 
-        $canRespond = ($user->hasRole(UserRole::KepalaUnit)
-                && $request->status === 'submitted'
-                && $user->unit === $request->user->unit)
-            || ($user->hasRole(UserRole::PengelolaGudang)
-                && in_array($request->status, ['approved_by_head', 'in_issuance'], true))
-            || ($user->isAdmin()
-                && in_array($request->status, ['processed_by_staff', 'in_issuance'], true));
-
-        if (!$canRespond) {
-            return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk memproses permintaan ini.');
+        try {
+            $workflow->respond($request, $user, $action);
+        } catch (AuthorizationException $exception) {
+            return redirect()->back()->with('error', $exception->getMessage());
         }
 
         if ($action === 'reject') {
-            $request->update(['status' => 'rejected']);
-            NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));
             return redirect()->back()->with('status', 'Permintaan telah ditolak.');
         }
-
-        if($action === 'approve') {
-            if ($user->hasRole(UserRole::KepalaUnit)) {
-                $request->update(['status' => 'approved_by_head']);
-                $documentGenerator->generateNotaDinas($request, $user);
-            } elseif ($user->hasRole(UserRole::PengelolaGudang)) {
-                $request->update([
-                    'status' => $request->status === 'approved_by_head'
-                        ? 'processed_by_staff'
-                        : 'completed',
-                ]);
-                if ($request->status === 'completed') {
-                    $documentGenerator->generateBast($request, $user);
-                }
-            } elseif ($user->isAdmin()) {
-                $request->update([
-                    'status' => $request->status === 'processed_by_staff'
-                        ? 'in_issuance'
-                        : 'completed',
-                ]);
-                if ($request->status === 'completed') {
-                    $documentGenerator->generateBast($request, $user);
-                }
-            }
-        }
-        NotificationScanner::catatPermintaanDiputuskan($request->fresh('user'));
-        $request->save();
 
         return redirect()->route('request.index')->with('status', 'Permintaan berhasil diproses.');
     }

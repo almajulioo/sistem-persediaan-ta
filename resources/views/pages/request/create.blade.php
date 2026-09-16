@@ -23,6 +23,8 @@
         @include('pages.request._form', [
             'isEdit' => false,
             'items' => $items,
+            'users' => $users,
+            'canCreateEmergency' => $canCreateEmergency,
             'action' => route('request.store'),
         ])
     </div>

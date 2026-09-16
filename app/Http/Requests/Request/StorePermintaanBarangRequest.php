@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Request;
 
+use App\Enums\UserRole;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StorePermintaanBarangRequest extends FormRequest
 {
@@ -20,6 +22,8 @@ class StorePermintaanBarangRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'emergency' => ['sometimes', 'boolean'],
+            'requester_id' => ['nullable', 'uuid', Rule::exists('users', 'user_id')->where('is_active', true)],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string', Rule::exists('items', 'item_id')],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:999999'],
@@ -28,12 +32,16 @@ class StorePermintaanBarangRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        // Memastikan item_id terformat uppercase & kuantitas berupa integer
+        $this->merge([
+            'emergency' => $this->boolean('emergency'),
+        ]);
+
+        // Item ID adalah UUID; cukup rapikan whitespace tanpa mengubah casing.
         if ($this->has('items') && is_array($this->items)) {
             $mergedItems = [];
             foreach ($this->items as $item) {
                 if (isset($item['item_id'])) {
-                    $item['item_id'] = mb_strtoupper(trim((string) $item['item_id']));
+                    $item['item_id'] = trim((string) $item['item_id']);
                 }
                 if (isset($item['qty'])) {
                     $item['qty'] = (int) $item['qty'];
@@ -55,12 +63,32 @@ class StorePermintaanBarangRequest extends FormRequest
         }
     }
 
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if (! $this->boolean('emergency')) {
+                return;
+            }
+
+            $user = $this->user();
+            if (! $user?->hasRole(UserRole::Admin, UserRole::PengelolaGudang)) {
+                $validator->errors()->add('emergency', 'Hanya Admin atau Pengelola Gudang yang dapat membuat permintaan darurat.');
+            }
+
+            if (blank($this->input('requester_id'))) {
+                $validator->errors()->add('requester_id', 'Peminta wajib dipilih untuk permintaan darurat.');
+            }
+        });
+    }
+
     /**
      * @return array<string, string>
      */
     public function attributes(): array
     {
         return [
+            'emergency' => 'jenis permintaan',
+            'requester_id' => 'peminta',
             'items' => 'Daftar Barang',
             'items.*.item_id' => 'Kode Barang',
             'items.*.qty' => 'Jumlah Barang',
@@ -81,6 +109,8 @@ class StorePermintaanBarangRequest extends FormRequest
             'items.*.qty.required' => 'Jumlah barang wajib diisi.',
             'items.*.qty.integer' => 'Jumlah barang harus berupa angka.',
             'items.*.qty.min' => 'Jumlah barang minimal 1.',
+            'requester_id.exists' => 'Peminta yang dipilih tidak ditemukan atau sudah nonaktif.',
+            'requester_id.uuid' => 'Format peminta tidak valid.',
         ];
     }
 }
