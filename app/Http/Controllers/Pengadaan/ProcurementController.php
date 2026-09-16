@@ -68,33 +68,49 @@ class ProcurementController extends Controller
     }
 
     /**
-     * Formulir hanya bisa dibuka dari satu usulan yang sudah disetujui dan
-     * belum punya realisasi — tombol "Realisasikan" pada halaman usulan.
+     * Formulir realisasi, dua pintu masuk.
+     *
+     * Dengan `?procurement_request_id=` — tombol "Realisasikan" pada halaman
+     * usulan: usulannya wajib sudah disetujui dan belum punya realisasi.
+     *
+     * Tanpa query itu — tombol "Buat Realisasi Langsung" pada daftar realisasi:
+     * Pejabat Pengadaan menyusun sendiri daftar barangnya, dan gantinya wajib
+     * menyebutkan dasar pengadaannya (ADR 0031). Query yang **ada tetapi tidak
+     * sah** tetap ditolak seperti sebelumnya, bukan diam-diam dialihkan ke
+     * formulir langsung — salah tempel tautan tidak boleh berubah diam-diam
+     * menjadi pengadaan tanpa usulan.
      */
     public function create(Request $request): View|RedirectResponse
     {
-        $procurementRequest = ProcurementRequest::with('details.item')
-            ->find((string) $request->query('procurement_request_id', ''));
+        $procurementRequest = null;
 
-        if ($procurementRequest === null) {
-            return redirect()
-                ->route('procurement-requests.index')
-                ->with('error', 'Usulan pengadaan tidak ditemukan.');
-        }
+        if ($request->query('procurement_request_id') !== null) {
+            $procurementRequest = ProcurementRequest::with('details.item')
+                ->find((string) $request->query('procurement_request_id', ''));
 
-        if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
-            return redirect()
-                ->route('procurement-requests.show', $procurementRequest)
-                ->with('error', 'Usulan ini tidak dapat direalisasikan. Realisasi hanya dari usulan yang sudah disetujui dan belum memiliki realisasi.');
+            if ($procurementRequest === null) {
+                return redirect()
+                    ->route('procurement-requests.index')
+                    ->with('error', 'Usulan pengadaan tidak ditemukan.');
+            }
+
+            if (! $procurementRequest->isDisetujuiMenungguRealisasi()) {
+                return redirect()
+                    ->route('procurement-requests.show', $procurementRequest)
+                    ->with('error', 'Usulan ini tidak dapat direalisasikan. Realisasi hanya dari usulan yang sudah disetujui dan belum memiliki realisasi.');
+            }
         }
 
         return view('pages.procurements.create', [
-            'title' => 'Realisasi Pengadaan',
+            'title' => $procurementRequest === null ? 'Realisasi Pengadaan Langsung' : 'Realisasi Pengadaan',
             'procurementRequest' => $procurementRequest,
-            'rincianDisetujui' => $procurementRequest->details->filter(fn ($detail) => $detail->disetujui())->values(),
+            'rincianDisetujui' => $procurementRequest === null
+                ? collect()
+                : $procurementRequest->details->filter(fn ($detail) => $detail->disetujui())->values(),
             'suppliers' => Supplier::aktif()->orderBy('supplier_name')->get(['supplier_id', 'supplier_name']),
             // Untuk pemilih "barang tambahan" — Pejabat Pengadaan boleh
-            // merealisasikan barang di luar usulan (ADR 0029).
+            // merealisasikan barang di luar usulan (ADR 0029), dan pada
+            // realisasi langsung seluruh barisnya justru dari pemilih ini.
             'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit']),
         ]);
     }
@@ -104,11 +120,21 @@ class ProcurementController extends Controller
         $data = $request->validated();
         $rincian = $request->rincianDisetujui();
 
-        $procurement = DB::transaction(function () use ($request, $data, $rincian) {
+        $usulanId = $data['procurement_request_id'] ?? null;
+
+        $procurement = DB::transaction(function () use ($request, $data, $rincian, $usulanId) {
             $procurement = Procurement::create([
-                'procurement_request_id' => $data['procurement_request_id'],
+                'procurement_request_id' => $usulanId,
                 'supplier_id' => $data['supplier_id'],
                 'procurement_date' => $data['procurement_date'],
+
+                // Dasar pengadaan hanya diisi pada realisasi langsung. Pada
+                // realisasi berusulan dasarnya adalah usulan itu sendiri, dan
+                // menyimpan alasan kedua di sini hanya akan menjadi data yang
+                // tidak pernah ditampilkan (ADR 0031).
+                'basis_reason' => $usulanId === null ? $data['basis_reason'] : null,
+                'basis_note' => $usulanId === null ? $data['basis_note'] : null,
+
                 // Dokumennya tersimpan, tetapi belum berlaku: penyedia, barang,
                 // dan harganya justru yang dinilai Kasubbag Umum dan TI lebih
                 // dulu (ADR 0030).
@@ -132,21 +158,29 @@ class ProcurementController extends Controller
             // Satu-satunya tempat baris `procurements` lahir dari sebuah
             // usulan, sehingga satu-satunya tempat transisi ini terjadi.
             // Permanen — tidak pernah berbalik meski realisasinya kelak
-            // dibatalkan (ADR 0028).
-            ProcurementRequest::whereKey($data['procurement_request_id'])
-                ->update(['status' => ProcurementRequestStatus::DisetujuiSelesai]);
+            // dibatalkan (ADR 0028). Realisasi langsung tidak punya usulan
+            // untuk ditransisikan.
+            if ($usulanId !== null) {
+                ProcurementRequest::whereKey($usulanId)
+                    ->update(['status' => ProcurementRequestStatus::DisetujuiSelesai]);
+            }
 
             return $procurement;
         });
 
-        AuditLogger::record($request->user(), "Membuat realisasi pengadaan: {$procurement->judul()}");
+        AuditLogger::record($request->user(), $usulanId === null
+            ? "Membuat realisasi pengadaan langsung: {$procurement->judul()} dengan dasar {$procurement->basis_reason->label()}"
+            : "Membuat realisasi pengadaan: {$procurement->judul()}");
+
         NotificationScanner::periksaRealisasi($procurement->fresh('supplier'));
 
         // Usulannya baru saja berhenti menganggur, jadi tagihan
         // UsulanBelumDirealisasi ikut ditutup seketika alih-alih menunggu
         // sapuan terjadwal — sejalan dengan catatUsulanDiputuskan() yang juga
         // menyegarkan keadaan usulannya sendiri.
-        NotificationScanner::periksaUsulan($procurement->procurementRequest);
+        if ($usulanId !== null) {
+            NotificationScanner::periksaUsulan($procurement->procurementRequest);
+        }
 
         return redirect()
             ->route('procurements.show', $procurement)
@@ -209,6 +243,12 @@ class ProcurementController extends Controller
             $procurement->forceFill([
                 'supplier_id' => $data['supplier_id'],
                 'procurement_date' => $data['procurement_date'],
+
+                // Hanya berlaku pada realisasi langsung; usulan asalnya tidak
+                // dapat dipindah, jadi keadaan "tanpa usulan" tidak pernah
+                // berubah sepanjang hidup dokumen ini (ADR 0031).
+                'basis_reason' => $procurement->tanpaUsulan() ? $data['basis_reason'] : null,
+                'basis_note' => $procurement->tanpaUsulan() ? $data['basis_note'] : null,
 
                 // Satu aturan menutup dua lubang sekaligus (ADR 0030).
                 // Pertama: realisasi yang ditolak tidak punya rute "ajukan
@@ -389,7 +429,7 @@ class ProcurementController extends Controller
             fwrite($handle, "\xEF\xBB\xBF");
 
             fputcsv($handle, [
-                'Tanggal', 'Realisasi', 'Penyedia', 'Status', 'Kode Barang', 'Nama Barang',
+                'Tanggal', 'Realisasi', 'Penyedia', 'Status', 'Dasar', 'Kode Barang', 'Nama Barang',
                 'Satuan', 'Dipesan', 'Harga Satuan', 'Nilai Dipesan', 'Diterima',
                 'Kurang Kirim', 'Nilai Diterima', 'Nomor BAST', 'Tanggal Diterima',
             ], ';');
@@ -401,6 +441,7 @@ class ProcurementController extends Controller
                         $procurement->judul(),
                         $procurement->supplier?->supplier_name ?? '-',
                         $procurement->status->label(),
+                        $procurement->dasarRingkas(),
                         $detail->item?->item_code ?? '-',
                         $detail->item?->item_name ?? '-',
                         $detail->item?->unit->label() ?? '-',
@@ -430,6 +471,7 @@ class ProcurementController extends Controller
     {
         return [
             'status' => (string) $request->query('status', ''),
+            'sumber' => (string) $request->query('sumber', ''),
             'supplier' => (string) $request->query('supplier', ''),
             'from' => (string) $request->query('from', ''),
             'to' => (string) $request->query('to', ''),
@@ -459,7 +501,9 @@ class ProcurementController extends Controller
     {
         return Procurement::query()
             ->filter($filters)
-            ->with(['supplier', 'receipt', 'details.item'])
+            // `procurementRequest` ikut dimuat karena kolom Dasar pada laporan
+            // menyebut judul usulan asalnya (ADR 0031).
+            ->with(['supplier', 'receipt', 'procurementRequest', 'details.item'])
             ->orderBy('procurement_date')
             ->orderBy('created_at')
             ->get();
@@ -478,6 +522,10 @@ class ProcurementController extends Controller
      * yang disembunyikan sekaligus menyisakan invarian yang enak dibaca —
      * `total = menunggu_persetujuan + menunggu + diterima`. Lihat ADR 0026 dan
      * ADR 0030.
+     *
+     * `langsung` adalah **irisan** dari `total`, bukan penjumlahnya, sehingga
+     * invarian di atas tidak terganggu. Angka ini yang membuat kebiasaan
+     * memakai pintu tanpa usulan terlihat alih-alih hanya terasa (ADR 0031).
      *
      * @param  array<string, string>  $filters
      * @return array<string, int>
@@ -499,6 +547,7 @@ class ProcurementController extends Controller
 
         return [
             'total' => (clone $base)->whereNotIn('status', $gagal)->count(),
+            'langsung' => (clone $base)->whereNotIn('status', $gagal)->whereNull('procurement_request_id')->count(),
             'menunggu_persetujuan' => (clone $base)->where('status', ProcurementStatus::MenungguPersetujuan)->count(),
             'menunggu' => (clone $base)->where('status', ProcurementStatus::MenungguPenerimaan)->count(),
             'diterima' => (clone $base)->where('status', ProcurementStatus::Diterima)->count(),

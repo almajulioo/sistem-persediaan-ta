@@ -2,9 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Enums\AlasanPengadaan;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
+use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
@@ -16,13 +18,15 @@ use Illuminate\Support\Str;
 class ProcurementSeeder extends Seeder
 {
     /**
-     * Dua realisasi contoh.
+     * Tiga realisasi contoh.
      *
      * Yang pertama dibawa sampai penerimaan supaya modul Tahap 3 langsung
      * terlihat bekerja: stok bertambah lewat StockLedger sungguhan, bukan data
      * yang ditulis langsung ke tabel. Yang kedua sengaja berhenti di
      * `MenungguPersetujuan` supaya layar Kasubbag Umum dan TI punya antrean
-     * berisi sejak data awal (ADR 0030).
+     * berisi sejak data awal (ADR 0030). Yang ketiga dibuat **tanpa usulan**
+     * sama sekali, supaya pintu ADR 0031 beserta kartu Dasar Pengadaan-nya
+     * punya contoh nyata.
      *
      * Usulan "Disetujui Penuh" (ATK-012) sengaja dibiarkan belum
      * direalisasikan — itulah yang mendemokan tombol "Realisasikan" pada
@@ -105,8 +109,43 @@ class ProcurementSeeder extends Seeder
         );
 
         $this->antreanPersetujuan($supplier, $pejabat);
+        $this->realisasiLangsung($supplier, $pejabat);
 
-        $this->command?->info('Realisasi pengadaan contoh berhasil dibuat (1 sudah diterima sebagian, 1 menunggu persetujuan).');
+        $this->command?->info('Realisasi pengadaan contoh berhasil dibuat (1 sudah diterima sebagian, 1 menunggu persetujuan, 1 langsung tanpa usulan).');
+    }
+
+    /**
+     * Realisasi langsung tanpa usulan, berhenti di `MenungguPersetujuan`
+     * (ADR 0031).
+     *
+     * Dasar pengadaannya wajib terisi karena tidak ada dokumen usulan yang
+     * dapat dinilai Kasubbag Umum dan TI — di sinilah `basis_reason` dan
+     * `basis_note` menggantikannya.
+     */
+    private function realisasiLangsung(Supplier $supplier, User $pejabat): void
+    {
+        $barang = Item::where('item_code', 'ATK-002')->first();
+
+        if ($barang === null) {
+            return;
+        }
+
+        $procurement = Procurement::create([
+            'procurement_id' => (string) Str::uuid(),
+            'procurement_request_id' => null,
+            'supplier_id' => $supplier->supplier_id,
+            'procurement_date' => now()->subDays(2),
+            'basis_reason' => AlasanPengadaan::KebutuhanMendesak,
+            'basis_note' => 'Permintaan mendadak untuk rapat pembahasan LHP pekan ini; tidak dapat menunggu siklus usulan bulanan.',
+            'status' => ProcurementStatus::MenungguPersetujuan,
+            'user_id' => $pejabat->user_id,
+        ]);
+
+        $procurement->details()->create([
+            'item_id' => $barang->item_id,
+            'amount' => 10,
+            'unit_price' => 18000,
+        ]);
     }
 
     /**

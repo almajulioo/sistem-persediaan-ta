@@ -8,6 +8,7 @@ use App\Enums\PeriodeOpname;
 use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
+use App\Models\ItemProposal;
 use App\Models\OpnameDetail;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
@@ -90,6 +91,7 @@ class NotificationScanner
         self::periksaPeriodeOpname();
         self::periksaSeluruhUsulan();
         self::periksaSeluruhRealisasi();
+        self::periksaSeluruhUsulanBarang();
     }
 
     /**
@@ -471,6 +473,17 @@ class NotificationScanner
 
         $judul = $procurement->judul();
 
+        // Realisasi langsung tidak punya dokumen hulu yang dapat dibuka untuk
+        // menilai apakah belanjanya perlu, jadi dasarnya disebut di sini —
+        // pada realisasi langsung, dasar itulah yang justru dinilai, bukan cuma
+        // harganya (ADR 0031).
+        $dasar = $procurement->tanpaUsulan()
+            ? sprintf(
+                ' Dibuat tanpa usulan dengan dasar %s.',
+                strtolower($procurement->basis_reason?->label() ?? 'yang tidak dicatat'),
+            )
+            : '';
+
         Notifier::terapkanKeadaan(
             berlaku: $procurement->isMenungguPersetujuan(),
             penerima: $pemberiPersetujuan,
@@ -478,10 +491,11 @@ class NotificationScanner
             dedupKey: NotificationType::RealisasiMenungguPersetujuan->dedupKey($procurement->procurement_id),
             title: "Realisasi menunggu persetujuan: {$judul}",
             body: sprintf(
-                '%s dari %s senilai Rp%s menunggu keputusan Anda. Periksa penyedia, barang, dan harganya, lalu setujui atau tolak sebelum barang dipesan.',
+                '%s dari %s senilai Rp%s menunggu keputusan Anda.%s Periksa penyedia, barang, dan harganya, lalu setujui atau tolak sebelum barang dipesan.',
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
                 number_format($procurement->nilaiTotal(), 0, ',', '.'),
+                $dasar,
             ),
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,
@@ -695,6 +709,113 @@ class NotificationScanner
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,
         );
+    }
+
+    /**
+     * Keadaan satu usulan barang baru: menunggu diperiksa dan didaftarkan
+     * Pengelola Gudang. Dipanggil setelah usulan diajukan maupun diputuskan
+     * supaya tagihannya muncul dan menghilang seketika (ADR 0032).
+     *
+     * Penerimanya pengawas gudang, karena master barang wewenang mereka — dan
+     * karena pemeriksaan duplikat itulah bagian paling bernilai dari langkah ini.
+     *
+     * @param  EloquentCollection<int, User>|null  $penerima
+     */
+    public static function periksaUsulanBarang(ItemProposal $proposal, ?EloquentCollection $penerima = null): void
+    {
+        $penerima ??= self::pengawasGudang();
+
+        Notifier::terapkanKeadaan(
+            berlaku: $proposal->isDiajukan(),
+            penerima: $penerima,
+            type: NotificationType::UsulanBarangMenungguKeputusan,
+            dedupKey: NotificationType::UsulanBarangMenungguKeputusan->dedupKey($proposal->item_proposal_id),
+            title: "Usulan barang baru: {$proposal->item_name}",
+            body: sprintf(
+                '%s mengusulkan barang baru "%s" (%s). Periksa apakah barangnya benar-benar belum ada, lalu daftarkan atau tolak dengan alasan.',
+                $proposal->proposedBy?->fullname ?? 'Seseorang',
+                $proposal->item_name,
+                $proposal->unit->label(),
+            ),
+            actionUrl: route('item-proposals.show', $proposal, false),
+            subject: $proposal,
+        );
+    }
+
+    /**
+     * Keadaan seluruh usulan barang baru. Menyapu seluruh baris, bukan hanya
+     * yang Diajukan, supaya usulan yang baru diputuskan tetapi pemeriksaan
+     * reaktifnya sempat gagal tetap ikut ditutup di sini.
+     */
+    public static function periksaSeluruhUsulanBarang(): void
+    {
+        $penerima = self::pengawasGudang();
+
+        ItemProposal::query()
+            ->with('proposedBy')
+            ->chunk(100, function ($usulan) use ($penerima) {
+                foreach ($usulan as $proposal) {
+                    self::periksaUsulanBarang($proposal, $penerima);
+                }
+            });
+    }
+
+    /**
+     * Peristiwa: usulan barang baru diputuskan Pengelola Gudang.
+     *
+     * Penerimanya pengusul — dialah yang menunggu jawaban sebelum dapat
+     * melanjutkan pengadaan atau permintaannya. Pelakunya sendiri tidak diberi
+     * tahu, dan pengusul yang akunnya sudah diarsipkan tidak ditagih apa pun.
+     */
+    public static function catatUsulanBarangDiputuskan(ItemProposal $proposal, User $pelaku): void
+    {
+        // Menutup tagihan keputusan lebih dulu: syaratnya sudah tidak
+        // terpenuhi begitu statusnya berpindah.
+        self::periksaUsulanBarang($proposal);
+
+        $pengusul = $proposal->proposedBy;
+
+        if ($pengusul === null || $pengusul->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        if ($proposal->isDisetujui()) {
+            Notifier::catatPeristiwa(
+                penerima: new EloquentCollection([$pengusul]),
+                type: NotificationType::UsulanBarangDisetujui,
+                dedupKey: NotificationType::UsulanBarangDisetujui->dedupKey($proposal->item_proposal_id),
+                title: "Usulan barang \"{$proposal->item_name}\" disetujui",
+                body: sprintf(
+                    '%s mendaftarkan "%s" sebagai %s. Stoknya masih nol sampai barangnya benar-benar diterima gudang, tetapi sudah dapat dimasukkan ke realisasi pengadaan.',
+                    $pelaku->fullname,
+                    $proposal->item_name,
+                    $proposal->item?->item_code ?? 'barang baru',
+                ),
+                actionUrl: $proposal->item === null
+                    ? route('item-proposals.show', $proposal, false)
+                    : route('items.show', $proposal->item, false),
+                subject: $proposal,
+            );
+
+            return;
+        }
+
+        if ($proposal->isDitolak()) {
+            Notifier::catatPeristiwa(
+                penerima: new EloquentCollection([$pengusul]),
+                type: NotificationType::UsulanBarangDitolak,
+                dedupKey: NotificationType::UsulanBarangDitolak->dedupKey($proposal->item_proposal_id),
+                title: "Usulan barang \"{$proposal->item_name}\" ditolak",
+                body: sprintf(
+                    '%s menolak usulan "%s" dengan alasan: %s',
+                    $pelaku->fullname,
+                    $proposal->item_name,
+                    $proposal->decision_note ?? 'tidak dicatat',
+                ),
+                actionUrl: route('item-proposals.show', $proposal, false),
+                subject: $proposal,
+            );
+        }
     }
 
     /**

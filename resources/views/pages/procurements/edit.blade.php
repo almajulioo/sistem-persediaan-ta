@@ -76,14 +76,23 @@
             @method('PUT')
 
             {{-- Usulan sumber tidak dapat dipindah: ia mengunci identitas
-                 dokumen ini. --}}
+                 dokumen ini. Realisasi langsung pun selamanya langsung, jadi
+                 keduanya sama-sama tampil sebagai keterangan, bukan pilihan
+                 (ADR 0025, ADR 0031). --}}
             <div class="bg-gray-50 dark:bg-white/[0.03] mb-5 rounded-lg p-4">
                 <p class="text-theme-xs text-gray-500 dark:text-gray-400">Usulan Sumber</p>
                 <p class="text-theme-sm mt-0.5 font-medium text-gray-800 dark:text-white/90">
-                    {{ $procurement->procurementRequest?->judul() ?? '—' }}
-                    <span class="text-theme-xs font-normal text-gray-500 dark:text-gray-400">
-                        &mdash; tidak dapat dipindah ke usulan lain
-                    </span>
+                    @if ($procurement->tanpaUsulan())
+                        Langsung, tanpa usulan
+                        <span class="text-theme-xs font-normal text-gray-500 dark:text-gray-400">
+                            &mdash; tidak dapat ditautkan ke usulan
+                        </span>
+                    @else
+                        {{ $procurement->procurementRequest?->judul() ?? '—' }}
+                        <span class="text-theme-xs font-normal text-gray-500 dark:text-gray-400">
+                            &mdash; tidak dapat dipindah ke usulan lain
+                        </span>
+                    @endif
                 </p>
             </div>
 
@@ -96,6 +105,37 @@
                     :value="$procurement->procurement_date->toDateString()" required />
             </div>
 
+            @if ($procurement->tanpaUsulan())
+                {{-- Dasar pengadaan ikut dapat diperbaiki. Mengubahnya pun
+                     mengembalikan realisasi ke MenungguPersetujuan seperti
+                     perubahan lain, sehingga dasar yang sudah disetujui tidak
+                     bisa ditukar diam-diam setelahnya (ADR 0030, ADR 0031). --}}
+                <div class="mt-6 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
+                    <h4 class="text-theme-sm font-medium text-gray-800 dark:text-white/90">Dasar Pengadaan</h4>
+                    <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
+                        Wajib diisi. Realisasi tanpa usulan harus menyebutkan atas dasar apa belanja ini dilakukan.
+                    </p>
+
+                    <div class="mt-4">
+                        <x-form.select-field name="basis_reason" label="Alasan" required
+                            :options="\App\Enums\AlasanPengadaan::options()"
+                            :selected="$procurement->basis_reason?->value" placeholder="Pilih dasar pengadaan" />
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="basis_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Keterangan<span class="text-error-500">*</span>
+                        </label>
+                        <textarea id="basis_note" name="basis_note" rows="3" required
+                            class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('basis_note', $procurement->basis_note) }}</textarea>
+                        @error('basis_note')
+                            <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            @endif
+
+            @unless ($procurement->tanpaUsulan())
             <div class="mt-6">
                 <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
                     Barang dari Usulan
@@ -153,20 +193,17 @@
                     </table>
                 </div>
 
-                @error('items')
-                    <p class="text-theme-xs text-error-500 mt-2">{{ $message }}</p>
-                @enderror
-
                 <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
                     Jumlah pesan boleh melebihi jumlah yang disetujui usulan. Barang dari usulan wajib ada dan
                     tidak dapat dihapus di sini &mdash; tambahkan atau hapus barang di luar usulan lewat bagian
                     di bawah.
                 </p>
             </div>
+            @endunless
 
             <div class="mt-8">
                 <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Barang di Luar Usulan
+                    {{ $procurement->tanpaUsulan() ? 'Daftar Barang' : 'Barang di Luar Usulan' }}
                 </label>
 
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px_160px_auto] sm:items-end">
@@ -250,6 +287,20 @@
                         </template>
                     </div>
                 </template>
+
+                {{-- Satu tempat untuk galat `items`, terlihat pada kedua rupa
+                     formulir: aturan cakupan usulan maupun "minimal satu
+                     barang" pada realisasi langsung. --}}
+                @error('items')
+                    <p class="text-theme-xs text-error-500 mt-3">{{ $message }}</p>
+                @enderror
+
+                @if ($procurement->tanpaUsulan())
+                    <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
+                        Seluruh barang pada realisasi langsung boleh ditambah maupun dihapus, selama tersisa
+                        minimal satu.
+                    </p>
+                @endif
             </div>
 
             <div class="mt-6 flex justify-end gap-3">

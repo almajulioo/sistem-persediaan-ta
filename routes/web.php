@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gudang\ItemController;
+use App\Http\Controllers\Gudang\ItemProposalController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
@@ -14,8 +15,8 @@ use App\Http\Controllers\Pengadaan\ProcurementDraftController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
+use App\Http\Controllers\Request\ItemProposalController as RequestItemProposalController;
 use App\Http\Controllers\Request\RequestController;
-use App\Http\Controllers\Request\ItemProposalController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -49,11 +50,17 @@ Route::middleware('auth')->group(function () {
     })->name('profile');
 
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
-    Route::get('/permintaan/usulan-barang', [ItemProposalController::class, 'index'])->name('request.item-proposals.index');
-    Route::get('/permintaan/usulan-barang/create', [ItemProposalController::class, 'create'])->name('request.item-proposals.create');
-    Route::post('/permintaan/usulan-barang', [ItemProposalController::class, 'store'])->name('request.item-proposals.store');
-    Route::patch('/permintaan/usulan-barang/{itemProposal}/keputusan', [ItemProposalController::class, 'decide'])
-        ->name('request.item-proposals.decide');
+
+    // Usulan barang baru dari sub sistem permintaan: pintu depan kedua ke
+    // tabel `item_proposals` yang sama dengan milik Pengadaan (ADR 0032).
+    // Siapa pun yang login boleh mengusulkan lewat sini — otorisasinya ada
+    // di StoreItemProposalRequest, bukan di rute. Tidak ada rute keputusan
+    // di sini: menolak memakai rute bersama `item-proposals.reject` (gate
+    // `kelola-gudang`), menyetujui memakai `items.create` — sama seperti
+    // pintu depan Pengadaan, supaya hanya ada satu jalur keputusan.
+    Route::get('/permintaan/usulan-barang', [RequestItemProposalController::class, 'index'])->name('request.item-proposals.index');
+    Route::get('/permintaan/usulan-barang/create', [RequestItemProposalController::class, 'create'])->name('request.item-proposals.create');
+    Route::post('/permintaan/usulan-barang', [RequestItemProposalController::class, 'store'])->name('request.item-proposals.store');
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
@@ -169,6 +176,13 @@ Route::middleware('auth')->group(function () {
         Route::delete('usulan-pengadaan/draf', [ProcurementDraftController::class, 'discard'])
             ->name('procurement-requests.draft.discard');
 
+        // Menolak usulan barang baru: master barang milik Pengelola Gudang,
+        // jadi dialah yang memutuskan (ADR 0032). Tidak ada rute "setujui" —
+        // menyetujui berarti mendaftarkan barangnya lewat `items.store`, dan
+        // persetujuan tanpa baris `items` tidak berarti apa pun.
+        Route::patch('usulan-barang/{itemProposal}/tolak', [ItemProposalController::class, 'reject'])
+            ->name('item-proposals.reject');
+
         // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
         // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
         Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
@@ -197,6 +211,14 @@ Route::middleware('auth')->group(function () {
             ->name('procurement-requests.approve');
         Route::patch('usulan-pengadaan/{procurementRequest}/tolak', [ProcurementRequestController::class, 'reject'])
             ->name('procurement-requests.reject');
+
+        // Mengusulkan barang baru: yang tahu ada barang belum terdaftar adalah
+        // yang mau mengadakannya (ADR 0032). Segmen statis "create" wajib
+        // terdaftar sebelum "usulan-barang/{itemProposal}" di grup penutup.
+        Route::get('usulan-barang/create', [ItemProposalController::class, 'create'])
+            ->name('item-proposals.create');
+        Route::post('usulan-barang', [ItemProposalController::class, 'store'])
+            ->name('item-proposals.store');
 
         // Realisasi: merealisasi adalah tugas Pejabat Pengadaan (ADR 0016).
         // "create" wajib terdaftar sebelum "pengadaan/{procurement}" di bawah
@@ -244,6 +266,13 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('can:akses-pengadaan')->group(function () {
+        // Usulan barang baru dibaca kedua peran: pengusulnya Pejabat Pengadaan,
+        // pemutusnya Pengelola Gudang (ADR 0032).
+        Route::get('usulan-barang', [ItemProposalController::class, 'index'])
+            ->name('item-proposals.index');
+        Route::get('usulan-barang/{itemProposal}', [ItemProposalController::class, 'show'])
+            ->name('item-proposals.show');
+
         Route::get('usulan-pengadaan/{procurementRequest}', [ProcurementRequestController::class, 'show'])
             ->name('procurement-requests.show');
 

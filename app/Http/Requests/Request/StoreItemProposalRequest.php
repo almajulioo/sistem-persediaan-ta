@@ -18,7 +18,7 @@ class StoreItemProposalRequest extends FormRequest
         return [
             'item_name' => ['required', 'string', 'max:255'],
             'unit' => ['required', Rule::enum(SatuanBarang::class)],
-            'reason' => ['nullable', 'string', 'max:1000'],
+            'purpose_note' => ['required', 'string', 'max:500'],
         ];
     }
 
@@ -26,7 +26,14 @@ class StoreItemProposalRequest extends FormRequest
     {
         $this->merge([
             'item_name' => trim((string) $this->input('item_name')),
-            'reason' => trim((string) $this->input('reason')),
+            'purpose_note' => trim((string) $this->input('purpose_note')),
         ]);
+    }
+
+    public function messages(): array
+    {
+        return [
+            'purpose_note.required' => 'Jelaskan kebutuhan barangnya. Tanpa ini Pengelola Gudang tidak punya bahan untuk memutuskan.',
+        ];
     }
 }

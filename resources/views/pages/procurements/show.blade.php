@@ -40,7 +40,9 @@
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
                 <dl class="space-y-3">
                     @foreach ([
-                        'Usulan Asal' => $procurement->procurementRequest?->judul() ?? '—',
+                        'Usulan Asal' => $procurement->tanpaUsulan()
+                            ? 'Langsung, tanpa usulan'
+                            : ($procurement->procurementRequest?->judul() ?? '—'),
                         'Penyedia' => $procurement->supplier?->supplier_name ?? '—',
                         'Tanggal Realisasi' => $procurement->procurement_date->translatedFormat('d F Y'),
                         'Direalisasikan Oleh' => $procurement->user?->fullname ?? '—',
@@ -107,6 +109,39 @@
                     @endcan
                 @endif
             </div>
+
+            {{-- Dasar pengadaan, hanya pada realisasi langsung. Pada realisasi
+                 berusulan tempatnya dokumen usulan itu sendiri, yang sudah
+                 tertaut di kartu identitas di atas (ADR 0031). --}}
+            @if ($procurement->tanpaUsulan())
+                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Dasar Pengadaan</h3>
+
+                    <dl class="mt-3 space-y-3">
+                        <div class="flex items-start justify-between gap-4">
+                            <dt class="text-theme-sm text-gray-500 dark:text-gray-400">Alasan</dt>
+                            <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">
+                                {{ $procurement->basis_reason?->label() ?? '—' }}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    @if ($procurement->basis_note)
+                        <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                            {{ $procurement->basis_note }}
+                        </p>
+                    @endif
+
+                    {{-- Realisasi langsung memotong usulan Pengelola Gudang,
+                         jadi halaman ini harus mengatakannya terang-terangan
+                         alih-alih membiarkannya terbaca sebagai pengadaan biasa
+                         yang kehilangan usulannya. --}}
+                    <p class="text-theme-xs mt-4 rounded-lg bg-gray-50 p-3 text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+                        Realisasi ini dibuat tanpa usulan dari Pengelola Gudang. Dasar di atas menggantikan
+                        dokumen usulan sebagai bahan penilaian Kasubbag Umum dan TI.
+                    </p>
+                </div>
+            @endif
 
             {{-- Hasil review Kasubbag Umum dan TI. Jejaknya dikosongkan setiap
                  kali realisasi diubah, jadi kartu ini hilang sendiri ketika

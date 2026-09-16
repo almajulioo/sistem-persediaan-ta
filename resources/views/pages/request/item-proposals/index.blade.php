@@ -24,23 +24,21 @@
                         <tr class="border-b border-gray-100 dark:border-gray-800">
                             <td class="px-5 py-4 text-sm font-medium text-gray-800 dark:text-white/90 sm:px-6">{{ $proposal->item_name }}</td>
                             <td class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ $proposal->unit?->label() ?? '-' }}</td>
-                            <td class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ $proposal->user?->fullname ?? '-' }}</td>
+                            <td class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ $proposal->proposedBy?->fullname ?? '-' }}</td>
                             <td class="px-5 py-4 sm:px-6">
-                                <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $proposal->status === 'diajukan' ? 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-warning-500' : ($proposal->status === 'ditolak' ? 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500' : 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500') }}">
-                                    {{ ['diajukan' => 'Diajukan', 'ditindaklanjuti' => 'Diselesaikan', 'ditolak' => 'Ditolak'][$proposal->status] ?? $proposal->status }}
+                                <span class="rounded-full px-2.5 py-1 text-xs font-medium {{ $proposal->status->badgeClass() }}">
+                                    {{ $proposal->status->label() }}
                                 </span>
                             </td>
                             <td class="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ $proposal->created_at?->translatedFormat('d M Y H:i') }}</td>
                             <td class="px-5 py-4 sm:px-6">
-                                @if ($canManage && $proposal->status === 'diajukan')
-                                    <form method="POST" action="{{ route('request.item-proposals.decide', $proposal) }}" class="flex flex-wrap gap-2">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="submit" name="action" value="complete" class="rounded-lg px-3 py-1.5 text-xs font-medium text-success-600 ring-1 ring-success-200 ring-inset hover:bg-success-50 dark:text-success-500 dark:ring-success-500/30 dark:hover:bg-success-500/10">Selesaikan</button>
-                                        <button type="submit" name="action" value="reject" class="rounded-lg px-3 py-1.5 text-xs font-medium text-error-600 ring-1 ring-error-200 ring-inset hover:bg-error-50 dark:text-error-500 dark:ring-error-500/30 dark:hover:bg-error-500/10">Tolak</button>
-                                    </form>
-                                @elseif (in_array($proposal->status, ['ditindaklanjuti', 'ditolak'], true))
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $proposal->followedUpBy?->fullname ?? 'Selesai' }}</span>
+                                @if ($canManage && $proposal->isDiajukan())
+                                    {{-- Keputusannya dipusatkan di halaman Pengelola Gudang: menolak lewat
+                                    item-proposals.reject, menyetujui lewat items.create — supaya usulan
+                                    dari sini dan dari Pengadaan diputuskan lewat satu jalur yang sama. --}}
+                                    <a href="{{ route('item-proposals.show', $proposal) }}" class="rounded-lg px-3 py-1.5 text-xs font-medium text-brand-600 ring-1 ring-brand-200 ring-inset hover:bg-brand-50 dark:text-brand-400 dark:ring-brand-500/30 dark:hover:bg-brand-500/10">Tinjau &amp; Putuskan</a>
+                                @elseif ($proposal->sudahDiputuskan())
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ $proposal->decidedBy?->fullname ?? 'Selesai' }}</span>
                                 @else
                                     <span class="text-xs text-gray-400">-</span>
                                 @endif

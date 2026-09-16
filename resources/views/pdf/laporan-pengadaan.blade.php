@@ -21,6 +21,13 @@
         };
 
         $status = \App\Enums\ProcurementStatus::tryFrom($filters['status'])?->label();
+
+        $sumber = match ($filters['sumber'] ?? '') {
+            'langsung' => 'Langsung, tanpa usulan',
+            'usulan' => 'Dari usulan',
+            default => null,
+        };
+
         $baris = $procurements->sum(fn ($procurement) => $procurement->details->count());
         $nomor = 0;
     @endphp
@@ -37,6 +44,12 @@
             <tr>
                 <td class="label">Status</td>
                 <td>: {{ $status }}</td>
+            </tr>
+        @endif
+        @if ($sumber)
+            <tr>
+                <td class="label">Dasar Pengadaan</td>
+                <td>: {{ $sumber }}</td>
             </tr>
         @endif
         @if ($namaPenyedia)
@@ -107,6 +120,7 @@
                         <td>
                             {{ $procurement->judul() }}
                             <br><em style="font-size: 8px; color: #667085;">{{ $procurement->status->label() }}</em>
+                            <br><em style="font-size: 8px; color: #667085;">{{ $procurement->dasarRingkas() }}</em>
                         </td>
                         <td>{{ $procurement->supplier?->supplier_name ?? '-' }}</td>
                         <td>{{ $detail->item?->item_code ?? '-' }}</td>

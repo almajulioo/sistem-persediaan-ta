@@ -23,9 +23,27 @@ kebenarannya adalah migrasi yang benar-benar berjalan di
 | `items` | Master barang; dirujuk `procurement_details`/`procurement_request_details` (Naren) — Alma belum punya tabel rincian barangnya sendiri, lihat catatan di bawah |
 | `stock_mutations` | Buku besar stok; dibangun Naren, ditulis Alma lewat `StockLedger` |
 | `audit_logs` | Jejak aktivitas, dipakai kedua sub sistem |
+| `item_proposals` | Usulan barang baru — pintu depan katalog. Dibangun Naren (skema, keputusan, `items.store()`), ditulis juga oleh sub sistem Permintaan lewat pintunya sendiri (lihat catatan di bawah) |
 
-Perubahan pada keempat tabel ini **hanya lewat kesepakatan**. Migrasi dari dua
-orang pada tabel yang sama rawan bentrok saat merge.
+Perubahan pada kelima tabel ini **hanya lewat kesepakatan**. Migrasi dari dua
+orang pada tabel yang sama rawan bentrok saat merge — persis yang terjadi pada
+`item_proposals` sendiri, lihat [ADR 0033](../keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md).
+
+`item_proposals` (sejak 16 September 2026,
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md)) dirancang **sengaja netral
+peran** sejak awal — pengusulnya cukup seorang `users`, dan perannya sendiri
+sudah menjelaskan asal usulannya — justru supaya sub sistem Permintaan bisa
+memakai tabel yang sama tanpa perubahan skema begitu ia butuh "pengguna meminta
+barang yang belum ada di sistem". ADR 0032 mencatatnya sebagai "ditawarkan,
+bukan diasumsikan": pintunya baru dibangun sisi Pengadaan, sisi Permintaan
+sengaja tidak disentuh.
+
+Alma ternyata membangun pintunya sendiri secara paralel dengan skema yang
+berbeda (kolom dan status berbeda, dan tidak menyambung ke pembuatan barang
+asli) tanpa tahu tabel ini sudah ada — baru ketahuan lewat konflik `git pull`.
+ADR 0033 menyatukannya: skema dan keputusan (ADR 0032) dipertahankan, sisi
+Permintaan diadaptasi memakainya. **Sejak itu tabel ini genuinely tabel
+bersama**, bukan lagi "milik Naren, ditawarkan".
 
 ### Milik Narendra — bebas diubah sendiri
 
@@ -128,6 +146,9 @@ ERD pada naskah Naren diperbarui.
 | `procurement_requests` | `user_id` menjadi **nullable** — draf otomatis tidak punya pengaju | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
 | `procurement_request_details` | Tambah `is_auto` — menandai baris yang masih dikelola draf otomatis | [0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) |
 | `procurements` | Tambah `reviewed_at`, `reviewed_by`, `review_note` — keputusan terakhir Kasubbag Umum dan TI; statusnya yang membedakan setuju dari tolak | [0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) |
+| `procurements` | `procurement_request_id` menjadi **nullable**, indeks uniknya **dipertahankan** — realisasi tanpa usulan boleh banyak (NULL berulang diizinkan), tetapi satu usulan tetap paling banyak satu realisasi | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
+| `procurements` | Tambah `basis_reason`, `basis_note` — dasar pengadaan, wajib pada realisasi tanpa usulan; NULL berarti dasarnya adalah usulannya | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
+| `item_proposals` | Tabel baru — usulan barang baru; `item_id` nullable terisi saat Pengelola Gudang mendaftarkan barangnya | [0032](../keputusan/0032-usulan-barang-baru.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

@@ -53,6 +53,7 @@ class Item extends Model
         'opnameDetails' => 'catatan stock opname',
         'procurementDetails' => 'rincian pengadaan',
         'procurementRequestDetails' => 'rincian usulan pengadaan',
+        'itemProposals' => 'usulan barang baru',
     ];
 
     /**
@@ -159,5 +160,15 @@ class Item extends Model
     public function stockMutations(): HasMany
     {
         return $this->hasMany(StockMutation::class, 'item_id', 'item_id');
+    }
+
+    /**
+     * Usulan barang baru yang menghasilkan baris ini (ADR 0032). Dokumen
+     * riwayat, jadi FK-nya restrictOnDelete seperti relasi transaksional
+     * lainnya — barang yang pernah diusulkan diarsipkan, tidak dihapus.
+     */
+    public function itemProposals(): HasMany
+    {
+        return $this->hasMany(ItemProposal::class, 'item_id', 'item_id');
     }
 }

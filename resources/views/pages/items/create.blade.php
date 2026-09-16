@@ -31,6 +31,7 @@
             'item' => $item,
             'isEdit' => false,
             'action' => route('items.store'),
+            'itemProposal' => $itemProposal ?? null,
         ])
     </div>
 @endsection

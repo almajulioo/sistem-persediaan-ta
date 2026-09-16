@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Gudang;
 
+use App\Enums\ItemProposalStatus;
 use App\Enums\MutationType;
 use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
@@ -9,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Gudang\StoreItemRequest;
 use App\Http\Requests\Gudang\UpdateItemRequest;
 use App\Models\Item;
+use App\Models\ItemProposal;
 use App\Support\AuditLogger;
 use App\Support\NotificationScanner;
 use App\Support\Notifier;
@@ -64,11 +66,47 @@ class ItemController extends Controller
         ]);
     }
 
-    public function create(): View
+    /**
+     * Formulir barang baru, dua pintu masuk.
+     *
+     * Tanpa query — tombol "Tambah Barang" biasa.
+     *
+     * Dengan `?item_proposal_id=` — tombol "Setujui & Buat Barang" pada halaman
+     * usulan barang: nama dan satuannya terisi dari usulan, sementara kode
+     * barang serta batas minimum/maksimum tetap diisi Pengelola Gudang karena
+     * hanya dia yang mengenal penamaan bakunya. Menyimpannya sekaligus menutup
+     * usulan itu. Lihat ADR 0032.
+     */
+    public function create(Request $request): View|RedirectResponse
     {
+        $proposal = null;
+
+        if ($request->query('item_proposal_id') !== null) {
+            $proposal = ItemProposal::find((string) $request->query('item_proposal_id', ''));
+
+            if ($proposal === null) {
+                return redirect()
+                    ->route('item-proposals.index')
+                    ->with('error', 'Usulan barang tidak ditemukan.');
+            }
+
+            if ($proposal->sudahDiputuskan()) {
+                return redirect()
+                    ->route('item-proposals.show', $proposal)
+                    ->with('error', "Usulan barang \"{$proposal->item_name}\" sudah diputuskan sebelumnya.");
+            }
+        }
+
         return view('pages.items.create', [
             'title' => 'Tambah Barang',
-            'item' => new Item(['is_active' => true, 'stock_min' => 0, 'stock_max' => 0]),
+            'item' => new Item([
+                'is_active' => true,
+                'stock_min' => 0,
+                'stock_max' => 0,
+                'item_name' => $proposal?->item_name,
+                'unit' => $proposal?->unit?->value,
+            ]),
+            'itemProposal' => $proposal,
         ]);
     }
 
@@ -76,10 +114,11 @@ class ItemController extends Controller
     {
         $data = $request->validated();
         $stokAwal = (int) $data['stock_awal'];
-        unset($data['stock_awal']);
+        unset($data['stock_awal'], $data['item_proposal_id']);
         $actor = $request->user();
+        $proposal = $request->usulanBarang();
 
-        $item = DB::transaction(function () use ($data, $stokAwal, $actor) {
+        $item = DB::transaction(function () use ($data, $stokAwal, $actor, $proposal) {
             $item = Item::create($data);
 
             // Stok awal masuk sebagai mutasi supaya buku mutasi cocok dengan
@@ -94,14 +133,39 @@ class ItemController extends Controller
                 );
             }
 
+            // Mendaftarkan barangnya itulah persetujuan usulannya — satu
+            // tindakan, satu kebenaran, di dalam transaksi yang sama supaya
+            // tidak mungkin ada usulan berstatus Disetujui tanpa barang, atau
+            // sebaliknya (ADR 0032).
+            $proposal?->forceFill([
+                'status' => ItemProposalStatus::Disetujui,
+                'item_id' => $item->item_id,
+                'decided_by' => $actor->user_id,
+                'decided_at' => now(),
+            ])->save();
+
             return $item;
         });
 
-        AuditLogger::record($request->user(), "Menambah barang: {$item->item_code} - {$item->item_name}");
+        AuditLogger::record($request->user(), $proposal === null
+            ? "Menambah barang: {$item->item_code} - {$item->item_name}"
+            : "Menyetujui usulan barang \"{$proposal->item_name}\" dan mendaftarkannya sebagai {$item->item_code}");
 
         // Barang baru bisa langsung lahir dalam keadaan habis atau menipis.
+        // Barang hasil usulan memang lahir berstok nol, jadi StokHabis dan draf
+        // usulan otomatis akan langsung menyalakan diri — bukan kerusakan,
+        // stoknya memang habis, dan keduanya melepas sendiri begitu barangnya
+        // datang (ADR 0032).
         NotificationScanner::periksaBarang($item);
         ProcurementDraftScanner::perbaruiBarang($item);
+
+        if ($proposal !== null) {
+            NotificationScanner::catatUsulanBarangDiputuskan($proposal->fresh(['proposedBy', 'item']), $actor);
+
+            return redirect()
+                ->route('item-proposals.show', $proposal)
+                ->with('status', "Usulan barang \"{$proposal->item_name}\" disetujui dan terdaftar sebagai {$item->item_code}.");
+        }
 
         return redirect()
             ->route('items.index')

@@ -121,6 +121,9 @@ class User extends Authenticatable
         'procurementRequests' => 'usulan pengadaan',
         'procurementReceipts' => 'penerimaan barang pengadaan',
         'reviewedProcurements' => 'persetujuan realisasi pengadaan',
+        'cancelledProcurements' => 'pembatalan realisasi pengadaan',
+        'itemProposals' => 'usulan barang baru',
+        'decidedItemProposals' => 'keputusan usulan barang baru',
         'requestDocuments' => 'dokumen permintaan',
     ];
 
@@ -189,6 +192,37 @@ class User extends Authenticatable
     public function reviewedProcurements(): HasMany
     {
         return $this->hasMany(Procurement::class, 'reviewed_by', 'user_id');
+    }
+
+    /**
+     * Realisasi pengadaan yang dibatalkan akun ini (ADR 0024).
+     *
+     * Terdaftar belakangan: FK `cancelled_by` sudah restrictOnDelete sejak awal,
+     * tetapi relasinya luput dari RESTRICTED_RELATIONS sehingga menghapus akun
+     * yang pernah membatalkan realisasi meledak jadi 500 alih-alih pesan
+     * validasi ADR 0003.
+     */
+    public function cancelledProcurements(): HasMany
+    {
+        return $this->hasMany(Procurement::class, 'cancelled_by', 'user_id');
+    }
+
+    /**
+     * Usulan barang baru yang diajukan akun ini (ADR 0032).
+     */
+    public function itemProposals(): HasMany
+    {
+        return $this->hasMany(ItemProposal::class, 'proposed_by', 'user_id');
+    }
+
+    /**
+     * Usulan barang baru yang diputuskan akun ini sebagai Pengelola Gudang,
+     * disetujui maupun ditolak. Berbeda dari `itemProposals()` — mengusulkan
+     * dan memutuskan adalah dua jabatan yang berbeda (ADR 0032).
+     */
+    public function decidedItemProposals(): HasMany
+    {
+        return $this->hasMany(ItemProposal::class, 'decided_by', 'user_id');
     }
 
     public function auditLogs(): HasMany

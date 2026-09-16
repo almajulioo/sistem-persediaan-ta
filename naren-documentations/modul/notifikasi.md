@@ -44,8 +44,10 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
 | Usulan Disetujui Belum Direalisasi | Perhatian | Pejabat Pengadaan + Admin | Tekan Realisasikan, atau tinjau ulang kebutuhannya |
+| Realisasi Menunggu Persetujuan | Perhatian | Kasubbag Umum dan TI + Admin | Periksa penyedia, barang, dan harganya; setujui atau tolak sebelum barang dipesan |
 | Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
 | BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
+| Usulan Barang Baru Menunggu Keputusan | Perhatian | Gudang + Admin | Periksa apakah barangnya benar-benar belum ada, lalu daftarkan atau tolak |
 
 ### Peristiwa
 
@@ -57,7 +59,18 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
 | Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
 | Penerimaan Barang Dikonfirmasi | Info | Pejabat Pengadaan yang merealisasi | Tahu barang yang direalisasikannya sudah sampai |
+| Realisasi Pengadaan Disetujui | Info | Pejabat Pengadaan yang merealisasi | Tahu barang sudah boleh dipesan |
+| Realisasi Pengadaan Ditolak | Perhatian | Pejabat Pengadaan yang merealisasi | Tahu apa yang harus diperbaiki; penolakan tidak terminal |
 | Realisasi Pengadaan Dibatalkan | Perhatian | Gudang + Admin, **kecuali pelaku** | Sudah disuruh menunggu barang; harus tahu barangnya tidak jadi datang |
+| Usulan Barang Baru Disetujui | Info | Pengusul | Tahu barangnya sudah terdaftar dan siap diadakan |
+| Usulan Barang Baru Ditolak | Perhatian | Pengusul | Tahu alasannya; biasanya menunjuk barang yang sudah ada |
+
+Tiga baris realisasi milik
+[ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)
+— Menunggu Persetujuan, Disetujui, dan Ditolak — baru dicatat di katalog ini
+pada 16 September 2026; tipenya sendiri sudah hidup sejak ADR 0030 dibangun.
+Dua baris Usulan Barang Baru berasal dari
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md).
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -124,7 +137,7 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | Titik panggil | Pemeriksaan |
 |---|---|
 | `StockMutationController::store()` | `periksaBarang()` + `catatMutasiManual()` + `ProcurementDraftScanner::perbaruiBarang()` |
-| `ItemController::store()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — barang baru bisa lahir habis |
+| `ItemController::store()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — barang baru bisa lahir habis. Bila lahir dari usulan barang: + `catatUsulanBarangDiputuskan()` |
 | `ItemController::update()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — ambang batas ikut menentukan status |
 | `ItemController::toggleStatus()` | `periksaBarang()` + `ProcurementDraftScanner::perbaruiBarang()` — barang diarsipkan menutup peringatan dan baris drafnya |
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
@@ -134,6 +147,8 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
 | `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
 | `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
+| `ItemProposalController::store()` | `periksaUsulanBarang()` — menagih keputusan Pengelola Gudang |
+| `ItemProposalController::reject()` | `catatUsulanBarangDiputuskan()`, yang ikut menutup tagihan keputusannya |
 
 **Terjadwal**, harian pukul 06.00 lewat `routes/console.php`:
 
@@ -145,6 +160,11 @@ php artisan notifikasi:periksa --bersihkan  # sekaligus buang yang lama
 Sejak [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md), perintah
 yang sama juga menjalankan `App\Support\ProcurementDraftScanner::perbaruiSeluruh()`
 — sapuan penuh draf usulan otomatis, sejajar `NotificationScanner::periksaSemua()`.
+
+`periksaSemua()` menyapu tujuh hal: barang, barang tidak bergerak, opname,
+periode opname, seluruh usulan pengadaan, seluruh realisasi, dan — sejak
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md) — seluruh usulan barang
+baru.
 
 Di server dibutuhkan satu entri cron:
 

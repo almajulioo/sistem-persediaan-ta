@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\AlasanPembatalan;
+use App\Enums\AlasanPengadaan;
 use App\Enums\ProcurementDocumentType;
 use App\Enums\ProcurementStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,7 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * Realisasi pengadaan — lahir begitu satu ProcurementRequest disetujui.
+ * Realisasi pengadaan — lahir dari satu ProcurementRequest yang disetujui,
+ * atau berdiri sendiri tanpa usulan sama sekali (ADR 0031).
  *
  * Berhenti di status MenungguPenerimaan sampai Pengelola Gudang
  * mengonfirmasi penerimaan lewat ProcurementReceipt; baru saat itu stok
@@ -30,13 +32,15 @@ class Procurement extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'procurement_request_id', 'supplier_id', 'procurement_date', 'status', 'user_id',
+        'procurement_request_id', 'supplier_id', 'procurement_date',
+        'basis_reason', 'basis_note', 'status', 'user_id',
     ];
 
     protected function casts(): array
     {
         return [
             'procurement_date' => 'date',
+            'basis_reason' => AlasanPengadaan::class,
             'status' => ProcurementStatus::class,
             'reviewed_at' => 'datetime',
             'cancelled_at' => 'datetime',
@@ -50,6 +54,33 @@ class Procurement extends Model
     public function judul(): string
     {
         return 'Realisasi #'.strtoupper(substr($this->procurement_id, 0, 8));
+    }
+
+    /**
+     * Realisasi langsung — dibuat Pejabat Pengadaan tanpa usulan (ADR 0031).
+     *
+     * Sengaja diturunkan dari `procurement_request_id`, bukan disimpan sebagai
+     * kolom `source` tersendiri: jawabannya sudah ada di baris yang sama,
+     * sehingga tidak butuh join dan tidak mungkin menyimpang dari kenyataan.
+     * Berbeda dari ADR 0028, yang memang harus menyimpan statusnya karena
+     * pertanyaannya tidak terjawab dari satu baris.
+     */
+    public function tanpaUsulan(): bool
+    {
+        return $this->procurement_request_id === null;
+    }
+
+    /**
+     * Dasar pengadaan untuk ditampilkan: judul usulan asalnya, atau label
+     * alasan bagi realisasi langsung.
+     */
+    public function dasarRingkas(): string
+    {
+        if (! $this->tanpaUsulan()) {
+            return $this->procurementRequest?->judul() ?? 'Usulan tidak ditemukan';
+        }
+
+        return 'Langsung — '.($this->basis_reason?->label() ?? 'tanpa alasan tercatat');
     }
 
     public function isMenungguPersetujuan(): bool
@@ -112,6 +143,15 @@ class Procurement extends Model
             ->when(
                 ProcurementStatus::tryFrom((string) ($filters['status'] ?? '')),
                 fn (Builder $query, ProcurementStatus $status) => $query->where('status', $status),
+            )
+            // Dasar pengadaan: langsung versus dari usulan (ADR 0031). Nilai
+            // lain diabaikan supaya query string sembarangan tidak mengosongkan
+            // daftar tanpa penjelasan.
+            ->when(
+                in_array($sumber = trim((string) ($filters['sumber'] ?? '')), ['langsung', 'usulan'], true),
+                fn (Builder $query) => $sumber === 'langsung'
+                    ? $query->whereNull('procurement_request_id')
+                    : $query->whereNotNull('procurement_request_id'),
             )
             ->when(
                 trim((string) ($filters['supplier'] ?? '')),

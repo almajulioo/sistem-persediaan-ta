@@ -23,11 +23,11 @@
                 <x-form.select-field name="unit" label="Satuan" :options="\App\Enums\SatuanBarang::options()"
                     :selected="old('unit')" required placeholder="Pilih satuan" />
                 <div class="md:col-span-2">
-                    <label for="reason" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Alasan/Keterangan</label>
-                    <textarea id="reason" name="reason" rows="4" maxlength="1000"
+                    <label for="purpose_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Kegunaan <span class="text-error-500">*</span></label>
+                    <textarea id="purpose_note" name="purpose_note" rows="4" maxlength="500" required
                         class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90"
-                        placeholder="Jelaskan kebutuhan barang ini">{{ old('reason') }}</textarea>
-                    @error('reason') <p class="mt-1.5 text-xs text-error-500">{{ $message }}</p> @enderror
+                        placeholder="Jelaskan kebutuhan barang ini">{{ old('purpose_note') }}</textarea>
+                    @error('purpose_note') <p class="mt-1.5 text-xs text-error-500">{{ $message }}</p> @enderror
                 </div>
             </div>
             <div class="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-6 dark:border-gray-800">

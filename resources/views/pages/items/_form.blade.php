@@ -1,14 +1,36 @@
 {{--
     Formulir barang yang dipakai bersama halaman tambah dan ubah.
 
-    $item   : App\Models\Item  — instance kosong saat menambah
-    $isEdit : bool
-    $action : string           — URL tujuan submit
+    $item         : App\Models\Item  — instance kosong saat menambah
+    $isEdit       : bool
+    $action       : string           — URL tujuan submit
+    $itemProposal : ?App\Models\ItemProposal — terisi bila barangnya lahir dari
+                    usulan barang baru (ADR 0032); menyimpan formulir ini
+                    sekaligus menyetujui usulan itu
 --}}
+@php($itemProposal = $itemProposal ?? null)
+
 <form method="POST" action="{{ $action }}" novalidate>
     @csrf
     @if ($isEdit)
         @method('PUT')
+    @endif
+
+    @if ($itemProposal)
+        <input type="hidden" name="item_proposal_id" value="{{ $itemProposal->item_proposal_id }}">
+
+        <div class="bg-brand-50 dark:bg-brand-500/15 mb-5 rounded-lg p-4">
+            <p class="text-theme-sm text-brand-700 dark:text-brand-400">
+                Mendaftarkan barang dari usulan
+                <strong>"{{ $itemProposal->item_name }}"</strong>
+                yang diajukan {{ $itemProposal->proposedBy?->fullname ?? 'pengguna lain' }}.
+                Nama dan satuannya sudah terisi dan masih boleh diperbaiki; menyimpan formulir ini sekaligus
+                menyetujui usulannya.
+            </p>
+            @error('item_proposal_id')
+                <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+            @enderror
+        </div>
     @endif
 
     <div class="grid grid-cols-1 gap-5 md:grid-cols-2">

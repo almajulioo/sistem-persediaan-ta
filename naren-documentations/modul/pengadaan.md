@@ -21,8 +21,19 @@ Pengelola Gudang    Pejabat Pengadaan    Kasubbag Umum & TI    [LUAR SISTEM]    
                                                                                    BAST dicetak
 ```
 
-Rincian keputusan: [ADR 0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md)
-dan [ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md).
+Sejak [ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) ada
+jalur kedua yang memotong dokumen usulan, tetapi **tidak** memotong pemutusnya:
+
+```
+Pejabat Pengadaan            Kasubbag Umum & TI    [LUAR SISTEM]    Pengelola Gudang
+       │                             │                   │                  │
+  Realisasi langsung ──ditinjau──▶ disetujui ────▶ pembelian nyata ──▶ Penerimaan
+  (+ dasar pengadaan wajib)
+```
+
+Rincian keputusan: [ADR 0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md),
+[ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md),
+dan [ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md).
 
 ## Pemisahan tugas
 
@@ -31,6 +42,8 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Tahap | Pelaku | Tercatat di |
 |---|---|---|
 | Mengusulkan | Pengelola Gudang | `procurement_requests.user_id` |
+| Mengusulkan barang baru | Pejabat Pengadaan | `item_proposals.proposed_by` |
+| Menyetujui / menolak usulan barang baru | Pengelola Gudang | `item_proposals.decided_by` |
 | Menyetujui / menolak usulan | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
 | **Menyetujui / menolak realisasi** | **Kasubbag Umum dan TI** | `procurements.reviewed_by` |
@@ -42,13 +55,21 @@ siklusnya bertangan empat: jenjang persetujuan realisasi disisipkan antara
 "merealisasi" dan "mengonfirmasi diterima", supaya ada pihak yang menilai
 penyedia, barang, dan harganya sebelum barang benar-benar dipesan.
 
+Realisasi tanpa usulan (ADR 0031) menghapus baris pertama tabel di atas, bukan
+pemisahan tugasnya: trionya tetap tiga orang berbeda — Pejabat Pengadaan
+menyusun, Kasubbag Umum dan TI memutus, Pengelola Gudang menerima. Justru
+karena itu jalur langsung baru layak dibuka **setelah** ADR 0030 ada.
+
 Admin lolos seluruhnya lewat `Gate::before`, **termasuk `setujui-pengadaan`**.
 Pemisahan staf TI dari pemberi persetujuan karena itu bersifat organisasional,
 bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 0030.
 
 ## Aturan bisnis yang ditegakkan
 
-1. Realisasi hanya dari usulan ber-status `Disetujui`.
+1. Realisasi lahir dari usulan ber-status `Disetujui`, **atau** tanpa usulan
+   sama sekali — dan yang tanpa usulan wajib membawa `basis_reason` berpasangan
+   `basis_note` sebagai gantinya
+   ([ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md)).
 2. Seluruh rincian usulan dengan `amount_granted > 0` wajib ada di realisasi
    dan tidak dapat dihapus darinya — tapi Pejabat Pengadaan boleh menambah
    barang di luar usulan itu sendiri, dan boleh menghapusnya kembali sebelum
@@ -57,6 +78,8 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
    — Pejabat Pengadaan boleh memesan lebih banyak dari yang disetujui usulan
    (ADR 0029; sebelum ADR ini batasnya `amount ≤ amount_granted`).
 4. Satu usulan → paling banyak satu realisasi (`procurement_request_id` unik).
+   Kolomnya nullable sejak ADR 0031, tetapi indeks uniknya dipertahankan: banyak
+   baris NULL diizinkan, sehingga invarian ini tetap dijaga basis data.
 5. **Stok bertambah sebanyak `amount_received`, bukan `amount`**
    ([ADR 0017](../keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md)).
 6. `MutationType::Masuk` ber-`isManual() === false`, sehingga penerimaan
@@ -70,7 +93,13 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
 9. **Setiap perubahan pada realisasi menggugurkan persetujuannya** dan
    mengembalikannya ke antrean Kasubbag Umum dan TI. Aturan ini sekaligus
    menjadi mekanisme "ajukan ulang" bagi realisasi yang ditolak — tidak ada rute
-   tersendiri untuk itu (ADR 0030).
+   tersendiri untuk itu (ADR 0030). Termasuk perubahan pada dasar pengadaan
+   realisasi langsung — kalau tidak, persetujuan atas dasar yang wajar dapat
+   ditukar setelah terbit (ADR 0031).
+10. **Barang wajib sudah terdaftar di master barang sebelum dapat diadakan.**
+   Barang yang belum ada diusulkan lebih dulu lewat Usulan Barang Baru, dan
+   Pengelola Gudang yang mendaftarkannya
+   ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)).
 
 ## Tabel
 
@@ -79,10 +108,11 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
 | `suppliers` | Data induk penyedia; identitasnya dicetak di BAST |
 | `procurement_requests` | Usulan pengadaan; `source` membedakan tiga asal-usul |
 | `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
-| `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia. `reviewed_at`/`reviewed_by`/`review_note` menampung keputusan **terakhir** Kasubbag Umum dan TI — persetujuan maupun penolakan, karena statusnya yang membedakan |
+| `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia, atau berdiri sendiri dengan `basis_reason`/`basis_note` bila tanpa usulan (ADR 0031). `reviewed_at`/`reviewed_by`/`review_note` menampung keputusan **terakhir** Kasubbag Umum dan TI — persetujuan maupun penolakan, karena statusnya yang membedakan |
 | `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_received` datang, `unit_price` harga satuan |
 | `procurement_receipts` | Peristiwa penerimaan: siapa, kapan, nomor BAST |
 | `procurement_documents` | Berkas BAST pindai dan SPK/kontrak, di disk privat |
+| `item_proposals` | Usulan barang baru; `item_id` terisi saat Pengelola Gudang mendaftarkan barangnya (ADR 0032) |
 
 ---
 
@@ -556,6 +586,139 @@ Pengadaan + Admin, ambang 7 hari). Yang kedua menutup satu-satunya serah terima
 di seluruh alur yang dulu tidak punya penagih: jarak antara "disetujui" dan
 "direalisasi".
 
+## Realisasi pengadaan tanpa usulan
+
+Ditambahkan 16 September 2026 atas permintaan langsung Kasubbag Umum dan TI pada
+presentasi prototipe yang sama dengan ADR 0030: Pejabat Pengadaan perlu dapat
+membuat realisasi sendiri, tanpa menunggu usulan Pengelola Gudang. Rincian
+keputusan: [ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md).
+
+Jalur ini baru layak dibuka **setelah** jenjang Kasubbag Umum dan TI ada.
+Sebelumnya, realisasi tanpa usulan akan membuat satu peran menjalankan separuh
+siklus sendirian — memilih barang, penyedia, dan harga tanpa dokumen hulu
+maupun pemutus.
+
+| Metode | URL | Nama | Gate |
+|---|---|---|---|
+| GET | `pengadaan/create` | `procurements.create` | `kelola-pengadaan` |
+| POST | `pengadaan` | `procurements.store` | `kelola-pengadaan` |
+
+Rutenya **tidak bertambah**: `procurements.create` kini melayani dua pintu —
+dengan `?procurement_request_id=` dari halaman usulan, dan tanpa query dari
+tombol "Buat Realisasi Langsung" pada daftar realisasi.
+
+**Aturan.**
+
+- Realisasi tanpa usulan wajib membawa **dasar pengadaan**: `basis_reason`
+  (enum `AlasanPengadaan`) berpasangan `basis_note` yang wajib diisi. Aturannya
+  satu kalimat — alasan tidak pernah hilang dari sistem, ia hanya pindah ke
+  dokumen yang tidak punya hulu.
+- `AlasanPengadaan`: `KebutuhanMendesak`, `BarangBaru`, `ArahanPimpinan`,
+  `BelanjaRutinNilaiKecil`, `Lainnya`.
+- Pada realisasi berusulan kedua kolom itu **disimpan NULL** walaupun kiriman
+  memuatnya: dasarnya adalah usulan itu sendiri, dan alasan kedua di sana hanya
+  akan menjadi data yang tak pernah ditampilkan.
+- `procurement_request_id` menjadi nullable, **indeks uniknya dipertahankan**.
+  MySQL dan SQLite mengizinkan banyak baris NULL pada indeks unik, jadi
+  "satu usulan satu realisasi" tetap dijaga basis data.
+- Keadaan "tanpa usulan" **diturunkan**, bukan disimpan:
+  `Procurement::tanpaUsulan()` membaca `procurement_request_id === null`. Tidak
+  ada kolom `source` tersendiri.
+- Seluruh baris realisasi langsung tergolong baris tambahan, jadi semuanya boleh
+  dihapus selama tersisa minimal satu.
+- Mengubah dasar pengadaan **menggugurkan persetujuan**, sama seperti perubahan
+  lain (ADR 0030). Tanpa itu, persetujuan atas dasar yang wajar dapat ditukar
+  setelah terbit.
+- Query `?procurement_request_id=` yang ada tetapi tidak sah tetap ditolak,
+  bukan dialihkan ke formulir langsung: salah tempel tautan tidak boleh berubah
+  diam-diam menjadi pengadaan tanpa usulan.
+
+**Penyaring dan rekap.** Kunci `sumber` (`langsung`/`usulan`) diterjemahkan
+menjadi `whereNull`/`whereNotNull`. Rekap mendapat angka `langsung` yang
+merupakan **irisan** dari `total`, bukan penjumlahnya, sehingga invarian
+`total = menunggu_persetujuan + menunggu + diterima` tidak terganggu. Tabelnya
+menandai baris tanpa usulan dengan label "Langsung".
+
+**Laporan.** Ekspor CSV mendapat kolom **Dasar** tersendiri. Laporan PDF sudah
+sebelas kolom pada kertas lanskap, jadi dasarnya ditaruh sebagai baris kedua di
+dalam sel "Realisasi" bersama statusnya, dan kepala laporan menyebut penyaring
+dasar pengadaan bila sedang dipakai. Aturan
+[ADR 0023](../keputusan/0023-laporan-pengadaan-per-baris-barang.md) tidak
+berubah.
+
+**Yang tidak disentuh satu baris pun.** `ProcurementReceiptPoster`,
+`ProcurementReceiptController`, `StockLedger`, `ProcurementApprovalController`,
+dan keadaan `RealisasiMenungguPenerimaan` — semuanya bekerja pada
+`procurement_details` dan status, bukan pada usulan.
+
+---
+
+## Usulan barang baru
+
+Ditambahkan 16 September 2026, menjawab permintaan kedua Kasubbag Umum dan TI:
+Pejabat Pengadaan perlu dapat mengadakan barang yang belum ada di master barang.
+Rincian keputusan: [ADR 0032](../keputusan/0032-usulan-barang-baru.md).
+
+Barangnya **harus** menjadi baris `items` lebih dulu — stok tidak bisa diposting
+ke sebuah nama bebas. Sementara kode barang dan batas stok adalah wewenang
+Pengelola Gudang, dan langkahnya yang paling bernilai justru **pemeriksaan
+duplikat**: satu barang fisik dengan dua baris di master membuat batas minimum,
+stok opname, dan kartu persediaannya berhenti bisa dipercaya.
+
+```
+Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
+       │                        │                                    │
+  Usulan barang ──▶ Setujui & Buat Barang ──▶ items (stok 0) ──▶ Realisasi
+       │                        │
+       └──────── Tolak (alasan wajib) ─────────┘
+```
+
+| Metode | URL | Nama | Gate |
+|---|---|---|---|
+| GET | `usulan-barang` | `item-proposals.index` | `akses-pengadaan` |
+| GET | `usulan-barang/create` | `item-proposals.create` | `kelola-pengadaan` |
+| POST | `usulan-barang` | `item-proposals.store` | `kelola-pengadaan` |
+| PATCH | `usulan-barang/{itemProposal}/tolak` | `item-proposals.reject` | `kelola-gudang` |
+| GET | `usulan-barang/{itemProposal}` | `item-proposals.show` | `akses-pengadaan` |
+
+**Aturan.**
+
+- **Tidak ada rute "setujui".** Menyetujui berarti mendaftarkan barangnya:
+  tombolnya menuju `items.create?item_proposal_id=…`, dan
+  `ItemController::store()` yang menutup usulannya — di dalam transaksi yang
+  sama, sehingga tidak mungkin ada usulan `Disetujui` tanpa barang.
+- Pengusul mengisi nama bebas, satuan, dan kegunaan yang **wajib**. Kode barang
+  serta batas minimum/maksimum tetap diisi Pengelola Gudang.
+- Penolakan wajib berketerangan. Penolakan tersering adalah "barangnya sudah ada,
+  pakai ATK-014", dan tanpa keterangan itu pengusul akan mengusulkan hal yang
+  sama lagi.
+- Nama barang **tidak** divalidasi keunikannya: pemeriksaan duplikat pekerjaan
+  orang yang mengenal penamaan bakunya, bukan validator yang hanya mencocokkan
+  huruf.
+- Usulan yang sudah diputuskan tidak dapat diputuskan dua kali; penjaganya ada
+  di `create()` maupun `StoreItemRequest`, karena formulirnya bisa dikirim ulang
+  dari tab lama.
+
+**Notifikasi baru.**
+
+| Tipe | Sifat | Penerima |
+|---|---|---|
+| `UsulanBarangMenungguKeputusan` | keadaan | Pengelola Gudang dan Admin |
+| `UsulanBarangDisetujui` | peristiwa | pengusul |
+| `UsulanBarangDitolak` | peristiwa | pengusul, memuat keterangan penolakan |
+
+**Konsekuensi yang perlu diingat.** Barang hasil usulan lahir berstok nol,
+sehingga `StokHabis` langsung berlaku dan draf usulan otomatis menyedotnya.
+Bukan kerusakan — stoknya memang habis — dan keduanya melepas sendiri begitu
+barangnya diterima gudang.
+
+**Batas kerja.** Tabel `item_proposals` sengaja netral peran supaya sub sistem
+permintaan barang dapat memakainya kelak tanpa perubahan skema, tetapi yang
+dibangun sekarang hanya pintu Pengadaan dan layar keputusan Gudang. Tidak ada
+berkas sub sistem permintaan yang disentuh.
+
+---
+
 ## Butir yang masih menunggu lapangan
 
 **Format nomor dokumen resmi BPK** untuk `procurement_receipts.bast_number`
@@ -569,3 +732,11 @@ belum ada jalannya — usulan itu hanya akan ditagih terus oleh
 yang mengonfirmasinya, dan kali ini catatan itu ditulis dengan kesadaran bahwa
 catatan serupa untuk `Dibatalkan` ternyata menyembunyikan jalan buntu selama
 satu tahap penuh.
+
+**Arti "barang kosong" pada permintaan Kasubbag Umum dan TI** perlu dipastikan
+di kunjungan berikutnya, karena sebenarnya dua hal yang mungkin tertukar:
+barang yang **ada di katalog tetapi stoknya nol** — sudah didukung, bahkan sudah
+otomatis menjadi draf usulan — versus barang yang **tidak ada di katalog sama
+sekali**, yang dijawab [ADR 0032](../keputusan/0032-usulan-barang-baru.md). Bila
+yang dimaksud yang pertama, sisanya hanya soal apakah sub sistem permintaan
+mengizinkan permintaan atas barang berstok nol, dan itu wilayah Alma.

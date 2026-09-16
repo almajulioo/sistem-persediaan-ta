@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Pengadaan;
 
+use App\Enums\AlasanPengadaan;
 use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
@@ -24,7 +25,13 @@ use Illuminate\Validation\Rule;
  *
  * `procurement_request_id` sengaja tidak ada di sini: memindahkan realisasi ke
  * usulan lain akan menabrak indeks unik dan menghapus jejak asal-usulnya.
- * Lihat ADR 0025.
+ * Lihat ADR 0025. Karena itu pula keadaan "tanpa usulan" dibaca dari
+ * realisasinya sendiri, bukan dari kiriman — realisasi langsung selamanya
+ * langsung, dan tetap wajib membawa dasarnya (ADR 0031).
+ *
+ * Pada realisasi langsung, `rincianDisetujui()` kosong sehingga seluruh baris
+ * tergolong baris tambahan: semuanya boleh dihapus, tidak ada yang wajib
+ * bertahan.
  */
 class UpdateProcurementRequest extends FormRequest
 {
@@ -45,12 +52,26 @@ class UpdateProcurementRequest extends FormRequest
      */
     public function rules(): array
     {
+        // Wajib bila realisasi yang sedang diubah memang tidak punya usulan.
+        // Dibaca dari rutenya, bukan dari kiriman, supaya kewajibannya tidak
+        // dapat dihindari dengan tidak mengirim apa pun.
+        $wajibDasar = $this->procurement()?->tanpaUsulan() ?? false;
+
         return [
             'supplier_id' => [
                 'required',
                 Rule::exists('suppliers', 'supplier_id')->where('is_active', true),
             ],
             'procurement_date' => ['required', 'date', 'before_or_equal:today'],
+            'basis_reason' => [
+                $wajibDasar ? 'required' : 'nullable',
+                Rule::enum(AlasanPengadaan::class),
+            ],
+            'basis_note' => [
+                $wajibDasar ? 'required' : 'nullable',
+                'string',
+                'max:500',
+            ],
             'items' => ['required', 'array', 'min:1'],
             'items.*.procurement_detail_id' => ['nullable', 'distinct'],
             'items.*.item_id' => ['nullable', 'distinct', Rule::exists('items', 'item_id')],
@@ -142,12 +163,27 @@ class UpdateProcurementRequest extends FormRequest
     }
 
     /**
+     * Rincian usulan yang disetujui, atau koleksi kosong bila realisasinya
+     * langsung.
+     *
+     * Guard-nya eksplisit dan bukan sekadar kehati-hatian: tanpa itu kueri
+     * berjalan dengan nilai null, yang oleh Laravel diubah menjadi
+     * `where ... is null`. Kebetulan hasilnya kosong karena
+     * `procurement_request_details.procurement_request_id` NOT NULL, tetapi
+     * bersandar pada kebetulan semacam itu rapuh.
+     *
      * @return Collection<string, ProcurementRequestDetail>
      */
     private function rincianDisetujui(): Collection
     {
+        $usulanId = $this->procurement()?->procurement_request_id;
+
+        if ($usulanId === null) {
+            return $this->rincianDisetujui ??= new Collection;
+        }
+
         return $this->rincianDisetujui ??= ProcurementRequestDetail::query()
-            ->where('procurement_request_id', $this->procurement()?->procurement_request_id)
+            ->where('procurement_request_id', $usulanId)
             ->where('amount_granted', '>', 0)
             ->get()
             // Dikunci item_id, bukan primary key: `procurement_details` tidak
@@ -165,6 +201,8 @@ class UpdateProcurementRequest extends FormRequest
         return [
             'supplier_id' => 'penyedia',
             'procurement_date' => 'tanggal realisasi',
+            'basis_reason' => 'dasar pengadaan',
+            'basis_note' => 'keterangan dasar pengadaan',
             'items' => 'daftar barang',
             'items.*.amount' => 'jumlah pesan',
             'items.*.unit_price' => 'harga satuan',
@@ -177,6 +215,8 @@ class UpdateProcurementRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'basis_reason.required' => 'Pilih dasar pengadaan. Realisasi tanpa usulan wajib menyebutkan dasarnya.',
+            'basis_note.required' => 'Jelaskan dasar pengadaannya. Keterangan ini yang dinilai Kasubbag Umum dan TI.',
             'items.required' => 'Daftar barang tidak boleh kosong.',
             'items.*.amount.min' => 'Jumlah pesan minimal 1.',
         ];

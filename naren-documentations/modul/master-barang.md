@@ -20,6 +20,9 @@ Seluruhnya di bawah `middleware('can:kelola-gudang')`, sehingga Pengelola Gudang
 | DELETE | `/barang/{item}` | `items.destroy` | Hapus |
 | GET | `/barang/{item}/kartu-persediaan` | `items.kartu-persediaan` | Cetak PDF kartu persediaan |
 
+Rute usulan barang baru tidak ada di tabel ini karena gate-nya berbeda-beda —
+lihat [modul Pengadaan](pengadaan.md#usulan-barang-baru).
+
 ## Aturan bisnis
 
 - **Stok tidak dapat diubah lewat formulir.** `stock_current` dikeluarkan dari
@@ -31,6 +34,10 @@ Seluruhnya di bawah `middleware('can:kelola-gudang')`, sehingga Pengelola Gudang
 - Barang yang diarsipkan tidak muncul pada pilihan transaksi baru.
 - `stock_max = 0` berarti **tanpa batas atas** — barang tidak akan pernah
   berstatus Berlebih.
+- **Hanya Pengelola Gudang yang mendaftarkan barang.** Peran lain yang
+  membutuhkan barang belum terdaftar mengusulkannya lewat Usulan Barang Baru
+  ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)); yang paling bernilai
+  dari langkah ini bukan pengisian formulirnya, melainkan pemeriksaan duplikat.
 
 ## Status stok
 
@@ -63,17 +70,47 @@ Daftar tetap lewat enum untuk mencegah data kotor seperti "Buah" / "buah" / "bh"
 yang mengacaukan rekap: Buah, Rim, Box, Pak, Dus, Lusin, Unit, Set, Botol,
 Kilogram, Liter, Lembar.
 
+## Usulan barang baru: pintu depan katalog
+
+Ditambahkan 16 September 2026. Rincian keputusan:
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md); rute, notifikasi, dan
+aturan lengkapnya di [modul Pengadaan](pengadaan.md#usulan-barang-baru).
+
+Yang perlu diketahui dari sisi master barang:
+
+- `items.create` menerima `?item_proposal_id=` dan **mengisi** `item_name` serta
+  `unit` dari usulannya. Kode barang dan batas minimum/maksimum tetap diisi
+  Pengelola Gudang — hanya dia yang mengenal penamaan bakunya.
+- `items.store` menutup usulannya **di dalam transaksi yang sama** dengan
+  pembuatan barang: mengisi `item_proposals.item_id`, `status = Disetujui`,
+  `decided_by`, dan `decided_at`. Tidak ada jalur pembuatan barang kedua, dan
+  tidak mungkin ada usulan `Disetujui` tanpa barang.
+- Usulan yang sudah diputuskan ditolak di dua tempat — `create()` dan
+  `StoreItemRequest::withValidator()` — karena formulirnya bisa dikirim ulang
+  dari tab yang sudah lama terbuka.
+- Barang hasil usulan lahir **berstok nol**, sehingga `StokHabis` langsung
+  berlaku dan draf usulan otomatis menyedotnya. Bukan kerusakan; keduanya
+  melepas sendiri begitu barangnya diterima gudang.
+- `Item::RESTRICTED_RELATIONS` bertambah `itemProposals`, sehingga barang yang
+  pernah lahir dari usulan ikut terlindung aturan arsip-alih-alih-hapus
+  ([ADR 0003](../keputusan/0003-arsip-alih-alih-hapus.md)).
+
 ## Berkas terkait
 
 | Berkas | Peran |
 |---|---|
 | [app/Models/Item.php](../../app/Models/Item.php) | Cast, scope, `stockStatus()`, `blockingRelations()` |
+| [app/Models/ItemProposal.php](../../app/Models/ItemProposal.php) | Usulan barang baru (ADR 0032) |
+| [app/Enums/ItemProposalStatus.php](../../app/Enums/ItemProposalStatus.php) | Tiga status usulan barang |
 | [app/Enums/SatuanBarang.php](../../app/Enums/SatuanBarang.php) | Daftar satuan |
 | [app/Enums/StockStatus.php](../../app/Enums/StockStatus.php) | Status kecukupan stok |
 | [app/Http/Controllers/Gudang/ItemController.php](../../app/Http/Controllers/Gudang/ItemController.php) | Seluruh aksi |
+| [app/Http/Controllers/Gudang/ItemProposalController.php](../../app/Http/Controllers/Gudang/ItemProposalController.php) | Usulan barang baru: ajukan, baca, tolak |
 | [app/Http/Requests/Gudang/](../../app/Http/Requests/Gudang/) | `StoreItemRequest`, `UpdateItemRequest`, `ItemFormRules` |
 | [resources/views/pages/items/](../../resources/views/pages/items/) | `index`, `create`, `edit`, `show`, `_form` |
+| [resources/views/pages/item-proposals/](../../resources/views/pages/item-proposals/) | `index`, `create`, `show` |
 | [database/seeders/ItemSeeder.php](../../database/seeders/ItemSeeder.php) | 15 barang ATK/RTK contoh |
+| [database/seeders/ItemProposalSeeder.php](../../database/seeders/ItemProposalSeeder.php) | 3 usulan barang contoh |
 
 ## Catatan implementasi
 
