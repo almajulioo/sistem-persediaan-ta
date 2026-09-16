@@ -37,6 +37,13 @@ Draf  ──simpan hasil cacah (berkali-kali)──►  Draf
 ikut — opname mencakup barang yang ada saat pencacahan dimulai. Draf dapat
 disimpan sebagian dan dapat dihapus, karena belum menyentuh stok sama sekali.
 
+Sejak 16 September 2026 ([ADR 0034](../keputusan/0034-log-aktivitas-terstruktur.md))
+**tiap penyimpanan hasil cacah menulis satu baris `audit_logs`**, lengkap
+dengan kemajuan pencacahannya ("7 dari 20 barang tercacah") supaya pengisian
+awal dapat dibedakan dari koreksi menjelang posting. Sebelumnya hanya pembuatan
+draf, pemostingan, dan penghapusan yang berjejak — padahal angka hasil cacah
+fisik itulah yang menjadi dasar penyesuaian stok.
+
 **Posting** ditolak bila salah satu tidak terpenuhi:
 
 1. Dokumen masih berstatus draf;

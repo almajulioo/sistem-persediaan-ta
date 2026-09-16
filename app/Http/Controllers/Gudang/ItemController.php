@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Gudang;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ItemProposalStatus;
 use App\Enums\MutationType;
 use App\Enums\SatuanBarang;
@@ -147,9 +149,18 @@ class ItemController extends Controller
             return $item;
         });
 
-        AuditLogger::record($request->user(), $proposal === null
-            ? "Menambah barang: {$item->item_code} - {$item->item_name}"
-            : "Menyetujui usulan barang \"{$proposal->item_name}\" dan mendaftarkannya sebagai {$item->item_code}");
+        // Satu aksi dengan dua makna: mendaftarkan barang baru, atau
+        // menyetujui usulan dengan cara mendaftarkannya (ADR 0032). Modul dan
+        // aksinya ikut bercabang supaya log dapat disaring sesuai maknanya.
+        AuditLogger::record(
+            user: $request->user(),
+            activity: $proposal === null
+                ? "Menambah barang: {$item->item_code} - {$item->item_name}"
+                : "Menyetujui usulan barang \"{$proposal->item_name}\" dan mendaftarkannya sebagai {$item->item_code}",
+            module: $proposal === null ? AuditModule::Barang : AuditModule::UsulanBarang,
+            event: $proposal === null ? AuditEvent::Tambah : AuditEvent::Setuju,
+            subject: $proposal ?? $item,
+        );
 
         // Barang baru bisa langsung lahir dalam keadaan habis atau menipis.
         // Barang hasil usulan memang lahir berstok nol, jadi StokHabis dan draf
@@ -197,7 +208,13 @@ class ItemController extends Controller
         // validated() tidak pernah memuat stock_current, jadi stok aman.
         $item->fill($request->validated())->save();
 
-        AuditLogger::record($request->user(), "Mengubah barang: {$item->item_code} - {$item->item_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengubah barang: {$item->item_code} - {$item->item_name}",
+            module: AuditModule::Barang,
+            event: AuditEvent::Ubah,
+            subject: $item,
+        );
 
         // Ambang batas ikut menentukan status stok, jadi mengubahnya bisa
         // memunculkan maupun menghilangkan peringatan tanpa stok bergerak.
@@ -218,7 +235,13 @@ class ItemController extends Controller
 
         $state = $item->is_active ? 'mengaktifkan' : 'mengarsipkan';
 
-        AuditLogger::record($request->user(), ucfirst($state)." barang: {$item->item_code}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: ucfirst($state)." barang: {$item->item_code}",
+            module: AuditModule::Barang,
+            event: AuditEvent::UbahStatus,
+            subject: $item,
+        );
 
         // Barang yang diarsipkan tidak lagi dilayani; peringatan stoknya ditutup.
         NotificationScanner::periksaBarang($item);
@@ -246,7 +269,12 @@ class ItemController extends Controller
 
         $item->delete();
 
-        AuditLogger::record($request->user(), "Menghapus barang: {$code}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menghapus barang: {$code}",
+            module: AuditModule::Barang,
+            event: AuditEvent::Hapus,
+        );
 
         return redirect()
             ->route('items.index')

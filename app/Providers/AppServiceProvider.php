@@ -3,10 +3,15 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\Item;
+use App\Models\ItemProposal;
 use App\Models\Procurement;
+use App\Models\ProcurementDocument;
+use App\Models\ProcurementRequest;
 // Model permintaan barang bernama Request, bentrok dengan Illuminate\Http\Request.
 use App\Models\Request as PermintaanBarang;
 use App\Models\StockOpname;
+use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Gate;
@@ -47,10 +52,15 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Alias untuk relasi polimorfik `stock_mutations.reference_*`.
+     * Alias untuk relasi polimorfik `stock_mutations.reference_*` dan
+     * `audit_logs.subject_*`.
      *
      * Memakai morphMap (bukan enforceMorphMap) supaya relasi polimorfik yang
      * nanti dibuat pengembang sub sistem permintaan tidak wajib terdaftar di sini.
+     *
+     * Tiga alias pertama dipakai baris `stock_mutations` yang sudah tersimpan:
+     * mengganti namanya akan memutus relasi seluruh buku mutasi. Sisanya
+     * ditambahkan untuk jejak audit (ADR 0034).
      */
     private function registerMorphMap(): void
     {
@@ -58,6 +68,13 @@ class AppServiceProvider extends ServiceProvider
             'pengadaan' => Procurement::class,
             'permintaan' => PermintaanBarang::class,
             'opname' => StockOpname::class,
+
+            'pengguna' => User::class,
+            'barang' => Item::class,
+            'penyedia' => Supplier::class,
+            'usulan_barang' => ItemProposal::class,
+            'usulan_pengadaan' => ProcurementRequest::class,
+            'dokumen_pengadaan' => ProcurementDocument::class,
         ]);
     }
 

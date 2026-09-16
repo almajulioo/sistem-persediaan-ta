@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\StoreSupplierRequest;
@@ -60,7 +62,13 @@ class SupplierController extends Controller
     {
         $supplier = Supplier::create($request->validated());
 
-        AuditLogger::record($request->user(), "Menambah penyedia: {$supplier->supplier_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menambah penyedia: {$supplier->supplier_name}",
+            module: AuditModule::Penyedia,
+            event: AuditEvent::Tambah,
+            subject: $supplier,
+        );
 
         return redirect()
             ->route('suppliers.index')
@@ -94,7 +102,13 @@ class SupplierController extends Controller
     {
         $supplier->fill($request->validated())->save();
 
-        AuditLogger::record($request->user(), "Mengubah penyedia: {$supplier->supplier_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengubah penyedia: {$supplier->supplier_name}",
+            module: AuditModule::Penyedia,
+            event: AuditEvent::Ubah,
+            subject: $supplier,
+        );
 
         return redirect()
             ->route('suppliers.index')
@@ -110,7 +124,13 @@ class SupplierController extends Controller
 
         $state = $supplier->is_active ? 'mengaktifkan' : 'mengarsipkan';
 
-        AuditLogger::record($request->user(), ucfirst($state)." penyedia: {$supplier->supplier_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: ucfirst($state)." penyedia: {$supplier->supplier_name}",
+            module: AuditModule::Penyedia,
+            event: AuditEvent::UbahStatus,
+            subject: $supplier,
+        );
 
         return back()->with('status', "Penyedia {$supplier->supplier_name} berhasil di{$state}.");
     }
@@ -136,7 +156,12 @@ class SupplierController extends Controller
 
         $supplier->delete();
 
-        AuditLogger::record($request->user(), "Menghapus penyedia: {$name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menghapus penyedia: {$name}",
+            module: AuditModule::Penyedia,
+            event: AuditEvent::Hapus,
+        );
 
         return redirect()
             ->route('suppliers.index')

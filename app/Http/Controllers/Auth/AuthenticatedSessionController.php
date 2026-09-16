@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\AuditLogger;
@@ -37,7 +39,12 @@ class AuthenticatedSessionController extends Controller
             'last_login_ip' => $request->ip(),
         ])->save();
 
-        AuditLogger::record($user, 'Masuk ke sistem');
+        AuditLogger::record(
+            user: $user,
+            activity: 'Masuk ke sistem',
+            module: AuditModule::Autentikasi,
+            event: AuditEvent::Masuk,
+        );
 
         return redirect()->intended(route('dashboard'));
     }
@@ -48,7 +55,12 @@ class AuthenticatedSessionController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         if ($user = $request->user()) {
-            AuditLogger::record($user, 'Keluar dari sistem');
+            AuditLogger::record(
+                user: $user,
+                activity: 'Keluar dari sistem',
+                module: AuditModule::Autentikasi,
+                event: AuditEvent::Keluar,
+            );
         }
 
         Auth::guard('web')->logout();

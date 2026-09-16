@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\StoreProcurementDocumentRequest;
 use App\Models\Procurement;
@@ -28,7 +30,7 @@ class ProcurementDocumentController extends Controller
         $file = $request->file('file');
         $jenis = $request->jenis();
 
-        $procurement->documents()->create([
+        $document = $procurement->documents()->create([
             'type' => $jenis,
             'file_path' => DocumentStorage::simpan($file, $procurement),
             'original_name' => $file->getClientOriginalName(),
@@ -39,8 +41,11 @@ class ProcurementDocumentController extends Controller
         ]);
 
         AuditLogger::record(
-            $request->user(),
-            "Mengunggah {$jenis->label()} pada {$procurement->judul()}",
+            user: $request->user(),
+            activity: "Mengunggah {$jenis->label()} pada {$procurement->judul()}",
+            module: AuditModule::DokumenPengadaan,
+            event: AuditEvent::Unggah,
+            subject: $document,
         );
 
         // Berkas BAST yang baru masuk menutup keadaan BastBelumDiunggah tanpa
@@ -50,7 +55,7 @@ class ProcurementDocumentController extends Controller
         return back()->with('status', "{$jenis->label()} berhasil diunggah.");
     }
 
-    public function download(Procurement $procurement, ProcurementDocument $document): StreamedResponse|RedirectResponse
+    public function download(Request $request, Procurement $procurement, ProcurementDocument $document): StreamedResponse|RedirectResponse
     {
         $this->pastikanMilik($procurement, $document);
 
@@ -59,6 +64,19 @@ class ProcurementDocumentController extends Controller
         if (! DocumentStorage::ada($document)) {
             return back()->with('error', "Berkas {$document->original_name} tidak ditemukan di penyimpanan.");
         }
+
+        // Satu satunya aksi baca yang ikut dicatat. Berkas pengadaan adalah
+        // bukti pada disk privat — kontrak dan BAST bertanda tangan — sehingga
+        // siapa yang membacanya sama layaknya ditelusuri dengan siapa yang
+        // mengunggahnya. Dicatat sebelum berkas dikirim, karena unduhan yang
+        // terputus di tengah jalan tetap berarti isinya sudah terbuka.
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengunduh {$document->type->label()} ({$document->original_name}) pada {$procurement->judul()}",
+            module: AuditModule::DokumenPengadaan,
+            event: AuditEvent::Unduh,
+            subject: $document,
+        );
 
         return DocumentStorage::unduh($document);
     }
@@ -91,7 +109,12 @@ class ProcurementDocumentController extends Controller
         DocumentStorage::hapus($document);
         $document->delete();
 
-        AuditLogger::record($user, "Menghapus {$jenis->label()} ({$nama}) pada {$procurement->judul()}");
+        AuditLogger::record(
+            user: $user,
+            activity: "Menghapus {$jenis->label()} ({$nama}) pada {$procurement->judul()}",
+            module: AuditModule::DokumenPengadaan,
+            event: AuditEvent::Hapus,
+        );
 
         // BAST yang dihapus membuat keadaan BastBelumDiunggah berlaku lagi.
         NotificationScanner::periksaRealisasi($procurement->fresh(['supplier', 'receipt']));

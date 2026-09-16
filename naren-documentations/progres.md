@@ -5,6 +5,106 @@ perubahan.
 
 ---
 
+## 16 September 2026 (lanjutan) — Modul Log Aktivitas: jejak audit yang akhirnya dapat dibaca
+
+Permintaan pengguna: layar log aktivitas yang menampilkan seluruh aktivitas
+semua pengguna, khusus Admin, dengan ekspor data — fitur yang dianggapnya
+penting untuk institusi seperti BPK yang menuntut akuntabilitas. Disertai
+pertanyaan terbuka: bagaimana desainnya sebaiknya, apa saja yang masuk log, dan
+seperti apa pemfilterannya.
+
+**Yang ditemukan sebelum membangun.** Separuh infrastrukturnya ternyata sudah
+ada dan sudah jalan sejak lama: tabel `audit_logs`, model `AuditLog`, dan
+`AuditLogger` dengan **34 titik panggil** tersebar di Auth, Admin, Gudang, dan
+Pengadaan. Yang tidak pernah ada adalah layarnya — menu "Log Aktivitas" sudah
+berdiri di sidebar dengan `'path' => '#'`, dan kartu modulnya sudah ada di
+dasbor tanpa kunci `route`. Jejaknya ditulis, tidak pernah dibaca.
+
+**Masalah desain yang sesungguhnya** baru muncul saat layarnya hendak dibuat.
+Kolom `activity` adalah kalimat bebas, enak dibaca tetapi mustahil disaring
+dengan andal: penyaring "modul Pengadaan" akan jadi `LIKE '%pengadaan%'` yang
+ikut menangkap *usulan* pengadaan dan *dokumen* pengadaan — tiga modul berbeda
+dalam satu hasil. Prinsip yang diambil: **kolom terstruktur untuk menyaring,
+kalimat untuk dibaca**, saling melengkapi dan bukan duplikasi. Lihat
+[ADR 0034](keputusan/0034-log-aktivitas-terstruktur.md).
+
+**Keputusan pengguna** (ditanya lewat tiga opsi eksplisit sebelum membangun):
+skema lengkap — `module`, `event`, `actor_role`, `ip_address`, dan pasangan
+`subject_type`/`subject_id`; tiga celah pencatatan ditutup; ekspor **CSV saja**,
+tanpa PDF.
+
+**Dua hal yang ditawarkan lalu ditolak pengguna**, keduanya layak dicatat
+karena penolakannya membentuk hasil akhirnya. *Percobaan masuk gagal* tidak
+jadi dicatat — konsekuensi baiknya nyata: `user_id` tetap `NOT NULL`, sehingga
+migrasinya murni aditif tanpa menyentuh kunci asing `restrictOnDelete` sama
+sekali, `AuditLogger::record()` tetap menuntut `User` sungguhan, dan
+`LoginRequest` tidak perlu diubah sedikit pun. *Ekspor dan cetak laporan* juga
+tidak dicatat, supaya log tidak tenggelam baris bervolume tinggi bernilai
+rendah — tetapi unduhan **berkas pengadaan** tetap dicatat, karena itu berkas
+bukti pada disk privat, bukan laporan yang isinya sudah terlihat di layar.
+
+**Yang dikerjakan.** Enam kolom aditif pada `audit_logs`, tiga indeks, dan
+`activity` dilebarkan ke 500 karakter karena kalimatnya kini dapat memuat nama
+berkas unggahan. Dua enum baru (`AuditModule` 12 nilai, `AuditEvent` 14 nilai).
+Tanda tangan `AuditLogger::record()` berubah dan **seluruh 34 titik panggil
+dikonversi ke named arguments** menyamai `StockLedger::record()`; `module` dan
+`event` dibuat wajib tanpa nilai bawaan, karena nilai bawaan justru menjamin
+terjadinya pembusukan data diam-diam. Tiga titik panggil baru menutup celah
+yang ada: pengisian hasil cacah opname (angka yang jadi dasar penyesuaian stok,
+selama ini tidak berjejak sama sekali), perubahan draf usulan, dan unduhan
+berkas pengadaan. Morph map ditambah enam alias. Layar `/log-aktivitas` khusus
+Admin dengan tujuh penyaring, empat kartu rekap, dan ekspor CSV — tanpa satu
+pun rute tulis, karena baris audit bersifat append-only.
+
+**Butir rancangan yang paling mudah dianggap mubazir**, dan justru paling
+penting: `actor_role` disimpan sebagai **cuplikan**, bukan dibaca dari relasi
+`user`. Relasi memberi peran seseorang *sekarang*, sedangkan jejak audit harus
+menyatakan kapasitas apa yang ia pakai *waktu itu*. Begitu Pengelola Gudang
+dipromosikan jadi Admin, seluruh riwayat lamanya akan ikut terbaca sebagai
+tindakan Admin — pemalsuan riwayat yang terjadi tanpa seorang pun menyentuh
+satu baris. Ada uji khusus untuk ini.
+
+**Kesalahan yang ditemukan dan dikoreksi di tengah jalan.**
+`app()->runningInConsole()` ternyata **juga bernilai true** saat rangkaian uji
+dijalankan lewat `php artisan test`, padahal uji fitur mensimulasikan
+permintaan HTTP sungguhan. Pengisian `ip_address` yang semula hanya memakai
+pengecekan itu menghasilkan null di seluruh lingkungan uji, sehingga
+perilakunya tidak dapat diuji sama sekali — ketahuan justru karena ujinya
+gagal. Diperbaiki dengan ikut mengecualikan `runningUnitTests()`.
+
+**Injeksi rumus CSV** ditangani untuk pertama kalinya di proyek ini. Sebagian
+kalimat log memuat nama berkas unggahan — satu-satunya teks di sistem ini yang
+asalnya dari luar dan memang tidak dipercaya, alasan yang sama yang membuat
+`DocumentStorage` menyimpannya dengan nama UUID (ADR 0022). Nama seperti
+`=HYPERLINK("http://...")` akan dijalankan Excel begitu Admin membuka hasil
+ekspornya; sel yang diawali `=`, `+`, `-`, `@`, tab, atau CR kini dibubuhi
+kutip tunggal lebih dulu.
+
+**`AuditLogSeeder` ternyata diperlukan.** Seeder lain menulis model secara
+langsung tanpa melewati controller, sehingga tidak satu pun menghasilkan baris
+`audit_logs` — tanpa seeder ini layarnya kosong sesudah `migrate:fresh --seed`
+dan tidak satu penyaring pun dapat diperagakan saat sidang.
+
+**Masih menunggu.** `audit_logs` tabel bersama, dan **Alma perlu dikabari**
+bahwa skemanya bertambah enam kolom. Perubahannya aditif dan nullable serta
+sub sistem Permintaan belum pernah menulis satu baris pun ke tabel ini, jadi
+risiko merusaknya nihil — tetapi aturannya tetap berlaku.
+`AuditModule::Permintaan` sudah disediakan untuk dipakainya. Bahwa seluruh alur
+`RequestController` sampai sekarang tidak meninggalkan jejak audit apa pun
+adalah wilayah keputusannya, bukan keputusan yang dibuat di sini.
+
+**Verifikasi.** `php artisan migrate` bersih di MySQL, diperiksa langsung:
+`user_id` tetap `NOT NULL`, FK `ON DELETE RESTRICT` utuh, enam kolom baru dan
+tiga indeks terpasang. `migrate:fresh --seed` menghasilkan 267 baris log contoh
+menyebar di sepuluh modul. `php artisan test` **436 lolos** (410 lama tetap
+lolos, 26 baru). `npm run build` bersih. Pint bersih pada 26 dari 27 berkas
+yang disentuh — `app/Helpers/MenuHelper.php` sudah gagal Pint sebelum sesi ini
+dimulai (diperiksa terhadap versi di HEAD) dan sengaja tidak dirapikan, karena
+perubahan di berkas itu hanya satu string dan merapikannya akan jadi penyapuan
+berkas yang tidak berkaitan.
+
+---
+
 ## 16 September 2026 (lanjutan) — Merge dengan Alma: `item_proposals` jadi tabel bersama
 
 `git pull` dari repositori Alma ternyata bercabang dari commit yang sama dengan

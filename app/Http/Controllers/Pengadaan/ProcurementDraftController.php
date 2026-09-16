@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Http\Controllers\Controller;
@@ -83,6 +85,19 @@ class ProcurementDraftController extends Controller
             return $draft;
         });
 
+        // Draf yang dikosongkan sampai habis ikut terhapus di dalam transaksi
+        // di atas, jadi keduanya dicatat sesuai apa yang sungguh terjadi
+        // ketimbang sama sama disebut "mengubah".
+        AuditLogger::record(
+            user: $request->user(),
+            activity: $draft !== null
+                ? "Mengubah draf usulan pengadaan: {$draft->judul()}"
+                : 'Mengosongkan draf usulan pengadaan hingga terbuang',
+            module: AuditModule::UsulanPengadaan,
+            event: $draft !== null ? AuditEvent::Ubah : AuditEvent::Hapus,
+            subject: $draft,
+        );
+
         ProcurementDraftScanner::sinkronkanNotifikasi();
 
         return redirect()
@@ -109,7 +124,13 @@ class ProcurementDraftController extends Controller
             ])->save();
         });
 
-        AuditLogger::record($request->user(), "Mengajukan usulan pengadaan: {$draft->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengajukan usulan pengadaan: {$draft->judul()}",
+            module: AuditModule::UsulanPengadaan,
+            event: AuditEvent::Ajukan,
+            subject: $draft,
+        );
         NotificationScanner::periksaUsulan($draft);
         ProcurementDraftScanner::sinkronkanNotifikasi();
 
@@ -131,7 +152,12 @@ class ProcurementDraftController extends Controller
         $judul = $draft->judul();
         $draft->delete();
 
-        AuditLogger::record($request->user(), "Membuang draf usulan pengadaan: {$judul}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Membuang draf usulan pengadaan: {$judul}",
+            module: AuditModule::UsulanPengadaan,
+            event: AuditEvent::Hapus,
+        );
         ProcurementDraftScanner::sinkronkanNotifikasi();
 
         return redirect()

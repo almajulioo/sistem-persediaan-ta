@@ -20,6 +20,8 @@ class DatabaseSeeder extends Seeder
             ProcurementRequestSeeder::class,
             ProcurementSeeder::class,
             ItemProposalSeeder::class,
+            // Paling akhir: barisnya menunjuk dokumen yang dibuat seeder di atas.
+            AuditLogSeeder::class,
         ]);
     }
 }

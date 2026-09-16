@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Http\Controllers\Controller;
@@ -91,7 +93,13 @@ class ProcurementRequestController extends Controller
             return $procurementRequest;
         });
 
-        AuditLogger::record($request->user(), "Mengajukan usulan pengadaan: {$procurementRequest->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengajukan usulan pengadaan: {$procurementRequest->judul()}",
+            module: AuditModule::UsulanPengadaan,
+            event: AuditEvent::Ajukan,
+            subject: $procurementRequest,
+        );
         NotificationScanner::periksaUsulan($procurementRequest);
 
         return redirect()
@@ -127,7 +135,13 @@ class ProcurementRequestController extends Controller
             $procurementRequest->forceFill(['status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi])->save();
         });
 
-        AuditLogger::record($request->user(), "Menyetujui usulan pengadaan: {$procurementRequest->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menyetujui usulan pengadaan: {$procurementRequest->judul()}",
+            module: AuditModule::UsulanPengadaan,
+            event: AuditEvent::Setuju,
+            subject: $procurementRequest,
+        );
         NotificationScanner::catatUsulanDiputuskan($procurementRequest->fresh(['user', 'details']), $request->user());
 
         return redirect()
@@ -149,7 +163,13 @@ class ProcurementRequestController extends Controller
             $procurementRequest->forceFill(['status' => ProcurementRequestStatus::Ditolak])->save();
         });
 
-        AuditLogger::record($request->user(), "Menolak usulan pengadaan: {$procurementRequest->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menolak usulan pengadaan: {$procurementRequest->judul()}",
+            module: AuditModule::UsulanPengadaan,
+            event: AuditEvent::Tolak,
+            subject: $procurementRequest,
+        );
         NotificationScanner::catatUsulanDiputuskan($procurementRequest->fresh(['user', 'details']), $request->user());
 
         return redirect()

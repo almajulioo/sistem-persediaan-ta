@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Request;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ItemProposalStatus;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
@@ -57,7 +59,13 @@ class ItemProposalController extends Controller
             'status' => ItemProposalStatus::Diajukan,
         ]);
 
-        AuditLogger::record($request->user(), "Mengusulkan barang baru: {$proposal->item_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengusulkan barang baru: {$proposal->item_name}",
+            module: AuditModule::UsulanBarang,
+            event: AuditEvent::Ajukan,
+            subject: $proposal,
+        );
         NotificationScanner::periksaUsulanBarang($proposal->fresh('proposedBy'));
 
         return redirect()

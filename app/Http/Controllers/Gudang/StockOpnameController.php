@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Gudang;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\OpnameStatus;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\OpnameTidakSiapException;
@@ -92,7 +94,13 @@ class StockOpnameController extends Controller
             return $opname;
         });
 
-        AuditLogger::record($request->user(), "Membuat draf {$opname->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Membuat draf {$opname->judul()}",
+            module: AuditModule::Opname,
+            event: AuditEvent::Tambah,
+            subject: $opname,
+        );
 
         return redirect()
             ->route('opname.edit', $opname)
@@ -152,6 +160,24 @@ class StockOpnameController extends Controller
         });
 
         $sisa = $opname->details()->whereNull('stock_real')->count();
+        $total = $opname->details()->count();
+
+        // Angka hasil cacah fisik adalah dasar penyesuaian stok nanti, jadi
+        // pengisiannya ikut ditelusuri — bukan hanya pembuatan dan pemostingan
+        // drafnya. Kemajuan pencacahan disebut supaya pembaca log dapat
+        // membedakan pengisian awal dari koreksi menjelang posting.
+        AuditLogger::record(
+            user: $request->user(),
+            activity: sprintf(
+                'Mengubah hasil cacah %s (%d dari %d barang tercacah)',
+                $opname->judul(),
+                $total - $sisa,
+                $total,
+            ),
+            module: AuditModule::Opname,
+            event: AuditEvent::Ubah,
+            subject: $opname,
+        );
 
         return redirect()
             ->route('opname.edit', $opname)
@@ -191,7 +217,12 @@ class StockOpnameController extends Controller
         $judul = $opname->judul();
         $opname->delete();
 
-        AuditLogger::record($request->user(), "Menghapus draf {$judul}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menghapus draf {$judul}",
+            module: AuditModule::Opname,
+            event: AuditEvent::Hapus,
+        );
 
         return redirect()
             ->route('opname.index')

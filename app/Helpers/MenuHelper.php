@@ -109,7 +109,7 @@ class MenuHelper
             [
                 'icon' => 'task',
                 'name' => 'Log Aktivitas',
-                'path' => '#',
+                'path' => '/log-aktivitas',
                 'roles' => [UserRole::Admin],
             ],
             [

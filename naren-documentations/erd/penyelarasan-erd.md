@@ -22,12 +22,25 @@ kebenarannya adalah migrasi yang benar-benar berjalan di
 | `users` | Autentikasi dan peran, dipakai kedua sub sistem |
 | `items` | Master barang; dirujuk `procurement_details`/`procurement_request_details` (Naren) — Alma belum punya tabel rincian barangnya sendiri, lihat catatan di bawah |
 | `stock_mutations` | Buku besar stok; dibangun Naren, ditulis Alma lewat `StockLedger` |
-| `audit_logs` | Jejak aktivitas, dipakai kedua sub sistem |
+| `audit_logs` | Jejak aktivitas. Ditulis Naren; sub sistem Permintaan belum pernah menulis satu baris pun ke sini (lihat catatan di bawah) |
 | `item_proposals` | Usulan barang baru — pintu depan katalog. Dibangun Naren (skema, keputusan, `items.store()`), ditulis juga oleh sub sistem Permintaan lewat pintunya sendiri (lihat catatan di bawah) |
 
 Perubahan pada kelima tabel ini **hanya lewat kesepakatan**. Migrasi dari dua
 orang pada tabel yang sama rawan bentrok saat merge — persis yang terjadi pada
 `item_proposals` sendiri, lihat [ADR 0033](../keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md).
+
+`audit_logs` bertambah enam kolom pada 16 September 2026
+([ADR 0034](../keputusan/0034-log-aktivitas-terstruktur.md)): `module`,
+`event`, `actor_role`, `ip_address`, serta pasangan `subject_type`/`subject_id`.
+Seluruhnya **aditif dan nullable**, dan `user_id` tidak disentuh sama sekali —
+tetap `NOT NULL` dengan kunci asing `restrictOnDelete`-nya utuh. Karena sub
+sistem Permintaan sampai saat ini belum pernah memanggil `AuditLogger` sekali
+pun, perubahan ini tidak mungkin merusak kodenya. **Alma tetap perlu
+dikabari**, dan `AuditModule::Permintaan` sudah disediakan untuk dipakai
+sub sistemnya kelak. Bahwa seluruh alur `RequestController` — mengajukan,
+mengubah, menyetujui, menolak permintaan — sampai sekarang tidak meninggalkan
+jejak audit apa pun adalah wilayah keputusannya, bukan keputusan yang dibuat
+dari sisi ini.
 
 `item_proposals` (sejak 16 September 2026,
 [ADR 0032](../keputusan/0032-usulan-barang-baru.md)) dirancang **sengaja netral

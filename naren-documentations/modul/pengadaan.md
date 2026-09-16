@@ -377,8 +377,14 @@ path sendiri.
 
 - Unggahan: `mimes:pdf,jpg,jpeg,png`, maksimal 5 MB, jenis divalidasi dengan
   `Rule::enum(ProcurementDocumentType::class)`.
-- `uploaded_by` diisi dari sesi, tidak pernah dari klien; tiap unggahan dan
-  tiap penghapusan menulis satu baris `audit_logs`.
+- `uploaded_by` diisi dari sesi, tidak pernah dari klien; tiap unggahan,
+  **tiap unduhan**, dan tiap penghapusan menulis satu baris `audit_logs`.
+  Unduhan ikut dicatat sejak 16 September 2026
+  ([ADR 0034](../keputusan/0034-log-aktivitas-terstruktur.md)): ini berkas
+  bukti pada disk privat — kontrak dan BAST bertanda tangan — sehingga siapa
+  yang membacanya sama layaknya ditelusuri dengan siapa yang mengunggahnya.
+  Dicatat sebelum berkasnya dikirim, karena unduhan yang terputus di tengah
+  jalan tetap berarti isinya sudah terbuka.
 - Nama berkas di disk diacak; nama asli disimpan di `original_name` dan
   dikembalikan utuh saat diunduh.
 - Berkas yang tidak menempel pada pengadaan di URL dijawab **404**, bukan 403 —

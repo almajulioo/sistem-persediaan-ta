@@ -50,6 +50,7 @@
             'name' => 'Log Aktivitas',
             'description' => 'Jejak audit seluruh aktivitas pengguna di dalam sistem.',
             'roles' => [UserRole::Admin],
+            'route' => 'activity-logs.index',
         ],
     ];
 

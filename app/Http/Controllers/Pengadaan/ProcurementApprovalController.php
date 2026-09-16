@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\ApproveProcurementRealizationRequest;
@@ -41,7 +43,13 @@ class ProcurementApprovalController extends Controller
             'review_note' => $request->input('review_note'),
         ])->save();
 
-        AuditLogger::record($request->user(), "Menyetujui realisasi pengadaan: {$procurement->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menyetujui realisasi pengadaan: {$procurement->judul()}",
+            module: AuditModule::Pengadaan,
+            event: AuditEvent::Setuju,
+            subject: $procurement,
+        );
         NotificationScanner::catatRealisasiDiputuskan(
             $procurement->fresh(['user', 'supplier', 'receipt']),
             $request->user(),
@@ -65,7 +73,13 @@ class ProcurementApprovalController extends Controller
             'review_note' => $request->validated()['review_note'],
         ])->save();
 
-        AuditLogger::record($request->user(), "Menolak realisasi pengadaan: {$procurement->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menolak realisasi pengadaan: {$procurement->judul()}",
+            module: AuditModule::Pengadaan,
+            event: AuditEvent::Tolak,
+            subject: $procurement,
+        );
         NotificationScanner::catatRealisasiDiputuskan(
             $procurement->fresh(['user', 'supplier', 'receipt']),
             $request->user(),

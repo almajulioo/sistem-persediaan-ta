@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
@@ -68,7 +70,13 @@ class UserController extends Controller
     {
         $user = User::create($request->validated());
 
-        AuditLogger::record($request->user(), "Menambah akun pengguna: {$user->username}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menambah akun pengguna: {$user->username}",
+            module: AuditModule::Pengguna,
+            event: AuditEvent::Tambah,
+            subject: $user,
+        );
 
         return redirect()
             ->route('users.index')
@@ -100,7 +108,13 @@ class UserController extends Controller
             $activity .= ' (termasuk kata sandi)';
         }
 
-        AuditLogger::record($request->user(), $activity);
+        AuditLogger::record(
+            user: $request->user(),
+            activity: $activity,
+            module: AuditModule::Pengguna,
+            event: AuditEvent::Ubah,
+            subject: $user,
+        );
 
         return redirect()
             ->route('users.index')
@@ -120,7 +134,13 @@ class UserController extends Controller
 
         $state = $user->is_active ? 'mengaktifkan' : 'menonaktifkan';
 
-        AuditLogger::record($request->user(), ucfirst($state)." akun pengguna: {$user->username}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: ucfirst($state)." akun pengguna: {$user->username}",
+            module: AuditModule::Pengguna,
+            event: AuditEvent::UbahStatus,
+            subject: $user,
+        );
 
         return back()->with('status', "Akun {$user->username} berhasil di{$state}.");
     }
@@ -144,7 +164,14 @@ class UserController extends Controller
         $username = $user->username;
         $user->delete();
 
-        AuditLogger::record($request->user(), "Menghapus akun pengguna: {$username}");
+        // Tanpa subjek: barisnya sudah tiada, dan menautkannya hanya akan
+        // mengantar pembaca log ke halaman yang tidak ada.
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menghapus akun pengguna: {$username}",
+            module: AuditModule::Pengguna,
+            event: AuditEvent::Hapus,
+        );
 
         return redirect()
             ->route('users.index')

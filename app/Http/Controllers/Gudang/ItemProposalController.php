@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Gudang;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ItemProposalStatus;
 use App\Enums\SatuanBarang;
 use App\Http\Controllers\Controller;
@@ -75,7 +77,13 @@ class ItemProposalController extends Controller
             'status' => ItemProposalStatus::Diajukan,
         ]);
 
-        AuditLogger::record($request->user(), "Mengusulkan barang baru: {$proposal->item_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengusulkan barang baru: {$proposal->item_name}",
+            module: AuditModule::UsulanBarang,
+            event: AuditEvent::Ajukan,
+            subject: $proposal,
+        );
         NotificationScanner::periksaUsulanBarang($proposal->fresh('proposedBy'));
 
         return redirect()
@@ -117,7 +125,13 @@ class ItemProposalController extends Controller
             'decision_note' => $request->input('decision_note'),
         ])->save();
 
-        AuditLogger::record($request->user(), "Menolak usulan barang baru: {$itemProposal->item_name}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menolak usulan barang baru: {$itemProposal->item_name}",
+            module: AuditModule::UsulanBarang,
+            event: AuditEvent::Tolak,
+            subject: $itemProposal,
+        );
         NotificationScanner::catatUsulanBarangDiputuskan($itemProposal->fresh(['proposedBy', 'item']), $request->user());
 
         return redirect()

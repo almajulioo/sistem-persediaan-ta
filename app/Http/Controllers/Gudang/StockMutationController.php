@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Gudang;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Gudang\StoreMutationRequest;
@@ -79,9 +81,16 @@ class StockMutationController extends Controller
             throw ValidationException::withMessages(['amount' => $e->getMessage()]);
         }
 
+        // Subjeknya barang, bukan baris mutasinya: mutasi tidak punya layar
+        // sendiri, dan menautkan baris audit ke baris mutasi tertentu sudah
+        // ditolak sejak ADR 0007. Kartu persediaan barang inilah tujuan yang
+        // benar bagi pembaca log.
         AuditLogger::record(
-            $request->user(),
-            "Mencatat mutasi manual {$type->label()} untuk barang {$item->item_code}",
+            user: $request->user(),
+            activity: "Mencatat mutasi manual {$type->label()} untuk barang {$item->item_code}",
+            module: AuditModule::Mutasi,
+            event: AuditEvent::Tambah,
+            subject: $item,
         );
 
         // Stok baru saja berubah: peringatan stok diselaraskan seketika, dan

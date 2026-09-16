@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\MutationType;
 use App\Enums\ProcurementStatus;
 use App\Exceptions\ProcurementTidakSiapException;
@@ -62,7 +64,13 @@ class ProcurementReceiptPoster
             ]);
         });
 
-        AuditLogger::record($actor, "Mengonfirmasi penerimaan {$procurement->judul()}");
+        AuditLogger::record(
+            user: $actor,
+            activity: "Mengonfirmasi penerimaan {$procurement->judul()}",
+            module: AuditModule::Penerimaan,
+            event: AuditEvent::Terima,
+            subject: $procurement,
+        );
 
         // Di luar transaksi, sejajar dengan AuditLogger dan OpnamePoster:
         // notifikasi tidak boleh ikut tertulis bila konfirmasi batal, dan

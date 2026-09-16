@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Pengadaan;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
@@ -168,9 +170,15 @@ class ProcurementController extends Controller
             return $procurement;
         });
 
-        AuditLogger::record($request->user(), $usulanId === null
-            ? "Membuat realisasi pengadaan langsung: {$procurement->judul()} dengan dasar {$procurement->basis_reason->label()}"
-            : "Membuat realisasi pengadaan: {$procurement->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: $usulanId === null
+                ? "Membuat realisasi pengadaan langsung: {$procurement->judul()} dengan dasar {$procurement->basis_reason->label()}"
+                : "Membuat realisasi pengadaan: {$procurement->judul()}",
+            module: AuditModule::Pengadaan,
+            event: AuditEvent::Tambah,
+            subject: $procurement,
+        );
 
         NotificationScanner::periksaRealisasi($procurement->fresh('supplier'));
 
@@ -297,7 +305,13 @@ class ProcurementController extends Controller
                 ->each(fn (ProcurementDetail $detail) => $detail->delete());
         });
 
-        AuditLogger::record($request->user(), "Mengubah realisasi pengadaan: {$procurement->judul()}");
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Mengubah realisasi pengadaan: {$procurement->judul()}",
+            module: AuditModule::Pengadaan,
+            event: AuditEvent::Ubah,
+            subject: $procurement,
+        );
 
         // Isi notifikasi RealisasiMenungguPenerimaan memuat nama penyedia,
         // sehingga ia basi begitu penyedianya diganti. Pemeriksaan ini sekaligus
@@ -347,8 +361,11 @@ class ProcurementController extends Controller
         ])->save();
 
         AuditLogger::record(
-            $request->user(),
-            "Membatalkan {$procurement->judul()} dengan alasan {$alasan->label()}",
+            user: $request->user(),
+            activity: "Membatalkan {$procurement->judul()} dengan alasan {$alasan->label()}",
+            module: AuditModule::Pengadaan,
+            event: AuditEvent::Batal,
+            subject: $procurement,
         );
 
         // Menutup RealisasiMenungguPenerimaan (syaratnya tidak lagi terpenuhi)

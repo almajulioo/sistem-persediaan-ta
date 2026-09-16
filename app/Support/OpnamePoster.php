@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
 use App\Exceptions\OpnameTidakSiapException;
@@ -50,7 +52,13 @@ class OpnamePoster
             ])->save();
         });
 
-        AuditLogger::record($actor, "Memposting {$opname->judul()}");
+        AuditLogger::record(
+            user: $actor,
+            activity: "Memposting {$opname->judul()}",
+            module: AuditModule::Opname,
+            event: AuditEvent::Posting,
+            subject: $opname,
+        );
 
         // Di luar transaksi, sejajar dengan AuditLogger: notifikasi tidak boleh
         // ikut tertulis bila posting batal, dan kegagalannya tidak boleh

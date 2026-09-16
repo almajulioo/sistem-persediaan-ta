@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
@@ -293,6 +294,15 @@ Route::middleware('auth')->group(function () {
 
         Route::patch('pengguna/{user}/status', [UserController::class, 'toggleStatus'])
             ->name('users.toggle-status');
+
+        // Segmen statis lebih dulu, mengikuti kebiasaan modul lain: rute GET
+        // berpola tetap yang didaftarkan setelah rute berparameter pada awalan
+        // yang sama akan ditelan wildcard-nya.
+        Route::get('log-aktivitas/ekspor/csv', [ActivityLogController::class, 'exportCsv'])
+            ->name('activity-logs.csv');
+
+        Route::get('log-aktivitas', [ActivityLogController::class, 'index'])
+            ->name('activity-logs.index');
     });
 
     /*
