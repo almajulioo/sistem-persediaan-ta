@@ -19,7 +19,11 @@ use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
 use App\Models\RequestDocument;
 use App\Models\User;
+use App\Services\RequestProcurementService;
 use App\Services\RequestWorkflowService;
+use App\Support\AuditLogger;
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
 use Illuminate\Support\Facades\DB;
@@ -395,11 +399,11 @@ class RequestController extends Controller
         ]);
     }
 
-    public function store(StorePermintaanBarangRequest $request)
+    public function store(StorePermintaanBarangRequest $request, RequestProcurementService $requestProcurementService)
     {
         $validatedData = $request->validated();
         
-        $itemRequest = DB::transaction(function () use ($request, $validatedData) {
+        $itemRequest = DB::transaction(function () use ($request, $validatedData, $requestProcurementService) {
             $isEmergency = (bool) ($validatedData['emergency'] ?? false);
 
             $itemRequest = ModelsRequest::create([
@@ -437,14 +441,28 @@ class RequestController extends Controller
                 ]);
             }
 
-            return $itemRequest;
+            $procurementRequest = $requestProcurementService->createForShortage($itemRequest);
+
+            return [$itemRequest, $procurementRequest];
         });
+
+        [$itemRequest, $procurementRequest] = $itemRequest;
 
         if ($itemRequest->type !== 'umum') {
             app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
         }
 
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
+        if ($procurementRequest !== null) {
+            AuditLogger::record(
+                user: $request->user(),
+                activity: "Membuat otomatis usulan pengadaan dari permintaan {$itemRequest->request_number}",
+                module: AuditModule::UsulanPengadaan,
+                event: AuditEvent::Ajukan,
+                subject: $procurementRequest,
+            );
+            NotificationScanner::periksaUsulan($procurementRequest->fresh(['user', 'details']));
+        }
         $itemRequest->item()
             ->with('itemProposal')
             ->get()
