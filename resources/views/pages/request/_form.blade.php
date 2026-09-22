@@ -123,7 +123,7 @@
             </div>
 
             @unless ($isEdit)
-            <div x-show="newItemMode" class="space-y-4 rounded-lg border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
+            <div x-show="newItemMode" class="space-y-4 rounded-lg border  p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
                 <div>
                     <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Nama Barang Baru <span class="text-error-500">*</span></label>
                     <input type="text" x-model="newItemName" class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90" placeholder="Masukkan nama barang">
