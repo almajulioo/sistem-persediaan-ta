@@ -21,6 +21,7 @@ use App\Models\RequestDocument;
 use App\Models\User;
 use App\Services\RequestWorkflowService;
 use App\Support\NotificationScanner;
+use App\Support\RequestDocumentGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -228,7 +229,7 @@ class RequestController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
-        DB::transaction(function () use ($requestIds, $kasubbag): void {
+        $mergedRequest = DB::transaction(function () use ($requestIds, $kasubbag): ModelsRequest {
             $requests = ModelsRequest::whereIn('request_id', $requestIds)
                 ->where('type', 'umum')
                 ->where('status', 'submitted')
@@ -264,7 +265,11 @@ class RequestController extends Controller
             ])->values()->all());
 
             ModelsRequest::whereIn('request_id', $requests->pluck('request_id'))->delete();
+
+            return $mergedRequest;
         });
+
+        app(RequestDocumentGenerator::class)->generateNotaDinas($mergedRequest->fresh(['user', 'item.itemProposal']));
 
         return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil digabung menjadi permintaan darurat.');
     }
@@ -434,6 +439,10 @@ class RequestController extends Controller
 
             return $itemRequest;
         });
+
+        if ($itemRequest->type !== 'umum') {
+            app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
+        }
 
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
         $itemRequest->item()

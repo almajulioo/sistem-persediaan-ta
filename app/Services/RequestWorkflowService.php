@@ -43,8 +43,11 @@ class RequestWorkflowService
             $request->update(['status' => $nextStatus]);
 
             if ($actor->hasRole(UserRole::KepalaUnit)
+                || ($actor->hasRole(UserRole::KasubbagUmumTi)
+                    && $actor->unit === 'Subbagian Umum dan TI'
+                    && $nextStatus === 'approved_by_head')
                 || ($actor->isAdmin() && $nextStatus === 'approved_by_head')) {
-                $this->documentGenerator->generateNotaDinas($request, $actor);
+                $this->documentGenerator->approveNotaDinas($request, $actor);
             } elseif ($nextStatus === 'completed') {
                 $this->documentGenerator->generateBast($request, $actor);
             }
@@ -71,7 +74,8 @@ class RequestWorkflowService
             $actor->hasRole(UserRole::PengelolaGudang) =>
                 in_array($request->status, ['approved_by_head', 'in_issuance'], true),
             $actor->hasRole(UserRole::KasubbagUmumTi) =>
-                in_array($request->status, ['processed_by_staff', 'in_issuance'], true)
+                ($request->status === 'submitted' && $actor->unit === 'Subbagian Umum dan TI')
+                || in_array($request->status, ['processed_by_staff', 'in_issuance'], true)
                 || ($request->type === 'emergency' && $request->status === 'approved_by_head'),
             default => false,
         };
@@ -96,6 +100,12 @@ class RequestWorkflowService
         }
 
         if ($actor->hasRole(UserRole::KepalaUnit)) {
+            return 'approved_by_head';
+        }
+
+        if ($actor->hasRole(UserRole::KasubbagUmumTi)
+            && $actor->unit === 'Subbagian Umum dan TI'
+            && $request->status === 'submitted') {
             return 'approved_by_head';
         }
 

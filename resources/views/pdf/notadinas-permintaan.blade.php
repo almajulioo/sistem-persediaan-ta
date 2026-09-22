@@ -182,10 +182,14 @@
     </div>
 
     <div class="signature-container">
-        <div>Kepala  {{$approvedBy->unit ?? '-' }},</div>
-        <img class="verification-qr" src="{{ $qrCodeDataUri }}" alt="QR verifikasi persetujuan">
-        <div class="signature-name">{{ $approvedBy->fullname ?? '-' }}</div>
-        <div>Disetujui pada {{ $approvedAt?->translatedFormat('j F Y H:i') ?? '-' }}</div>
+        @if ($approvedBy && $qrCodeDataUri)
+            <div>Kepala {{ $approvedBy->unit ?? '-' }},</div>
+            <img class="verification-qr" src="{{ $qrCodeDataUri }}" alt="QR verifikasi persetujuan">
+            <div class="signature-name">{{ $approvedBy->fullname ?? '-' }}</div>
+            <div>Disetujui pada {{ $approvedAt?->translatedFormat('j F Y H:i') ?? '-' }}</div>
+        @else
+            <div class="signature-name">Menunggu persetujuan Kepala Unit</div>
+        @endif
     </div>
 
 </body>

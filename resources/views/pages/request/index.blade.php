@@ -122,7 +122,7 @@
                                         ][$row->status] ?? ucfirst(str_replace('_', ' ', $row->status)) }}
                                     </span>
                                 </td>
-                                <td class="px-5 py-4 flex gap-3 sm:px-6">
+                                <td class="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
                                     <a href="{{ route('request.show', $row) }}"
                                         class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                                         Detail
@@ -138,19 +138,14 @@
                                     @php
                                         $isEmergencyReadyToComplete = $row->type === 'emergency' && $row->status === 'approved_by_head';
                                         $hasItemProposals = $row->item->contains(fn ($detail) => $detail->item_proposal_id !== null);
-                                        $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
+                                        $isKasubbagKepalaUnit = $isKasubbag
+                                            && auth()->user()->unit === 'Subbagian Umum dan TI';
+                                        $canRespond = ($row->status === 'submitted' && ($isKepalaUnit || $isKasubbagKepalaUnit)) ||
                                                     (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
                                                     ($isAdmin && in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
                                                     ($isKasubbag && (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
-                                        $canRespond = $canRespond && ! $hasItemProposals;
+                                        $canRespond = $canRespond && (! $hasItemProposals || ($isAdmin && $row->status === 'submitted'));
                                     @endphp
-
-                                    @if ($hasItemProposals && ($isAdmin || $isPengelolaGudang))
-                                        <a href="{{ route('item-proposals.index') }}"
-                                            class="text-theme-xs text-warning-600 underline decoration-warning-300 underline-offset-2 hover:text-warning-700 dark:text-warning-400 dark:decoration-warning-500/50 dark:hover:text-warning-300">
-                                            Selesaikan usulan barang
-                                        </a>
-                                    @endif
 
                                     @if ($canRespond)
                                         <!-- Tombol Setujui -->
@@ -172,6 +167,13 @@
                                                 </button>
                                             </form>
                                         @endunless
+                                    @endif
+
+                                    @if ($hasItemProposals && ($isAdmin || $isPengelolaGudang))
+                                        <a href="{{ route('item-proposals.index') }}"
+                                            class="text-theme-xs order-last text-warning-600 underline decoration-warning-300 underline-offset-2 hover:text-warning-700 dark:text-warning-400 dark:decoration-warning-500/50 dark:hover:text-warning-300">
+                                            Selesaikan usulan barang
+                                        </a>
                                     @endif
                                 </td>
                             </tr>

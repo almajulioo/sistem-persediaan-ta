@@ -13,11 +13,9 @@ use Illuminate\Support\Str;
 
 class RequestDocumentGenerator
 {
-    public function generateNotaDinas(ModelsRequest $request, User $approver): RequestDocument
+    public function generateNotaDinas(ModelsRequest $request): RequestDocument
     {
         $request->loadMissing(['user', 'item.itemProposal']);
-        $approvedAt = now();
-        $verificationToken = Str::random(64);
 
         $filePath = 'nota-dinas/'.$request->request_id.'.pdf';
         $document = RequestDocument::query()->firstOrNew([
@@ -28,6 +26,30 @@ class RequestDocumentGenerator
             'user_id' => $request->user_id,
             'document_number' => $request->request_number,
             'file_path' => $filePath,
+            'approved_by_user_id' => null,
+            'approved_at' => null,
+            'verification_token_hash' => null,
+        ]);
+        $document->save();
+
+        $this->renderNotaDinas($request, $document, null, null, null);
+
+        return $document;
+    }
+
+    public function approveNotaDinas(ModelsRequest $request, User $approver): RequestDocument
+    {
+        $request->loadMissing(['user', 'item.itemProposal']);
+        $approvedAt = now();
+        $verificationToken = Str::random(64);
+        $document = RequestDocument::query()->firstOrNew([
+            'request_id' => $request->request_id,
+            'document_type' => 'nota_dinas',
+        ]);
+        $document->fill([
+            'user_id' => $request->user_id,
+            'document_number' => $request->request_number,
+            'file_path' => 'nota-dinas/'.$request->request_id.'.pdf',
             'approved_by_user_id' => $approver->user_id,
             'approved_at' => $approvedAt,
             'verification_token_hash' => hash('sha256', $verificationToken),
@@ -45,6 +67,19 @@ class RequestDocumentGenerator
             margin: 10,
         )->getDataUri();
 
+        $this->renderNotaDinas($request, $document, $approver, $approvedAt, $qrCodeDataUri);
+
+        return $document;
+    }
+
+    private function renderNotaDinas(
+        ModelsRequest $request,
+        RequestDocument $document,
+        ?User $approver,
+        ?\Illuminate\Support\Carbon $approvedAt,
+        ?string $qrCodeDataUri,
+    ): void {
+
         $pdf = Pdf::loadView('pdf.notadinas-permintaan', [
             'request' => $request,
             'approvedBy' => $approver,
@@ -52,9 +87,7 @@ class RequestDocumentGenerator
             'qrCodeDataUri' => $qrCodeDataUri,
         ])->setPaper('a4', 'portrait');
 
-        Storage::disk('local')->put($filePath, $pdf->output());
-
-        return $document;
+        Storage::disk('local')->put($document->file_path, $pdf->output());
     }
 
     public function generateBast(ModelsRequest $request, User $issuer): RequestDocument
