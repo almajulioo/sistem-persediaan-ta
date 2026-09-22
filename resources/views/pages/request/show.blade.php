@@ -3,13 +3,16 @@
 @section('content')
     @php
         $isEmergencyReadyToComplete = $requestData->type === 'emergency' && $requestData->status === 'approved_by_head';
+        $hasItemProposals = $requestData->hasItemProposals();
+        $canEditQuantity = $requestData->status === 'approved_by_head'
+            && $requestData->type !== 'emergency'
+            && $isPengelolaGudang
+            && ! $hasItemProposals;
         $canRespond = ($requestData->status === 'submitted' && $isKepalaUnit) ||
                     (in_array($requestData->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
                     ($isAdmin && in_array($requestData->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
                     ($isKasubbag && (in_array($requestData->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
-        $canEditQuantity = $requestData->status === 'approved_by_head'
-            && $requestData->type !== 'emergency'
-            && $isPengelolaGudang;
+        $canRespond = $canRespond && ! $hasItemProposals;
     @endphp
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -46,18 +49,10 @@
         </div>
     </div>
 
-    @php
-        $isEmergencyReadyToComplete = $requestData->type === 'emergency' && $requestData->status === 'approved_by_head';
-        $canRespond = ($requestData->status === 'submitted' && $isKepalaUnit) ||
-                    (in_array($requestData->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
-                    ($isAdmin && in_array($requestData->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
-                    ($isKasubbag && (in_array($requestData->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
-    @endphp
-
-    @if ($canRespond || ($requestData->status === 'approved_by_head' && $requestData->type !== 'emergency' && $isPengelolaGudang))
+    @if ($canRespond || $canEditQuantity)
         <div class="mt-6  p-5 dark:border-gray-800 dark:bg-white/[0.03]">
             <div class="flex flex-wrap items-center justify-end gap-3">
-                @if ($requestData->status === 'approved_by_head' && $requestData->type !== 'emergency' && $isPengelolaGudang)
+                @if ($canEditQuantity)
                     <a href="{{ route('request.edit', $requestData) }}"
                         class="text-theme-sm text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 inline-flex items-center rounded-lg px-4 py-2.5 font-medium ring-1 ring-inset transition">
                         Ubah Kuantitas
@@ -133,8 +128,24 @@
                 <tbody>
                     @forelse ($requestData->item as $detail)
                     <tr class="border-b border-gray-100 last:border-0 dark:border-gray-800">
-                        <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code ?? '-' }}</td>
-                        <td class="px-6 py-4 text-sm font-medium text-gray-800 dark:text-white/90">{{ $detail->item?->item_name ?? '-' }}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code ?? ($detail->itemProposal ? 'Usulan baru' : '-') }}</td>
+                        <td class="px-6 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                            {{ $detail->item?->item_name ?? $detail->itemProposal?->item_name ?? '-' }}
+                            @if ($detail->itemProposal)
+                                <span class="ml-2 rounded-full bg-warning-50 px-2 py-1 text-xs font-medium text-warning-600 dark:bg-warning-500/15 dark:text-warning-400">
+                                    Usulan {{ $detail->itemProposal->status?->label() ?? $detail->itemProposal->status }}
+                                </span>
+                                @if ($detail->itemProposal->isDitolak() && ($isAdmin || $isKasubbag || $isPengelolaGudang))
+                                    <form method="POST" action="{{ route('request.proposal-detail.remove', [$requestData, $detail]) }}" class="mt-2">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-xs font-medium text-error-600 hover:text-error-700 dark:text-error-400">
+                                            Hapus dari permintaan
+                                        </button>
+                                    </form>
+                                @endif
+                            @endif
+                        </td>
                         <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">{{ number_format($detail->quantity_requested, 0, ',', '.') }}</td>
                     </tr>
                     @empty

@@ -2,6 +2,7 @@
     $isEdit = $isEdit ?? false;
     $canCreateEmergency = $canCreateEmergency ?? false;
     $users = $users ?? collect();
+    $satuan = $satuan ?? [];
     $existingItems = $isEdit && isset($request)
         ? $request->item->map(fn ($detail) => [
             'item_id' => $detail->item_id,
@@ -63,8 +64,18 @@
         <!-- Input Form Section -->
         <div class="grid grid-cols-1 gap-5">
             
+            @unless ($isEdit)
+            <div class="flex items-center justify-between">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-400">Sumber Barang</label>
+                <button type="button" @click="newItemMode = !newItemMode; selectedItemCode = ''; selectedItemText = ''"
+                    class="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                    <span x-text="newItemMode ? 'Pilih dari master barang' : 'Barang belum terdaftar'"></span>
+                </button>
+            </div>
+            @endunless
+
             <!-- Custom Searchable Select dengan Debounce -->
-            <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+            <div x-show="!newItemMode" class="relative" x-data="{ open: false }" @click.outside="open = false">
                 <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                     Nama Barang <span class="text-error-500">*</span>
                 </label>
@@ -111,6 +122,28 @@
                 </div>
             </div>
 
+            @unless ($isEdit)
+            <div x-show="newItemMode" class="space-y-4 rounded-lg border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/10">
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Nama Barang Baru <span class="text-error-500">*</span></label>
+                    <input type="text" x-model="newItemName" class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90" placeholder="Masukkan nama barang">
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Satuan <span class="text-error-500">*</span></label>
+                    <select x-model="newItemUnit" class="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
+                        <option value="">Pilih satuan</option>
+                        @foreach ($satuan as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Tujuan Penggunaan <span class="text-error-500">*</span></label>
+                    <textarea x-model="newItemPurpose" rows="2" class="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:border-gray-700 dark:text-white/90" placeholder="Jelaskan kebutuhan barang"></textarea>
+                </div>
+            </div>
+            @endunless
+
             <!-- Input Quantity -->
             <div>
                 <x-form.text-field name="qty_input" label="Jumlah Barang" type="number" min="1"
@@ -145,7 +178,12 @@
                             <div class="flex items-center justify-between bg-white px-4 py-3 dark:bg-gray-900">
                                 <div>
                                     <span class="font-medium text-gray-800 dark:text-white" x-text="item.item_name"></span>
-                                    <input type="hidden" :name="`items[${index}][item_id]`" :value="item.item_id">
+                                    <span x-show="item.source === 'proposal'" class="ml-2 text-xs text-warning-600">Barang baru</span>
+                                    <input type="hidden" :name="`items[${index}][source]`" :value="item.source">
+                                    <input type="hidden" :name="`items[${index}][item_id]`" :value="item.item_id" :disabled="item.source !== 'item'">
+                                    <input type="hidden" :name="`items[${index}][item_name]`" :value="item.item_name" :disabled="item.source !== 'proposal'">
+                                    <input type="hidden" :name="`items[${index}][unit]`" :value="item.unit" :disabled="item.source !== 'proposal'">
+                                    <input type="hidden" :name="`items[${index}][purpose_note]`" :value="item.purpose_note" :disabled="item.source !== 'proposal'">
                                 </div>
                                 <div class="flex items-center gap-4">
                                     <input type="number" min="1" max="999999" :name="`items[${index}][qty]`"
@@ -205,6 +243,10 @@
             selectedItemText: '',
             searchQuery: '',
             inputQty: '',
+            newItemMode: false,
+            newItemName: '',
+            newItemUnit: '',
+            newItemPurpose: '',
             requestedList: @json($existingItems),
 
             init() {
@@ -220,7 +262,7 @@
                         });
                     }
                 });
-                this.requestedList = Array.from(mergedItems.values());
+                this.requestedList = Array.from(mergedItems.values()).map(item => ({ source: 'item', ...item }));
             },
 
             get filteredItems() {
@@ -252,6 +294,29 @@
             },
 
             addItem() {
+                if (this.newItemMode) {
+                    if (!this.newItemName.trim() || !this.newItemUnit || !this.newItemPurpose.trim() || !this.inputQty || this.inputQty <= 0) {
+                        this.$dispatch('show-request-validation-modal', {
+                            message: 'Lengkapi nama barang, satuan, tujuan penggunaan, dan jumlah barang.'
+                        });
+                        return;
+                    }
+
+                    this.requestedList.push({
+                        source: 'proposal',
+                        item_id: `proposal-${Date.now()}`,
+                        item_name: this.newItemName.trim(),
+                        unit: this.newItemUnit,
+                        purpose_note: this.newItemPurpose.trim(),
+                        qty: parseInt(this.inputQty, 10),
+                    });
+                    this.newItemName = '';
+                    this.newItemUnit = '';
+                    this.newItemPurpose = '';
+                    this.inputQty = '';
+                    return;
+                }
+
                 if (!this.selectedItemCode || !this.inputQty || this.inputQty <= 0) {
                     this.$dispatch('show-request-validation-modal', {
                         message: 'Pilih barang dan isi jumlah barang dengan benar!'
@@ -276,6 +341,7 @@
                     this.requestedList[existingIndex].qty = newQty;
                 } else {
                     this.requestedList.push({
+                        source: 'item',
                         item_id: selectedItem.item_id,
                         item_name: selectedItem.item_name,
                         qty: parseInt(this.inputQty)

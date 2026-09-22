@@ -15,7 +15,7 @@ class RequestDocumentGenerator
 {
     public function generateNotaDinas(ModelsRequest $request, User $approver): RequestDocument
     {
-        $request->loadMissing(['user', 'item']);
+        $request->loadMissing(['user', 'item.itemProposal']);
         $approvedAt = now();
         $verificationToken = Str::random(64);
 

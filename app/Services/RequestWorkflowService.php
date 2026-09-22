@@ -25,6 +25,11 @@ class RequestWorkflowService
         }
 
         $request->loadMissing('user');
+
+        if ($request->status !== 'submitted' && $request->hasItemProposals()) {
+            throw new AuthorizationException('Permintaan belum dapat diproses karena masih ada usulan barang yang harus diselesaikan atau dihapus dari permintaan.');
+        }
+
         $this->assertCanRespond($request, $actor, $action);
 
         DB::transaction(function () use ($request, $actor, $action): void {

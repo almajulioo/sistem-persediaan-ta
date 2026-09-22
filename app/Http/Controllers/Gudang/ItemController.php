@@ -146,6 +146,13 @@ class ItemController extends Controller
                 'decided_at' => now(),
             ])->save();
 
+            if ($proposal !== null) {
+                $proposal->requestDetails()->update([
+                    'item_id' => $item->item_id,
+                    'item_proposal_id' => null,
+                ]);
+            }
+
             return $item;
         });
 

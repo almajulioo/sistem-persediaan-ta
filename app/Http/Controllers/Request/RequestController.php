@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Request;
 
 use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
+use App\Enums\SatuanBarang;
+use App\Enums\ItemProposalStatus;
 use App\Http\Requests\Request\StorePermintaanBarangRequest;
 use App\Http\Requests\Request\UpdatePermintaanBarangRequest;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use App\Models\Item;
+use App\Models\ItemProposal;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
 use App\Models\RequestDocument;
@@ -34,7 +37,7 @@ class RequestController extends Controller
         $isKasubbag = $request->user()->hasRole(UserRole::KasubbagUmumTi);
         $isUser = $request->user()->hasRole(UserRole::Pengguna);
 
-        $requests = ModelsRequest::with('user')
+        $requests = ModelsRequest::with(['user', 'item.itemProposal'])
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('request_number', 'like', "%{$keyword}%")
@@ -94,6 +97,7 @@ class RequestController extends Controller
         return view('pages.request.create', [
             'title' => 'Request',
             'items' => $items,
+            'satuan' => SatuanBarang::options(),
             'users' => $users,
             'canCreateEmergency' => $canCreateEmergency,
         ]);
@@ -101,6 +105,12 @@ class RequestController extends Controller
 
     public function edit(ModelsRequest $request)
     {
+        if ($request->hasItemProposals()) {
+            return redirect()
+                ->route('request.show', $request)
+                ->with('error', 'Putuskan seluruh usulan barang terlebih dahulu sebelum mengubah permintaan.');
+        }
+
         $request->load('item');
         $items = Item::where('is_active', true)->get();
         return view('pages.request.edit', [
@@ -221,31 +231,53 @@ class RequestController extends Controller
                 'request_number' => 'REQ-' . time(),
             ]);
 
-            $details = [];
+            // dd($validatedData['items']);
 
             foreach ($validatedData['items'] as $item) {
-                $details[] = [
+                $proposal = ($item['source'] ?? 'item') === 'proposal'
+                    ? ItemProposal::create([
+                        'item_name' => $item['item_name'],
+                        'unit' => $item['unit'],
+                        'purpose_note' => $item['purpose_note'],
+                        'proposed_by' => $request->user()->user_id,
+                        'status' => 'diajukan',
+                    ])
+                    : null;
+
+
+                RequestDetail::query()->insert([
                     'request_id' => $itemRequest->request_id,
-                    'item_id' => $item['item_id'],
+                    'item_id' => $proposal === null ? $item['item_id'] : null,
+                    'item_proposal_id' => $proposal?->item_proposal_id,
                     'quantity_requested' => $item['qty'],
                     'quantity_approved' => 0,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ];
+                ]);
             }
-
-            RequestDetail::insert($details);
 
             return $itemRequest;
         });
 
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
+        $itemRequest->item()
+            ->with('itemProposal')
+            ->get()
+            ->pluck('itemProposal')
+            ->filter()
+            ->each(fn (ItemProposal $proposal) => NotificationScanner::periksaUsulanBarang($proposal->fresh('proposedBy')));
 
         return redirect()->route('request.index')->with('status', 'Permintaan barang berhasil dibuat.');
     }
 
     public function update(UpdatePermintaanBarangRequest $httpRequest, ModelsRequest $request)
     {
+        if ($request->hasItemProposals()) {
+            return redirect()
+                ->route('request.show', $request)
+                ->with('error', 'Putuskan seluruh usulan barang terlebih dahulu sebelum mengubah permintaan.');
+        }
+
         if ($request->status !== 'approved_by_head') {
             return redirect()
                 ->route('request.index')
@@ -275,6 +307,29 @@ class RequestController extends Controller
         return redirect()
             ->route('request.index')
             ->with('status', 'Permintaan barang berhasil diperbarui.');
+    }
+
+    public function removeRejectedProposal(RequestDetail $requestDetail, Request $httpRequest)
+    {
+        $actor = $httpRequest->user();
+        abort_unless(
+            $actor->isAdmin()
+                || $actor->hasRole(UserRole::KasubbagUmumTi, UserRole::PengelolaGudang),
+            403,
+        );
+
+        $request = $requestDetail->request;
+        abort_unless(
+            $requestDetail->item_proposal_id !== null
+                && $requestDetail->itemProposal?->status === ItemProposalStatus::Ditolak,
+            404,
+        );
+
+        $requestDetail->delete();
+
+        return redirect()
+            ->route('request.show', $request)
+            ->with('status', 'Usulan barang yang ditolak berhasil dihapus dari permintaan.');
     }
 
     public function respondByRole(

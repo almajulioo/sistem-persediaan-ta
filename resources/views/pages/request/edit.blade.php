@@ -23,6 +23,7 @@
         @include('pages.request._form', [
             'isEdit' => true,
             'items' => $items,
+            'satuan' => $satuan ?? [],
             'action' => route('request.update', $request),
         ])
     </div>

@@ -137,11 +137,20 @@
 
                                     @php
                                         $isEmergencyReadyToComplete = $row->type === 'emergency' && $row->status === 'approved_by_head';
+                                        $hasItemProposals = $row->item->contains(fn ($detail) => $detail->item_proposal_id !== null);
                                         $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
                                                     (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
                                                     ($isAdmin && in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
                                                     ($isKasubbag && (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
+                                        $canRespond = $canRespond && ! $hasItemProposals;
                                     @endphp
+
+                                    @if ($hasItemProposals && ($isAdmin || $isPengelolaGudang))
+                                        <a href="{{ route('item-proposals.index') }}"
+                                            class="text-theme-xs text-warning-600 underline decoration-warning-300 underline-offset-2 hover:text-warning-700 dark:text-warning-400 dark:decoration-warning-500/50 dark:hover:text-warning-300">
+                                            Selesaikan usulan barang
+                                        </a>
+                                    @endif
 
                                     @if ($canRespond)
                                         <!-- Tombol Setujui -->

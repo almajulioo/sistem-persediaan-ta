@@ -17,6 +17,7 @@ class RequestDetail extends Model
     protected $fillable = [
         'request_id',
         'item_id',
+        'item_proposal_id',
         'quantity_requested',
         'quantity_approved',
     ];
@@ -29,5 +30,10 @@ class RequestDetail extends Model
     public function item()
     {
         return $this->belongsTo(Item::class, 'item_id', 'item_id');
+    }
+
+    public function itemProposal()
+    {
+        return $this->belongsTo(ItemProposal::class, 'item_proposal_id', 'item_proposal_id');
     }
 }

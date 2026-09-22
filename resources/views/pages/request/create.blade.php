@@ -24,6 +24,7 @@
             'isEdit' => false,
             'items' => $items,
             'users' => $users,
+            'satuan' => $satuan,
             'canCreateEmergency' => $canCreateEmergency,
             'action' => route('request.store'),
         ])

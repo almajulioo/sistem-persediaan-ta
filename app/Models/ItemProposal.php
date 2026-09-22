@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Usulan barang baru — pintu depan katalog (ADR 0032).
@@ -107,5 +108,10 @@ class ItemProposal extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class, 'item_id', 'item_id');
+    }
+
+    public function requestDetails(): HasMany
+    {
+        return $this->hasMany(RequestDetail::class, 'item_proposal_id', 'item_proposal_id');
     }
 }

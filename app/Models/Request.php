@@ -84,6 +84,12 @@ class Request extends Model
 
     public function item(): HasMany
     {
-        return $this->hasMany(RequestDetail::class, 'request_id', 'request_id');
+        return $this->hasMany(RequestDetail::class, 'request_id', 'request_id')
+            ->with(['item', 'itemProposal']);
+    }
+
+    public function hasItemProposals(): bool
+    {
+        return $this->item()->whereNotNull('item_proposal_id')->exists();
     }
 }

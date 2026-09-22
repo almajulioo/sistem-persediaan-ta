@@ -25,7 +25,11 @@ class StorePermintaanBarangRequest extends FormRequest
             'emergency' => ['sometimes', 'boolean'],
             'requester_id' => ['nullable', 'uuid', Rule::exists('users', 'user_id')->where('is_active', true)],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.item_id' => ['required', 'string', Rule::exists('items', 'item_id')],
+            'items.*.source' => ['required', Rule::in(['item', 'proposal'])],
+            'items.*.item_id' => ['nullable', 'string', 'required_if:items.*.source,item', Rule::exists('items', 'item_id')],
+            'items.*.item_name' => ['nullable', 'string', 'max:255', 'required_if:items.*.source,proposal'],
+            'items.*.unit' => ['nullable', Rule::enum(\App\Enums\SatuanBarang::class), 'required_if:items.*.source,proposal'],
+            'items.*.purpose_note' => ['nullable', 'string', 'max:500', 'required_if:items.*.source,proposal'],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:999999'],
         ];
     }
@@ -40,22 +44,34 @@ class StorePermintaanBarangRequest extends FormRequest
         if ($this->has('items') && is_array($this->items)) {
             $mergedItems = [];
             foreach ($this->items as $item) {
-                if (isset($item['item_id'])) {
+                if (($item['source'] ?? 'item') === 'item' && isset($item['item_id'])) {
                     $item['item_id'] = trim((string) $item['item_id']);
                 }
                 if (isset($item['qty'])) {
                     $item['qty'] = (int) $item['qty'];
                 }
-                if (isset($item['item_id'], $item['qty'])) {
+                if (($item['source'] ?? 'item') === 'item' && isset($item['item_id'], $item['qty'])) {
                     $mergedItems[$item['item_id']] = ($mergedItems[$item['item_id']] ?? 0) + $item['qty'];
                 }
             }
 
             $formattedItems = array_map(
-                fn ($itemId, $qty) => ['item_id' => $itemId, 'qty' => $qty],
+                fn ($itemId, $qty) => ['source' => 'item', 'item_id' => $itemId, 'qty' => $qty],
                 array_keys($mergedItems),
                 array_values($mergedItems),
             );
+
+            foreach ($this->input('items', []) as $item) {
+                if (($item['source'] ?? 'item') === 'proposal') {
+                    $formattedItems[] = [
+                        'source' => 'proposal',
+                        'item_name' => trim((string) ($item['item_name'] ?? '')),
+                        'unit' => $item['unit'] ?? null,
+                        'purpose_note' => trim((string) ($item['purpose_note'] ?? '')),
+                        'qty' => (int) ($item['qty'] ?? 0),
+                    ];
+                }
+            }
 
             $this->merge([
                 'items' => $formattedItems,

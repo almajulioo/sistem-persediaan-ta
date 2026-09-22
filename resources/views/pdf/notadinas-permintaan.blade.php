@@ -170,8 +170,8 @@
             @foreach($request->item as $index => $detail)
             <tr>
                 <td class="text-center">{{ $index + 1 }}.</td>
-                <td>{{ $detail->item?->item_name ?? '-' }}</td>
-                <td class="text-center">{{ number_format($detail->quantity_requested, 0, ',', '.') }} {{ $detail->item?->unit?->label() ?? '' }}</td>
+                <td>{{ $detail->item?->item_name ?? $detail->itemProposal?->item_name ?? '-' }}</td>
+                <td class="text-center">{{ number_format($detail->quantity_requested, 0, ',', '.') }} {{ $detail->item?->unit?->label() ?? $detail->itemProposal?->unit?->label() ?? '' }}</td>
             </tr>
             @endforeach
         </tbody>
