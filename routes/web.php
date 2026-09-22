@@ -52,6 +52,17 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
 
+    Route::get('/permintaan-umum/create', [RequestController::class, 'createUmum'])->name('request.umum.create');
+    Route::post('/permintaan-umum', [RequestController::class, 'storeUmum'])->name('request.umum.store');
+
+    Route::middleware('role:pengelola_gudang,admin')->group(function () {
+        Route::get('/permintaan-umum', [RequestController::class, 'umumIndex'])->name('request.umum.index');
+        Route::get('/permintaan-umum/{request}/edit', [RequestController::class, 'editUmum'])->name('request.umum.edit');
+        Route::put('/permintaan-umum/{request}', [RequestController::class, 'updateUmum'])->name('request.umum.update');
+        Route::post('/permintaan-umum/{request}/reject', [RequestController::class, 'rejectUmum'])->name('request.umum.reject');
+        Route::post('/permintaan-umum/merge', [RequestController::class, 'mergeUmum'])->name('request.umum.merge');
+    });
+
     // Usulan barang baru dari sub sistem permintaan: pintu depan kedua ke
     // tabel `item_proposals` yang sama dengan milik Pengadaan (ADR 0032).
     // Siapa pun yang login boleh mengusulkan lewat sini — otorisasinya ada

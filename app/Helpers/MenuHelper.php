@@ -30,12 +30,23 @@ class MenuHelper
                 'path' => '#',
                 'subItems' => [
                     ['name' => 'Buat Permintaan', 'path' => '/permintaan/create'],
-                    ['name' => 'Usulkan Barang Baru', 'path' => '/permintaan/usulan-barang/create'],
+                    [
+                        'name' => 'Buat Permintaan Umum',
+                        'path' => '/permintaan-umum/create',
+                        'unit' => 'Subbagian Umum dan TI',
+                        'unitBypassRoles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                    ],
+                    [
+                        'name' => 'Daftar Permintaan Umum',
+                        'path' => '/permintaan-umum',
+                        'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                    ],
                     [
                         'name' => 'Daftar Permintaan', 
                         'path' => '/permintaan'
-                    ],
-                    ['name' => 'Usulan Tambah Barang', 'path' => '/permintaan/usulan-barang'],
+                        ],
+                    // ['name' => 'Usulkan Barang Baru', 'path' => '/permintaan/usulan-barang/create'],
+                    // ['name' => 'Usulan Tambah Barang', 'path' => '/permintaan/usulan-barang'],
                 ],
             ],
             [
@@ -190,6 +201,12 @@ class MenuHelper
             function (array $item) use ($user): ?array {
                 if (isset($item['roles'])
                     && ($user === null || ! $user->hasRole(...$item['roles']))) {
+                    return null;
+                }
+
+                if (isset($item['unit'])
+                    && ($user === null || (! $user->hasRole(...($item['unitBypassRoles'] ?? []))
+                        && $user->unit !== $item['unit']))) {
                     return null;
                 }
 

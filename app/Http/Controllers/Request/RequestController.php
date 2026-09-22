@@ -7,7 +7,10 @@ use App\Enums\UserRole;
 use App\Enums\SatuanBarang;
 use App\Enums\ItemProposalStatus;
 use App\Http\Requests\Request\StorePermintaanBarangRequest;
+use App\Http\Requests\Request\StorePermintaanUmumRequest;
 use App\Http\Requests\Request\UpdatePermintaanBarangRequest;
+use App\Http\Requests\Request\UpdatePermintaanUmumRequest;
+use App\Http\Requests\Request\MergePermintaanUmumRequest;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use App\Models\Item;
@@ -20,6 +23,7 @@ use App\Services\RequestWorkflowService;
 use App\Support\NotificationScanner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class RequestController extends Controller
 {
@@ -45,6 +49,7 @@ class RequestController extends Controller
                 });
             })
             ->when($type !== '', fn ($query) => $query->where('type', $type))
+            ->where('type', '!=', 'umum')
             ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('date', '>=', $dateFrom))
             ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo))
@@ -58,14 +63,14 @@ class RequestController extends Controller
             ->withQueryString();
 
         $summary = [
-            'pending' => ModelsRequest::whereIn('status', [
+            'pending' => ModelsRequest::where('type', '!=', 'umum')->whereIn('status', [
                 'submitted', 
                 'approved_by_head', 
                 'processed_by_staff',
                 'in_issuance'
             ])->count(),
-            'bulan_ini' => ModelsRequest::whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])->count(),
-            'selesai_bulan_ini' => ModelsRequest::whereIn('status', ['completed'])
+            'bulan_ini' => ModelsRequest::where('type', '!=', 'umum')->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])->count(),
+            'selesai_bulan_ini' => ModelsRequest::where('type', '!=', 'umum')->whereIn('status', ['completed'])
                 ->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])
                 ->count(),
         ];
@@ -101,6 +106,177 @@ class RequestController extends Controller
             'users' => $users,
             'canCreateEmergency' => $canCreateEmergency,
         ]);
+    }
+
+    public function createUmum(Request $request)
+    {
+        $this->assertCanManageUmum($request->user());
+
+        return view('pages.request.umum.create', [
+            'title' => 'Buat Permintaan Umum',
+            'items' => Item::where('is_active', true)->orderBy('item_name')->get(),
+        ]);
+    }
+
+    public function storeUmum(StorePermintaanUmumRequest $request)
+    {
+        $validatedData = $request->validated();
+        $userId = $request->user()->user_id;
+
+        DB::transaction(function () use ($validatedData, $userId) {
+            $itemRequest = ModelsRequest::create([
+                'user_id' => $userId,
+                'date' => now(),
+                'type' => 'umum',
+                'status' => 'submitted',
+                'request_number' => 'REQ-UMUM-'.now()->format('YmdHis').'-'.Str::upper(Str::random(4)),
+            ]);
+
+            $now = now();
+            RequestDetail::insert(array_map(
+                fn (array $item) => [
+                    'request_id' => $itemRequest->request_id,
+                    'item_id' => $item['item_id'],
+                    'quantity_requested' => $item['qty'],
+                    'quantity_approved' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                $validatedData['items'],
+            ));
+        });
+
+        return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil dibuat.');
+    }
+
+    public function umumIndex(Request $request)
+    {
+        abort_unless($request->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang), 403);
+
+        $requests = ModelsRequest::with(['user', 'item.item'])
+            ->where('type', 'umum')
+            ->latest('date')
+            ->latest('created_at')
+            ->paginate(15);
+
+        return view('pages.request.umum.index', [
+            'title' => 'Permintaan Umum',
+            'requests' => $requests,
+        ]);
+    }
+
+    public function editUmum(ModelsRequest $request)
+    {
+        abort_unless(
+            $request->type === 'umum'
+                && $request->status === 'submitted'
+                && auth()->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang),
+            404,
+        );
+
+        return view('pages.request.umum.create', [
+            'title' => 'Ubah Permintaan Umum',
+            'items' => Item::where('is_active', true)->orderBy('item_name')->get(),
+            'requestData' => $request->load('item.item'),
+            'isEdit' => true,
+        ]);
+    }
+
+    public function updateUmum(UpdatePermintaanUmumRequest $httpRequest, ModelsRequest $request)
+    {
+        $validatedData = $httpRequest->validated();
+
+        DB::transaction(function () use ($validatedData, $request): void {
+            abort_unless($request->fresh()->status === 'submitted', 409);
+
+            $details = collect($validatedData['items'])
+                ->filter(fn (array $item): bool => (int) $item['qty'] > 0)
+                ->map(fn (array $item): array => [
+                    'request_id' => $request->request_id,
+                    'item_id' => $item['item_id'],
+                    'quantity_requested' => $item['qty'],
+                    'quantity_approved' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ])
+                ->values()
+                ->all();
+
+            $request->item()->delete();
+            if ($details !== []) {
+                RequestDetail::insert($details);
+            }
+        });
+
+        return redirect()->route('request.umum.index')->with('status', 'Permintaan umum berhasil diperbarui.');
+    }
+
+    public function rejectUmum(ModelsRequest $request)
+    {
+        abort_unless(auth()->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang), 403);
+        abort_unless($request->type === 'umum' && $request->status === 'submitted', 409);
+
+        $request->update(['status' => 'rejected']);
+
+        return redirect()->route('request.umum.index')->with('status', 'Permintaan umum ditolak.');
+    }
+
+    public function mergeUmum(MergePermintaanUmumRequest $httpRequest)
+    {
+        $requestIds = $httpRequest->validated()['request_ids'];
+        $kasubbag = User::where('role', UserRole::KasubbagUmumTi->value)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        DB::transaction(function () use ($requestIds, $kasubbag): void {
+            $requests = ModelsRequest::whereIn('request_id', $requestIds)
+                ->where('type', 'umum')
+                ->where('status', 'submitted')
+                ->with('item')
+                ->lockForUpdate()
+                ->get();
+
+            abort_unless($requests->count() === count(array_unique($requestIds)), 409);
+
+            $items = $requests->flatMap->item
+                ->filter(fn (RequestDetail $detail): bool => (int) $detail->quantity_requested > 0)
+                ->groupBy('item_id')
+                ->map(fn ($details): int => $details->sum('quantity_requested'));
+
+            abort_unless($items->isNotEmpty(), 422, 'Tidak ada barang yang dapat digabung.');
+
+            $mergedRequest = ModelsRequest::create([
+                'user_id' => $kasubbag->user_id,
+                'date' => now(),
+                'type' => 'emergency',
+                'status' => 'submitted',
+                'request_number' => 'REQ-' . time() . '-' . Str::upper(Str::random(4)),
+            ]);
+
+            $now = now();
+            RequestDetail::insert($items->map(fn (int $quantity, string $itemId): array => [
+                'request_id' => $mergedRequest->request_id,
+                'item_id' => $itemId,
+                'quantity_requested' => $quantity,
+                'quantity_approved' => 0,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->values()->all());
+
+            ModelsRequest::whereIn('request_id', $requests->pluck('request_id'))->delete();
+        });
+
+        return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil digabung menjadi permintaan darurat.');
+    }
+
+    private function assertCanManageUmum(User $user): void
+    {
+        abort_unless(
+            $user->isAdmin()
+                || $user->hasRole(UserRole::PengelolaGudang)
+                || $user->unit === 'Subbagian Umum dan TI',
+            403,
+        );
     }
 
     public function edit(ModelsRequest $request)
