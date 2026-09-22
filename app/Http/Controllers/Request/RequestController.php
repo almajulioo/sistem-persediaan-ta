@@ -110,8 +110,9 @@ class RequestController extends Controller
         ]);
     }
 
-    public function show(ModelsRequest $request)
+    public function show(ModelsRequest $request, Request $httpRequest)
     {
+        $viewer = $httpRequest->user();
         $request->load(['user', 'item']);
         $notaDinas = $request->requestDocuments()
             ->where('document_type', 'nota_dinas')
@@ -127,6 +128,10 @@ class RequestController extends Controller
             'requestData' => $request,
             'hasNotaDinas' => $notaDinas && Storage::disk('local')->exists($notaDinas->file_path),
             'hasBast' => $bast && Storage::disk('local')->exists($bast->file_path),
+            'isKepalaUnit' => $viewer->hasRole(UserRole::KepalaUnit),
+            'isPengelolaGudang' => $viewer->hasRole(UserRole::PengelolaGudang),
+            'isAdmin' => $viewer->isAdmin(),
+            'isKasubbag' => $viewer->hasRole(UserRole::KasubbagUmumTi),
         ]);
     }
 

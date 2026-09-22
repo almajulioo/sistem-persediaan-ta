@@ -37,7 +37,8 @@ class RequestWorkflowService
             $nextStatus = $this->nextStatus($request, $actor);
             $request->update(['status' => $nextStatus]);
 
-            if ($actor->hasRole(UserRole::KepalaUnit)) {
+            if ($actor->hasRole(UserRole::KepalaUnit)
+                || ($actor->isAdmin() && $nextStatus === 'approved_by_head')) {
                 $this->documentGenerator->generateNotaDinas($request, $actor);
             } elseif ($nextStatus === 'completed') {
                 $this->documentGenerator->generateBast($request, $actor);

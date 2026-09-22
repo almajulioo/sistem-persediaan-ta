@@ -1,6 +1,17 @@
 @extends('layouts.app')
 
 @section('content')
+    @php
+        $isEmergencyReadyToComplete = $requestData->type === 'emergency' && $requestData->status === 'approved_by_head';
+        $canRespond = ($requestData->status === 'submitted' && $isKepalaUnit) ||
+                    (in_array($requestData->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
+                    ($isAdmin && in_array($requestData->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
+                    ($isKasubbag && (in_array($requestData->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
+        $canEditQuantity = $requestData->status === 'approved_by_head'
+            && $requestData->type !== 'emergency'
+            && $isPengelolaGudang;
+    @endphp
+
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Detail Permintaan</h2>
@@ -34,6 +45,47 @@
             @endif
         </div>
     </div>
+
+    @php
+        $isEmergencyReadyToComplete = $requestData->type === 'emergency' && $requestData->status === 'approved_by_head';
+        $canRespond = ($requestData->status === 'submitted' && $isKepalaUnit) ||
+                    (in_array($requestData->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
+                    ($isAdmin && in_array($requestData->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
+                    ($isKasubbag && (in_array($requestData->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
+    @endphp
+
+    @if ($canRespond || ($requestData->status === 'approved_by_head' && $requestData->type !== 'emergency' && $isPengelolaGudang))
+        <div class="mt-6  p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                @if ($requestData->status === 'approved_by_head' && $requestData->type !== 'emergency' && $isPengelolaGudang)
+                    <a href="{{ route('request.edit', $requestData) }}"
+                        class="text-theme-sm text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 inline-flex items-center rounded-lg px-4 py-2.5 font-medium ring-1 ring-inset transition">
+                        Ubah Kuantitas
+                    </a>
+                @endif
+
+                @if ($canRespond)
+                    <form action="{{ route('request.respond', ['request' => $requestData, 'action' => 'approve']) }}" method="POST" class="inline">
+                        @csrf
+                        <button type="submit"
+                            class="bg-success-500 hover:bg-success-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                            {{ $isEmergencyReadyToComplete || $requestData->status === 'in_issuance' ? 'Selesaikan' : ($requestData->status === 'processed_by_staff' ? 'Mulai Pengeluaran' : 'Setujui') }}
+                        </button>
+                    </form>
+
+                    @unless ($isEmergencyReadyToComplete)
+                        <form action="{{ route('request.respond', ['request' => $requestData, 'action' => 'reject']) }}" method="POST" class="inline">
+                            @csrf
+                            <button type="submit"
+                                class="text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
+                                Tolak
+                            </button>
+                        </form>
+                    @endunless
+                @endif
+            </div>
+        </div>
+    @endif
 
     <div class="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-white/[0.03]">
         <dl class="grid grid-cols-1 gap-5 sm:grid-cols-2">
