@@ -24,6 +24,7 @@ use App\Services\RequestWorkflowService;
 use App\Support\AuditLogger;
 use App\Enums\AuditEvent;
 use App\Enums\AuditModule;
+use App\Exceptions\InsufficientStockException;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
 use Illuminate\Support\Facades\DB;
@@ -552,6 +553,12 @@ class RequestController extends Controller
             $workflow->respond($request, $user, $action);
         } catch (AuthorizationException $exception) {
             return redirect()->back()->with('error', $exception->getMessage());
+        } catch (InsufficientStockException $exception) {
+            return redirect()->back()->with(
+                'error',
+                "Stok {$exception->item->item_name} tidak cukup untuk diserahkan. "
+                    ."Tersedia {$exception->available}, dibutuhkan {$exception->requested}.",
+            );
         }
 
         if ($action === 'reject') {

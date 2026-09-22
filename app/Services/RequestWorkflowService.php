@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\MutationType;
 use App\Enums\UserRole;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Request as ModelsRequest;
 use App\Models\User;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
+use App\Support\StockLedger;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -18,7 +21,11 @@ class RequestWorkflowService
     ) {
     }
 
-    public function respond(ModelsRequest $request, User $actor, string $action): ModelsRequest
+    public function respond(
+        ModelsRequest $request,
+        User $actor,
+        string $action,
+    ): ModelsRequest
     {
         if (! in_array($action, ['approve', 'reject'], true)) {
             throw new InvalidArgumentException('Aksi tidak valid.');
@@ -40,6 +47,7 @@ class RequestWorkflowService
             }
 
             $nextStatus = $this->nextStatus($request, $actor);
+
             $request->update(['status' => $nextStatus]);
 
             if ($actor->hasRole(UserRole::KepalaUnit)
@@ -49,6 +57,7 @@ class RequestWorkflowService
                 || ($actor->isAdmin() && $nextStatus === 'approved_by_head')) {
                 $this->documentGenerator->approveNotaDinas($request, $actor);
             } elseif ($nextStatus === 'completed') {
+                $this->recordIssuance($request, $actor);
                 $this->documentGenerator->generateBast($request, $actor);
             }
         });
@@ -123,4 +132,34 @@ class RequestWorkflowService
             ? 'in_issuance'
             : 'completed';
     }
+
+    private function recordIssuance(ModelsRequest $request, User $actor): void
+    {
+        $request->loadMissing(['user', 'item.item']);
+
+        foreach ($request->item as $detail) {
+            if ($detail->item === null) {
+                continue;
+            }
+
+            $amount = (int) $detail->quantity_requested;
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $referenceNumber = $request->nd_number ?: $request->request_number;
+
+            StockLedger::record(
+                item: $detail->item,
+                type: MutationType::Keluar,
+                amount: $amount,
+                recordedBy: $actor,
+                reference: $request,
+                referenceNumber: $referenceNumber,
+                notes: "Penyerahan ke ".($request->user?->unit ?? 'unit pemohon')." sesuai {$referenceNumber}",
+            );
+        }
+    }
+
 }
