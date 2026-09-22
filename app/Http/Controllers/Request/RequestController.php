@@ -31,6 +31,7 @@ class RequestController extends Controller
         $isKepalaUnit = $request->user()->hasRole(UserRole::KepalaUnit);
         $isPengelolaGudang = $request->user()->hasRole(UserRole::PengelolaGudang);
         $isAdmin = $request->user()->isAdmin();
+        $isKasubbag = $request->user()->hasRole(UserRole::KasubbagUmumTi);
         $isUser = $request->user()->hasRole(UserRole::Pengguna);
 
         $requests = ModelsRequest::with('user')
@@ -78,13 +79,14 @@ class RequestController extends Controller
             'isKepalaUnit' => $isKepalaUnit,
             'isPengelolaGudang' => $isPengelolaGudang,
             'isAdmin' => $isAdmin,
+            'isKasubbag' => $isKasubbag,
             'isUser' => $isUser,
         ]);
     }
     public function create(Request $request)
     {
         $items = Item::where('is_active', true)->get();
-        $canCreateEmergency = $request->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang);
+        $canCreateEmergency = $request->user()->hasRole(UserRole::Admin, UserRole::KasubbagUmumTi, UserRole::PengelolaGudang);
         $users = $canCreateEmergency
             ? User::query()->where('is_active', true)->orderBy('fullname')->get(['user_id', 'fullname', 'username', 'unit'])
             : collect();
@@ -137,7 +139,7 @@ class RequestController extends Controller
             ->first();
 
         $viewer = auth()->user();
-        $canView = $viewer->hasRole(UserRole::Admin)
+        $canView = $viewer->hasRole(UserRole::Admin, UserRole::KasubbagUmumTi)
             || $viewer->hasRole(UserRole::PengelolaGudang)
             || ($viewer->hasRole(UserRole::Pengguna)
                 && $notaDinas?->user_id === $viewer->user_id)
@@ -164,7 +166,7 @@ class RequestController extends Controller
             ->first();
 
         $viewer = auth()->user();
-        $canView = $viewer->isAdmin()
+        $canView = $viewer->hasRole(UserRole::Admin, UserRole::KasubbagUmumTi)
             || $viewer->hasRole(UserRole::PengelolaGudang)
             || ($viewer->hasRole(UserRole::Pengguna) && $bast?->user_id === $viewer->user_id)
             || ($viewer->hasRole(UserRole::KepalaUnit)

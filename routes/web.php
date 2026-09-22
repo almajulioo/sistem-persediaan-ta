@@ -68,7 +68,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/permintaan/{request}/bast', [RequestController::class, 'bast'])->name('request.bast');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
 
-    Route::middleware('role:kepala_unit,pengelola_gudang,admin')->group(function () {
+    Route::middleware('role:kepala_unit,pengelola_gudang,admin,kasubbag_umum_ti')->group(function () {
         Route::get('/permintaan/{request}/edit', [RequestController::class, 'edit'])->name('request.edit');
         Route::put('/permintaan/{request}', [RequestController::class, 'update'])->name('request.update');
         Route::post('/permintaan/{request}/respond', [RequestController::class, 'respondByRole'])->name('request.respond');

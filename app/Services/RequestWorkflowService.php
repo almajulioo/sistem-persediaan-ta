@@ -53,12 +53,18 @@ class RequestWorkflowService
     private function assertCanRespond(ModelsRequest $request, User $actor, string $action): void
     {
         $canRespond = match (true) {
+            $actor->isAdmin() => in_array($request->status, [
+                'submitted',
+                'approved_by_head',
+                'processed_by_staff',
+                'in_issuance',
+            ], true),
             $actor->hasRole(UserRole::KepalaUnit) =>
                 $request->status === 'submitted'
                     && $actor->unit === $request->user?->unit,
             $actor->hasRole(UserRole::PengelolaGudang) =>
                 in_array($request->status, ['approved_by_head', 'in_issuance'], true),
-            $actor->isAdmin() =>
+            $actor->hasRole(UserRole::KasubbagUmumTi) =>
                 in_array($request->status, ['processed_by_staff', 'in_issuance'], true)
                 || ($request->type === 'emergency' && $request->status === 'approved_by_head'),
             default => false,
@@ -74,6 +80,15 @@ class RequestWorkflowService
 
     private function nextStatus(ModelsRequest $request, User $actor): string
     {
+        if ($actor->isAdmin()) {
+            return match ($request->status) {
+                'submitted' => 'approved_by_head',
+                'approved_by_head' => 'processed_by_staff',
+                'processed_by_staff' => 'in_issuance',
+                default => 'completed',
+            };
+        }
+
         if ($actor->hasRole(UserRole::KepalaUnit)) {
             return 'approved_by_head';
         }

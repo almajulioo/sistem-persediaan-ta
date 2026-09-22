@@ -71,7 +71,7 @@ class StorePermintaanBarangRequest extends FormRequest
             }
 
             $user = $this->user();
-            if (! $user?->hasRole(UserRole::Admin, UserRole::PengelolaGudang)) {
+            if (! $user?->hasRole(UserRole::Admin, UserRole::KasubbagUmumTi, UserRole::PengelolaGudang)) {
                 $validator->errors()->add('emergency', 'Hanya Admin atau Pengelola Gudang yang dapat membuat permintaan darurat.');
             }
 

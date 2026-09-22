@@ -139,8 +139,8 @@
                                         $isEmergencyReadyToComplete = $row->type === 'emergency' && $row->status === 'approved_by_head';
                                         $canRespond = ($row->status === 'submitted' && $isKepalaUnit) ||
                                                     (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
-                                                    (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) && $isAdmin) ||
-                                                    ($isEmergencyReadyToComplete && $isAdmin);
+                                                    ($isAdmin && in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
+                                                    ($isKasubbag && (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
                                     @endphp
 
                                     @if ($canRespond)
