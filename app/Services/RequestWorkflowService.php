@@ -48,6 +48,10 @@ class RequestWorkflowService
 
             $nextStatus = $this->nextStatus($request, $actor);
 
+            if ($nextStatus === 'processed_by_staff') {
+                $this->fillZeroApprovedQuantities($request);
+            }
+
             $request->update(['status' => $nextStatus]);
 
             if ($actor->hasRole(UserRole::KepalaUnit)
@@ -142,7 +146,7 @@ class RequestWorkflowService
                 continue;
             }
 
-            $amount = (int) $detail->quantity_requested;
+            $amount = (int) $detail->quantity_approved;
 
             if ($amount <= 0) {
                 continue;
@@ -159,6 +163,28 @@ class RequestWorkflowService
                 referenceNumber: $referenceNumber,
                 notes: "Penyerahan ke ".($request->user?->unit ?? 'unit pemohon')." sesuai {$referenceNumber}",
             );
+        }
+    }
+
+    private function fillZeroApprovedQuantities(ModelsRequest $request): void
+    {
+        $request->loadMissing('item');
+
+        foreach ($request->item as $detail) {
+            if ((int) $detail->quantity_approved === 0) {
+                $detail->loadMissing('item');
+                if ($detail->item !== null && (int) $detail->quantity_requested > (int) $detail->item->stock_current) {
+                    throw new InsufficientStockException(
+                        $detail->item,
+                        (int) $detail->quantity_requested,
+                        (int) $detail->item->stock_current,
+                    );
+                }
+
+                $detail->update([
+                    'quantity_approved' => $detail->quantity_requested,
+                ]);
+            }
         }
     }
 

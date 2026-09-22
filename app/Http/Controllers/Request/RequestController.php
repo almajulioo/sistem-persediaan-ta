@@ -490,23 +490,49 @@ class RequestController extends Controller
 
         $validatedData = $httpRequest->validated();
 
-        DB::transaction(function () use ($request, $validatedData) {
-            $request->item()->delete();
+        $error = DB::transaction(function () use ($request, $validatedData): ?string {
+            $submittedItems = collect($validatedData['items'])
+                ->keyBy('item_id');
+            $existingDetails = $request->item()->get()->keyBy('item_id');
 
-            $details = [];
-            foreach ($validatedData['items'] as $item) {
-                $details[] = [
-                    'request_id' => $request->request_id,
-                    'item_id' => $item['item_id'],
-                    'quantity_requested' => $item['qty'],
-                    'quantity_approved' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
+            foreach ($existingDetails as $itemId => $detail) {
+                $approved = (int) ($submittedItems->get($itemId)['qty'] ?? 0);
+                $item = Item::query()->lockForUpdate()->findOrFail($itemId);
+
+                if ($approved > (int) $detail->quantity_requested) {
+                    return 'Jumlah disetujui tidak boleh melebihi jumlah yang diminta.';
+                }
+
+                if ($approved > (int) $item->stock_current) {
+                    return "Jumlah disetujui untuk {$item->item_name} tidak boleh melebihi stok gudang.";
+                }
+
+                $detail->update(['quantity_approved' => $approved]);
             }
 
-            RequestDetail::insert($details);
+            foreach ($submittedItems->reject(fn (array $item): bool => $existingDetails->has($item['item_id'])) as $item) {
+                $masterItem = Item::query()->lockForUpdate()->findOrFail($item['item_id']);
+
+                if ((int) $item['qty'] > (int) $masterItem->stock_current) {
+                    return "Jumlah disetujui untuk {$masterItem->item_name} tidak boleh melebihi stok gudang.";
+                }
+
+                RequestDetail::create([
+                    'request_id' => $request->request_id,
+                    'item_id' => $item['item_id'],
+                    'quantity_requested' => 0,
+                    'quantity_approved' => $item['qty'],
+                ]);
+            }
+
+            $request->update(['status' => 'processed_by_staff']);
+
+            return null;
         });
+
+        if ($error !== null) {
+            return redirect()->back()->withInput()->with('error', $error);
+        }
 
         return redirect()
             ->route('request.index')

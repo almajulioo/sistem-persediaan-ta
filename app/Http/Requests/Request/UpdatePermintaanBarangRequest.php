@@ -17,4 +17,5 @@ class UpdatePermintaanBarangRequest extends StorePermintaanBarangRequest
             && $request->status === 'approved_by_head'
             && $user->hasRole(UserRole::PengelolaGudang, UserRole::Admin, UserRole::KasubbagUmumTi);
     }
+
 }

@@ -18,9 +18,7 @@
     @if ($isEdit)
         @method('PUT')
     @endif
-    <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">
-        {{ $isEdit ? 'Ubah Kuantitas Permintaan Barang' : 'Tambah Barang' }}
-    </h2>
+  
 
     <div class="space-y-6">
         @if ($canCreateEmergency && !$isEdit)

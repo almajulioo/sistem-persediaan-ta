@@ -128,7 +128,7 @@
                                         Detail
                                     </a>
 
-                                    @if ($row->status === 'approved_by_head' && $row->type !== 'emergency' && $isPengelolaGudang)
+                                    @if ($row->status === 'approved_by_head' && $row->type !== 'emergency' && ($isPengelolaGudang || $isAdmin))
                                         <a href="{{ route('request.edit', $row) }}"
                                             class="text-theme-xs text-warning-600 dark:text-warning-500 ring-warning-200 dark:ring-warning-500/30 hover:bg-warning-50 dark:hover:bg-warning-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
                                             Ubah Kuantitas

@@ -6,7 +6,7 @@
         $hasItemProposals = $requestData->hasItemProposals();
         $canEditQuantity = $requestData->status === 'approved_by_head'
             && $requestData->type !== 'emergency'
-            && $isPengelolaGudang
+            && ($isPengelolaGudang || $isAdmin)
             && ! $hasItemProposals;
         $isKasubbagKepalaUnit = $isKasubbag
             && auth()->user()->unit === 'Subbagian Umum dan TI';

@@ -12,6 +12,8 @@
         </nav>
     </div>
 
+    <x-ui.flash />
+
     @if ($errors->any())
         <div class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mb-6 rounded-lg px-4 py-3 text-sm"
             role="alert" aria-live="assertive">

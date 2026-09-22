@@ -2,7 +2,7 @@
 
 @section('content')
     <div class="mb-6">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Tambah Barang</h2>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Ubah Kuantitas Permintaan Barang</h2>
         <nav class="mt-1.5">
             <ol class="flex items-center gap-1.5">
                 <li class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
@@ -11,6 +11,8 @@
             </ol>
         </nav>
     </div>
+
+    <x-ui.flash />
 
     @if ($errors->any())
         <div class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mb-6 rounded-lg px-4 py-3 text-sm"
