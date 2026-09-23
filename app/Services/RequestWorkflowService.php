@@ -48,7 +48,8 @@ class RequestWorkflowService
 
             $nextStatus = $this->nextStatus($request, $actor);
 
-            if ($nextStatus === 'processed_by_staff') {
+            if ($nextStatus === 'processed_by_staff'
+                || ($nextStatus === 'completed' && $request->type === 'emergency')) {
                 $this->fillZeroApprovedQuantities($request);
             }
 
@@ -103,6 +104,10 @@ class RequestWorkflowService
 
     private function nextStatus(ModelsRequest $request, User $actor): string
     {
+        if ($request->type === 'emergency' && $request->status === 'approved_by_head') {
+            return 'completed';
+        }
+
         if ($actor->isAdmin()) {
             return match ($request->status) {
                 'submitted' => 'approved_by_head',
@@ -113,6 +118,7 @@ class RequestWorkflowService
         }
 
         if ($actor->hasRole(UserRole::KepalaUnit)) {
+
             return 'approved_by_head';
         }
 
@@ -120,10 +126,6 @@ class RequestWorkflowService
             && $actor->unit === 'Subbagian Umum dan TI'
             && $request->status === 'submitted') {
             return 'approved_by_head';
-        }
-
-        if ($request->type === 'emergency' && $request->status === 'approved_by_head') {
-            return 'completed';
         }
 
         if ($actor->hasRole(UserRole::PengelolaGudang)) {
