@@ -270,7 +270,7 @@ describe('mengubah realisasi langsung', function () {
         $procurement = buatRealisasiLangsung($pejabat, $supplier, [barisLangsung($item)]);
         setujuiRealisasi($procurement);
 
-        expect($procurement->fresh()->status)->toBe(ProcurementStatus::MenungguPenerimaan);
+        expect($procurement->fresh()->status)->toBe(ProcurementStatus::ProsesBelanja);
 
         $detail = $procurement->details->first();
 
@@ -341,7 +341,7 @@ describe('penerimaan realisasi langsung', function () {
         $procurement = buatRealisasiLangsung(pejabatPengadaan(), Supplier::factory()->create(), [
             barisLangsung($item, 10),
         ]);
-        setujuiRealisasi($procurement);
+        belanjakanRealisasi(setujuiRealisasi($procurement));
 
         $detail = $procurement->details->first();
 

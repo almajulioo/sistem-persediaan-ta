@@ -85,6 +85,10 @@ class ProcurementReceiptPoster
      */
     private static function pastikanSiap(Procurement $procurement): void
     {
+        if ($procurement->isProsesBelanja()) {
+            throw ProcurementTidakSiapException::belumDibelanjakan();
+        }
+
         if (! $procurement->isMenungguPenerimaan()) {
             throw ProcurementTidakSiapException::bukanMenungguPenerimaan();
         }

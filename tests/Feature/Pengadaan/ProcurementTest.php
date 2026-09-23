@@ -11,6 +11,9 @@ use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Support\DocumentStorage;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Setujui seluruh rincian sebuah usulan lewat alur aplikasi, mengembalikan
@@ -74,9 +77,9 @@ function kasubbagUmumTi(array $attributes = []): User
 }
 
 /**
- * Setujui realisasi lewat alur aplikasi sehingga statusnya berpindah ke
- * MenungguPenerimaan — prasyarat setiap fixture yang meneruskan ke penerimaan,
- * berkas, laporan, atau pembatalan.
+ * Setujui realisasi lewat alur aplikasi. Sejak ADR 0035 statusnya berpindah
+ * ke ProsesBelanja, bukan langsung MenungguPenerimaan — fixture yang
+ * meneruskan ke penerimaan melanjutkan dengan `belanjakanRealisasi()`.
  */
 function setujuiRealisasi(Procurement $procurement, ?User $kasubbag = null): Procurement
 {
@@ -87,11 +90,38 @@ function setujuiRealisasi(Procurement $procurement, ?User $kasubbag = null): Pro
 }
 
 /**
- * Jalan pintas fixture: buat realisasi lalu setujui sekaligus.
+ * Tandai realisasi sudah dibelanjakan lewat alur aplikasi, beserta satu foto
+ * belanja palsu, sehingga statusnya berpindah ke MenungguPenerimaan (ADR 0035).
+ *
+ * Fotonya wajib, jadi fixture ini menulis berkas. Disk palsu dipasang di sini
+ * bila berkas uji belum memasangnya sendiri — supaya tidak ada foto yang
+ * mendarat di storage/app/private sungguhan — dan tidak dipasang ulang bila
+ * sudah, supaya berkas yang diunggah uji lebih dulu tidak ikut tersapu.
  */
-function buatRealisasiDisetujui(User $pejabat, ProcurementRequest $usulan, Supplier $supplier, array $overrides = []): Procurement
+function belanjakanRealisasi(Procurement $procurement, ?User $pejabat = null): Procurement
 {
-    return setujuiRealisasi(buatRealisasi($pejabat, $usulan, $supplier, $overrides));
+    $akar = str_replace('\\', '/', Storage::disk(DocumentStorage::DISK)->path(''));
+
+    if (! str_contains($akar, 'framework/testing/disks')) {
+        Storage::fake(DocumentStorage::DISK);
+    }
+
+    test()->actingAs($pejabat ?? pejabatPengadaan())
+        ->patch("/pengadaan/{$procurement->procurement_id}/dibelanjakan", [
+            'purchased_at' => now()->toDateString(),
+            'photos' => [UploadedFile::fake()->image('belanja.jpg')],
+        ]);
+
+    return $procurement->refresh();
+}
+
+/**
+ * Jalan pintas fixture: buat realisasi, setujui, lalu tandai sudah
+ * dibelanjakan — realisasi yang siap dikonfirmasi diterima gudang.
+ */
+function buatRealisasiSiapDiterima(User $pejabat, ProcurementRequest $usulan, Supplier $supplier, array $overrides = []): Procurement
+{
+    return belanjakanRealisasi(setujuiRealisasi(buatRealisasi($pejabat, $usulan, $supplier, $overrides)), $pejabat);
 }
 
 describe('hak akses realisasi', function () {
@@ -363,7 +393,7 @@ describe('konfirmasi penerimaan', function () {
         $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
             ['item_id' => $item->item_id, 'amount_request' => 40],
         ]));
-        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
         $response = $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
@@ -413,7 +443,7 @@ describe('konfirmasi penerimaan', function () {
         $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
             ['item_id' => $item->item_id, 'amount_request' => 10],
         ]));
-        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
         $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
@@ -443,7 +473,7 @@ describe('konfirmasi penerimaan', function () {
             ['item_id' => $kertas->item_id, 'amount_request' => 10],
             ['item_id' => $tinta->item_id, 'amount_request' => 5],
         ]));
-        $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
+        $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
 
         $this->actingAs($gudang)
             ->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [

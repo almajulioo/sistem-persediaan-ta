@@ -5,6 +5,104 @@ perubahan.
 
 ---
 
+## 23 September 2026 — Tahap belanja pada realisasi pengadaan, berbukti foto
+
+Permintaan langsung **Pejabat Pengadaan** di lapangan. Setelah disetujui
+Kasubbag Umum dan TI, realisasi seharusnya tidak langsung "menunggu
+penerimaan", karena barangnya baru akan dibelanjakan. Beliau juga meminta
+realisasi dapat dilampiri foto barang atau foto kegiatan belanjanya, dengan
+format berkas yang lebih longgar. Pertanyaan terbuka dari pengguna: dua status
+baru ("menunggu dibelanjakan" dan "sudah dibelanjakan") atau cukup satu, dan
+apakah foto boleh menyusul seperti BAST atau menjadi syarat.
+
+**Yang ditemukan sebelum membangun.** `ProcurementApprovalController::approve()`
+langsung memindahkan realisasi ke `MenungguPenerimaan`, sehingga
+`RealisasiMenungguPenerimaan` terbit ke gudang pada detik persetujuan — gudang
+ditagih menunggu barang yang belum dibeli siapa pun. Permintaan lapangannya
+tepat sasaran.
+
+**Keputusan pengguna**, lewat empat pertanyaan eksplisit sebelum membangun;
+keempatnya memilih rekomendasi:
+
+1. **Satu** status baru, `ProsesBelanja`, bukan dua. "Sudah dibelanjakan" dan
+   "menunggu penerimaan" adalah keadaan fisik yang sama, dan tidak ada siapa pun
+   yang memicu perpindahan di antara keduanya.
+2. Foto belanja **wajib minimal satu** saat menandai, dihitung dari keadaan
+   (foto yang diunggah lebih dulu ikut dihitung). Berkebalikan dengan BAST
+   (ADR 0018) karena foto belanja sudah ada di ponsel ketika tombolnya
+   ditekan, sedangkan BAST butuh tanda tangan orang lain.
+3. Gudang **tidak** boleh menerima selama `ProsesBelanja`.
+4. Penagih `RealisasiBelumDibelanjakan` setelah **7 hari**.
+
+Lihat [ADR 0035](keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md).
+
+**Keputusan rancangan yang diambil tanpa ditanyakan**, dan dicatat di ADR
+berikut alternatif yang ditolak: fakta belanja disimpan sebagai kolom
+(`purchased_at`/`purchased_by`/`purchase_note`) dan **tidak dikosongkan saat
+realisasi diubah**. Persetujuan ulang atas realisasi yang sudah dibelanjakan
+langsung membawanya ke `MenungguPenerimaan`: mengubah dokumen mengulang
+penilaian, bukan mengulang belanja. Format berkas diperluas ke WEBP dan HEIC
+(format bawaan kamera iPhone), dengan batas 10 MB, tetapi **tidak dibebaskan**:
+berkas kini dapat ditampilkan langsung di peramban, dan SVG/HTML membawa skrip.
+Ada tombol **Lihat** yang membuka foto/PDF di tab baru dan tetap dicatat seperti
+unduhan. Sengaja tanpa gambar kecil di halaman detail, supaya log aktivitas
+tidak dibanjiri pembacaan setiap kali halaman dibuka.
+
+**Yang dikerjakan.** Migrasi aditif `2026_09_23_000001_add_purchase_to_procurements_table`.
+`ProcurementStatus::ProsesBelanja`, `ProcurementDocumentType::FotoBelanja`
+beserta `formatBerkas()` sebagai satu sumber format per jenis, dan
+`NotificationType::RealisasiBelumDibelanjakan`. `ProcurementPurchaseController`
+dan `MarkProcurementPurchasedRequest` baru, dengan rute
+`PATCH /pengadaan/{procurement}/dibelanjakan` (`kelola-pengadaan`) dan
+`GET .../dokumen/{document}/lihat`. Dialog "Tandai Sudah Dibelanjakan", kartu
+*Belanja*, dan keterangan bagi gudang di halaman detail. Angka *Proses Belanja*
+di rekap dan laporan PDF. `User::purchasedProcurements()` langsung masuk
+`RESTRICTED_RELATIONS`. Seeder mendapat realisasi keempat yang berhenti di
+`ProsesBelanja` dengan persetujuan 8 hari lalu, supaya penagihnya punya contoh.
+
+**Kesalahan yang ditemukan dan dikoreksi di tengah jalan.**
+
+- **Jebakan yang sudah diperkirakan dan dimasukkan ke rencana:**
+  `NotificationScanner::catatRealisasiDiputuskan()` menilai "disetujui" dengan
+  `isMenungguPenerimaan()`. Kalau baris itu dibiarkan, setiap persetujuan yang
+  kini berujung di `ProsesBelanja` akan terkirim sebagai kabar **penolakan**.
+  Diganti `! isDitolak()`, dan ada uji regresinya.
+- **Galat parse Blade.** `Foto Belanja@if (...)...@endif` tidak dikenali
+  sebagai direktif, karena Blade hanya mengenali `@` yang tidak menempel pada
+  huruf. `@if`-nya menjadi teks biasa sementara `@endif`-nya tetap dikompilasi,
+  dan halaman detail meledak 500. Ketahuan dari 57 uji gagal sekaligus.
+- **Celah yang ditemukan sebelum ditutup:** unggahan umum di Berkas Pendukung
+  menerima PDF untuk jenis apa pun, jadi PDF bisa diunggah sebagai "Foto
+  Belanja" dan meloloskan syarat foto tanpa satu pun foto. Format kini
+  ditentukan per jenis lewat `formatBerkas()`, dan ada ujinya.
+
+**Temuan lingkungan.** PHP 8.4 di laptop (WinGet) memuat
+`upload_max_filesize=2M` dan `post_max_size=8M`. Batas 5 MB yang lama pun ternyata
+tidak pernah tercapai: pindaian BAST di atas 2 MB sudah ditolak PHP sebelum
+sampai ke Laravel. Harus dinaikkan (mis. 12M / 64M) di laptop dan server. Aturan
+`uploaded` kini diberi pesan yang menyebut kemungkinan ini.
+
+**Uji.** Berkas baru `tests/Feature/Pengadaan/ProcurementPurchaseTest.php`
+(30 uji, pembantu berakhiran `Belanja` supaya lulus juga saat dijalankan
+sendirian), dan 8 uji baru di `ProcurementDocumentTest` untuk format dan rute
+*Lihat*. Fixture `setujuiRealisasi()` kini berujung di `ProsesBelanja`. Helper
+baru `belanjakanRealisasi()` meneruskannya ke `MenungguPenerimaan`, dan
+`buatRealisasiDisetujui()` berganti nama menjadi `buatRealisasiSiapDiterima()`
+di tujuh berkas uji.
+
+**Verifikasi.** `php artisan test` — **474 lulus** (sebelumnya 436).
+`php artisan migrate` di MySQL lokal: migrasi ini beserta migrasi Alma
+`2026_09_22_000001` yang masih tertunda. `migrate:fresh --seed`,
+`notifikasi:periksa`, dan `migrate:rollback --step=1` diuji di basis data SQLite
+sementara, bukan di MySQL, supaya data lokal tidak terhapus. Pint `--test` bersih
+pada 27 berkas yang disentuh. `npm run build` berhasil.
+
+**Tidak ada tabel bersama yang tersentuh.** `procurements` dan
+`procurement_documents` milik sub sistem ini; `users` hanya mendapat relasi
+Eloquent.
+
+---
+
 ## 16 September 2026 (lanjutan) — Modul Log Aktivitas: jejak audit yang akhirnya dapat dibaca
 
 Permintaan pengguna: layar log aktivitas yang menampilkan seluruh aktivitas

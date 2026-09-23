@@ -27,13 +27,14 @@
 
     <x-ui.flash />
 
-    {{-- Dialog pembatalan dan penolakan dibuka kembali sendiri bila validasinya
-         gagal, supaya pesan galatnya tidak tersembunyi di balik dialog
-         tertutup. --}}
+    {{-- Dialog pembatalan, penolakan, dan penandaan belanja dibuka kembali
+         sendiri bila validasinya gagal, supaya pesan galatnya tidak tersembunyi
+         di balik dialog tertutup. --}}
     <div class="grid grid-cols-12 gap-4 md:gap-6"
         x-data="{
             batalTerbuka: @js($errors->hasAny(['cancel_reason', 'cancel_note'])),
             tolakTerbuka: @js($errors->has('review_note')),
+            belanjaTerbuka: @js($errors->hasAny(['purchased_at', 'photos', 'photos.*', 'purchase_note'])),
         }">
         {{-- Identitas realisasi --}}
         <div class="col-span-12 space-y-4 md:space-y-6 xl:col-span-4">
@@ -71,6 +72,25 @@
                         <button type="button" @click="tolakTerbuka = true"
                             class="text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 mt-3 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
                             Tolak Realisasi
+                        </button>
+                    @endcan
+                @endif
+
+                {{-- Tahap belanja (ADR 0035): Pejabat Pengadaan menandai sudah
+                     dibelanjakan beserta fotonya, dan baru setelah itu gudang
+                     menunggu barangnya. Keterangannya tampil bagi siapa pun,
+                     supaya gudang yang tidak melihat tombol konfirmasi tahu
+                     sebabnya. --}}
+                @if ($procurement->isProsesBelanja())
+                    <p class="text-theme-xs bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-400 mt-4 rounded-lg p-3">
+                        Realisasi sudah disetujui dan barangnya sedang dibelanjakan. Konfirmasi penerimaan
+                        terbuka setelah Pejabat Pengadaan menandainya sudah dibelanjakan beserta foto belanjanya.
+                    </p>
+
+                    @can('kelola-pengadaan')
+                        <button type="button" @click="belanjaTerbuka = true"
+                            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 mt-4 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                            Tandai Sudah Dibelanjakan
                         </button>
                     @endcan
                 @endif
@@ -181,6 +201,43 @@
                             Penolakan ini tidak mengakhiri realisasi. Pejabat Pengadaan dapat memperbaiki penyedia,
                             barang, atau harganya lalu menyimpannya — penyimpanan itulah yang mengajukannya ulang ke
                             Kasubbag Umum dan TI. Bila pengadaannya memang tidak jadi, batalkan realisasi ini.
+                        </p>
+                    @endif
+                </div>
+            @endif
+
+            {{-- Fakta belanja bertahan walau realisasinya diubah dan kembali
+                 menunggu persetujuan: yang diulang penilaiannya, bukan
+                 belanjanya (ADR 0035). --}}
+            @if ($procurement->sudahDibelanjakan())
+                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Belanja</h3>
+
+                    <dl class="mt-3 space-y-3">
+                        @foreach ([
+                            'Tanggal Belanja' => $procurement->purchased_at->translatedFormat('d F Y'),
+                            'Ditandai Oleh' => $procurement->purchasedBy?->fullname ?? '—',
+                            'Foto Belanja' => ($jumlahFoto = $procurement->documents->where('type', \App\Enums\ProcurementDocumentType::FotoBelanja)->count()) > 0
+                                ? $jumlahFoto.' foto'
+                                : 'Belum ada',
+                        ] as $label => $value)
+                            <div class="flex items-start justify-between gap-4">
+                                <dt class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                                <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">{{ $value }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+
+                    @if ($procurement->purchase_note)
+                        <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                            {{ $procurement->purchase_note }}
+                        </p>
+                    @endif
+
+                    @if ($procurement->isMenungguPersetujuan())
+                        <p class="text-theme-xs mt-4 rounded-lg bg-gray-50 p-3 text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+                            Realisasi ini diubah setelah barangnya dibelanjakan. Begitu disetujui ulang, ia langsung
+                            menunggu penerimaan tanpa perlu ditandai dibelanjakan lagi.
                         </p>
                     @endif
                 </div>
@@ -328,8 +385,8 @@
                     <div>
                         <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Berkas Pendukung</h3>
                         <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
-                            BAST bertanda tangan hasil pindai dan SPK/kontrak. Berkas disimpan di penyimpanan
-                            privat dan hanya dapat diunduh lewat halaman ini.
+                            BAST bertanda tangan hasil pindai, SPK/kontrak, dan foto belanja. Berkas disimpan di
+                            penyimpanan privat dan hanya dapat dibuka lewat halaman ini.
                         </p>
                     </div>
 
@@ -363,6 +420,15 @@
                             </div>
 
                             <div class="flex items-center gap-2">
+                                {{-- Foto dan PDF dibuka di tab baru; tetap tercatat
+                                     di log aktivitas seperti unduhan (ADR 0035). --}}
+                                @if ($document->dapatDitampilkan())
+                                    <a href="{{ route('procurement-documents.show', [$procurement, $document]) }}" target="_blank" rel="noopener"
+                                        class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                        Lihat
+                                    </a>
+                                @endif
+
                                 <a href="{{ route('procurement-documents.download', [$procurement, $document]) }}"
                                     class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                                     Unduh
@@ -401,13 +467,13 @@
                         <label for="file" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
                             Berkas<span class="text-error-500">*</span>
                         </label>
-                        <input type="file" id="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required
+                        <input type="file" id="file" name="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif" required
                             class="focus:border-brand-300 focus:ring-brand-500/10 file:bg-brand-50 file:text-brand-600 dark:file:bg-brand-500/15 dark:file:text-brand-400 h-11 w-full rounded-lg border border-gray-300 bg-transparent text-sm text-gray-800 file:mr-4 file:h-full file:cursor-pointer file:rounded-l-lg file:border-0 file:px-4 file:text-sm file:font-medium focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90" />
                         @error('file')
                             <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
                         @else
                             <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                                PDF, JPG, atau PNG. Maksimal 5 MB.
+                                PDF, JPG, PNG, WEBP, atau HEIC. Maksimal 10 MB.
                             </p>
                         @enderror
                     </div>
@@ -474,6 +540,89 @@
                                 <button type="submit"
                                     class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                                     Ya, tolak
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            @endcan
+        @endif
+
+        {{-- Tandai sudah dibelanjakan. Foto wajib minimal satu, tetapi foto yang
+             sudah diunggah lewat Berkas Pendukung ikut dihitung (ADR 0035). --}}
+        @if ($procurement->isProsesBelanja())
+            @can('kelola-pengadaan')
+                @php
+                    $fotoAda = $procurement->documents->where('type', \App\Enums\ProcurementDocumentType::FotoBelanja)->count();
+                @endphp
+
+                <div x-show="belanjaTerbuka" x-cloak @keydown.escape.window="belanjaTerbuka = false"
+                    class="fixed inset-0 z-99999 flex items-center justify-center p-5">
+                    <div @click="belanjaTerbuka = false" class="fixed inset-0 bg-gray-900/50"></div>
+
+                    <div @click.stop class="relative w-full max-w-lg rounded-2xl bg-white p-6 dark:bg-gray-900">
+                        <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
+                            Tandai {{ $procurement->judul() }} sudah dibelanjakan?
+                        </h3>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Pengelola Gudang akan diberi tahu untuk menunggu barangnya, lalu mengonfirmasi penerimaan
+                            supaya stok bertambah. Lampirkan foto barang yang dibeli atau foto kegiatan belanjanya.
+                        </p>
+
+                        <form method="POST" action="{{ route('procurements.purchase', $procurement) }}"
+                            enctype="multipart/form-data" class="mt-5 space-y-4">
+                            @csrf
+                            @method('PATCH')
+
+                            <x-form.text-field name="purchased_at" label="Tanggal Belanja" type="date"
+                                :value="now()->toDateString()" required />
+
+                            <div>
+                                <label for="photos" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                    {{-- Bukan `Belanja@if`: Blade tidak mengenali direktif
+                                         yang menempel pada huruf, sehingga `@endif`-nya yatim. --}}
+                                    Foto Belanja{!! $fotoAda === 0 ? '<span class="text-error-500">*</span>' : '' !!}
+                                </label>
+                                <input type="file" id="photos" name="photos[]" multiple
+                                    accept="image/jpeg,image/png,image/webp,.heic,.heif"
+                                    @if ($fotoAda === 0) required @endif
+                                    class="focus:border-brand-300 focus:ring-brand-500/10 file:bg-brand-50 file:text-brand-600 dark:file:bg-brand-500/15 dark:file:text-brand-400 h-11 w-full rounded-lg border border-gray-300 bg-transparent text-sm text-gray-800 file:mr-4 file:h-full file:cursor-pointer file:rounded-l-lg file:border-0 file:px-4 file:text-sm file:font-medium focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90" />
+                                @if ($errors->has('photos') || $errors->has('photos.*'))
+                                    <p class="text-theme-xs text-error-500 mt-1.5">
+                                        {{ $errors->first('photos') ?: $errors->first('photos.*') }}
+                                    </p>
+                                @else
+                                    <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
+                                        JPG, PNG, WEBP, atau HEIC; paling banyak
+                                        {{ \App\Http\Requests\Pengadaan\MarkProcurementPurchasedRequest::MAKS_FOTO }} foto,
+                                        masing-masing maksimal 10 MB.
+                                        @if ($fotoAda > 0)
+                                            Sudah ada {{ $fotoAda }} foto belanja, jadi foto baru boleh dikosongkan.
+                                        @endif
+                                    </p>
+                                @endif
+                            </div>
+
+                            <div>
+                                <label for="purchase_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                    Catatan (opsional)
+                                </label>
+                                <textarea id="purchase_note" name="purchase_note" rows="3"
+                                    placeholder="Mis. dibeli di Toko Sinar Jaya, dua rim kertas dibawa langsung, sisanya dikirim besok"
+                                    class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('purchase_note') }}</textarea>
+                                @error('purchase_note')
+                                    <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div class="flex justify-end gap-3 pt-2">
+                                <button type="button" @click="belanjaTerbuka = false"
+                                    class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                    Tutup
+                                </button>
+                                <button type="submit"
+                                    class="bg-brand-500 hover:bg-brand-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                                    Ya, sudah dibelanjakan
                                 </button>
                             </div>
                         </form>

@@ -122,6 +122,7 @@ class User extends Authenticatable
         'procurementReceipts' => 'penerimaan barang pengadaan',
         'reviewedProcurements' => 'persetujuan realisasi pengadaan',
         'cancelledProcurements' => 'pembatalan realisasi pengadaan',
+        'purchasedProcurements' => 'belanja realisasi pengadaan',
         'itemProposals' => 'usulan barang baru',
         'decidedItemProposals' => 'keputusan usulan barang baru',
         'requestDocuments' => 'dokumen permintaan',
@@ -205,6 +206,16 @@ class User extends Authenticatable
     public function cancelledProcurements(): HasMany
     {
         return $this->hasMany(Procurement::class, 'cancelled_by', 'user_id');
+    }
+
+    /**
+     * Realisasi pengadaan yang ditandai sudah dibelanjakan oleh akun ini
+     * (ADR 0035). Didaftarkan ke RESTRICTED_RELATIONS bersamaan dengan
+     * kolomnya, supaya tidak mengulang kekeliruan `cancelledProcurements()`.
+     */
+    public function purchasedProcurements(): HasMany
+    {
+        return $this->hasMany(Procurement::class, 'purchased_by', 'user_id');
     }
 
     /**

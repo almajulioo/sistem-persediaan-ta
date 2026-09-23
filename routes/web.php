@@ -13,6 +13,7 @@ use App\Http\Controllers\Pengadaan\ProcurementApprovalController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
 use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
 use App\Http\Controllers\Pengadaan\ProcurementDraftController;
+use App\Http\Controllers\Pengadaan\ProcurementPurchaseController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
@@ -135,6 +136,8 @@ Route::middleware('auth')->group(function () {
             ->name('procurement-documents.store');
         Route::get('pengadaan/{procurement}/dokumen/{document}/unduh', [ProcurementDocumentController::class, 'download'])
             ->name('procurement-documents.download');
+        Route::get('pengadaan/{procurement}/dokumen/{document}/lihat', [ProcurementDocumentController::class, 'show'])
+            ->name('procurement-documents.show');
         Route::delete('pengadaan/{procurement}/dokumen/{document}', [ProcurementDocumentController::class, 'destroy'])
             ->name('procurement-documents.destroy');
     });
@@ -257,6 +260,12 @@ Route::middleware('auth')->group(function () {
         // tersimpan sebagai bukti bahwa pengadaan itu pernah berjalan.
         Route::patch('pengadaan/{procurement}/batal', [ProcurementController::class, 'cancel'])
             ->name('procurements.cancel');
+
+        // Menandai barang sudah dibelanjakan beserta fotonya — yang
+        // membelanjakan adalah Pejabat Pengadaan, jadi dialah yang mencatatnya
+        // (ADR 0035). Baru setelah ini gudang menunggu barangnya.
+        Route::patch('pengadaan/{procurement}/dibelanjakan', [ProcurementPurchaseController::class, 'store'])
+            ->name('procurements.purchase');
     });
 
     /*

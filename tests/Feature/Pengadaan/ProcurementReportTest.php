@@ -30,7 +30,7 @@ function realisasiLaporan(
 
     // Disetujui Kasubbag Umum dan TI supaya realisasinya benar-benar berjalan;
     // laporan dan BAST baru bermakna setelah tahap itu (ADR 0030).
-    $procurement = buatRealisasiDisetujui($pejabat, $usulan, $supplier, [
+    $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, $supplier, [
         'procurement_date' => $tanggal ?? now()->toDateString(),
         'items' => [[
             'procurement_request_detail_id' => $usulan->details->first()->procurement_request_detail_id,

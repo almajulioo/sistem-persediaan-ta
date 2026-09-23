@@ -82,6 +82,37 @@ class ProcurementDocumentController extends Controller
     }
 
     /**
+     * Membuka foto atau PDF langsung di peramban (ADR 0035).
+     *
+     * Dicatat persis seperti unduhan: yang dilindungi adalah isi berkasnya,
+     * dan isi itu sama terbukanya entah disimpan atau hanya dilihat. Karena
+     * itu pula foto tidak ditampilkan sebagai gambar kecil di halaman detail —
+     * setiap kali halaman dibuka akan tercatat sebagai pembacaan berkas.
+     */
+    public function show(Request $request, Procurement $procurement, ProcurementDocument $document): StreamedResponse|RedirectResponse
+    {
+        $this->pastikanMilik($procurement, $document);
+
+        if (! $document->dapatDitampilkan()) {
+            return $this->download($request, $procurement, $document);
+        }
+
+        if (! DocumentStorage::ada($document)) {
+            return back()->with('error', "Berkas {$document->original_name} tidak ditemukan di penyimpanan.");
+        }
+
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Melihat {$document->type->label()} ({$document->original_name}) pada {$procurement->judul()}",
+            module: AuditModule::DokumenPengadaan,
+            event: AuditEvent::Unduh,
+            subject: $document,
+        );
+
+        return DocumentStorage::tampilkan($document);
+    }
+
+    /**
      * Menghapus berkas yang salah unggah.
      *
      * Dibatasi pengunggahnya sendiri dan Admin. Berkas pengadaan adalah bukti,

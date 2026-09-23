@@ -60,6 +60,14 @@ class NotificationScanner
     private const HARI_USULAN_BELUM_DIREALISASI = 7;
 
     /**
+     * Realisasi yang sudah disetujui dianggap terlupakan setelah sekian hari
+     * belum juga ditandai sudah dibelanjakan. Ambangnya sama dengan usulan
+     * yang belum direalisasi, karena yang ditagih pun sama: dokumen yang
+     * berhenti di meja Pejabat Pengadaan (ADR 0035).
+     */
+    private const HARI_REALISASI_BELUM_DIBELANJAKAN = 7;
+
+    /**
      * Jeda wajar antara barang diterima dan BAST bertanda tangan diunggah.
      *
      * Sengaja tidak nol: urutan fisiknya cetak → tanda tangan → pindai →
@@ -389,8 +397,8 @@ class NotificationScanner
      *
      * Menutup satu-satunya serah terima di seluruh alur pengadaan yang dulu
      * tidak punya penagih. Perpindahan 1&rarr;2 dijaga UsulanMenungguPersetujuan
-     * dan UsulanMenggantung, 2&rarr;3 dijaga RealisasiMenungguPenerimaan, dan
-     * 3&rarr;berkas dijaga BastBelumDiunggah — sementara jarak antara
+     * dan UsulanMenggantung, 2&rarr;3 dijaga RealisasiBelumDibelanjakan lalu
+     * RealisasiMenungguPenerimaan, dan 3&rarr;berkas dijaga BastBelumDiunggah — sementara jarak antara
      * "disetujui" dan "direalisasi" sunyi, padahal justru di situ barang yang
      * sudah disetujui dapat terlupakan tanpa jejak.
      *
@@ -447,29 +455,34 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan satu realisasi pengadaan: menunggu konfirmasi Pengelola Gudang
-     * bahwa barang sudah diterima, atau sudah diterima tetapi berkas BAST
-     * bertanda tangan belum diunggah. Dipanggil setelah realisasi dibuat,
-     * penerimaannya dikonfirmasi, atau berkasnya diunggah/dihapus supaya
-     * notifikasinya muncul dan menghilang seketika.
+     * Keadaan satu realisasi pengadaan: menunggu persetujuan, terlalu lama
+     * belum dibelanjakan, menunggu konfirmasi Pengelola Gudang bahwa barang
+     * sudah diterima, atau sudah diterima tetapi berkas BAST bertanda tangan
+     * belum diunggah. Dipanggil setelah realisasi dibuat, diputuskan, ditandai
+     * sudah dibelanjakan, penerimaannya dikonfirmasi, atau berkasnya
+     * diunggah/dihapus supaya notifikasinya muncul dan menghilang seketika.
      *
-     * Ketiga keadaan tidak akan pernah berlaku bersamaan: masing-masing
-     * menuntut status yang berbeda — MenungguPersetujuan, MenungguPenerimaan,
-     * dan sudah Diterima.
+     * Keempat keadaan tidak akan pernah berlaku bersamaan: masing-masing
+     * menuntut status yang berbeda — MenungguPersetujuan, ProsesBelanja,
+     * MenungguPenerimaan, dan sudah Diterima.
      *
-     * Penerimanya pun berbeda, karena itu dua koleksi: persetujuan ditagih ke
-     * Kasubbag Umum dan TI, penerimaan dan berkas BAST ke pengawas gudang.
+     * Penerimanya pun berbeda, karena itu tiga koleksi: persetujuan ditagih ke
+     * Kasubbag Umum dan TI, belanja ke Pejabat Pengadaan, penerimaan dan berkas
+     * BAST ke pengawas gudang.
      *
      * @param  EloquentCollection<int, User>|null  $penerima
      * @param  EloquentCollection<int, User>|null  $pemberiPersetujuan
+     * @param  EloquentCollection<int, User>|null  $pembelanja
      */
     public static function periksaRealisasi(
         Procurement $procurement,
         ?EloquentCollection $penerima = null,
         ?EloquentCollection $pemberiPersetujuan = null,
+        ?EloquentCollection $pembelanja = null,
     ): void {
         $penerima ??= self::pengawasGudang();
         $pemberiPersetujuan ??= self::pemberiPersetujuan();
+        $pembelanja ??= self::pejabatPengadaan();
 
         $judul = $procurement->judul();
 
@@ -501,6 +514,12 @@ class NotificationScanner
             subject: $procurement,
         );
 
+        self::periksaBelumDibelanjakan($procurement, $pembelanja);
+
+        // Baru terbit setelah barangnya dibelanjakan, bukan saat disetujui:
+        // sebelum ADR 0035 gudang sudah ditagih menunggu barang yang belum
+        // dibeli siapa pun. Realisasi lama yang disetujui sebelum ADR itu
+        // tidak punya tanggal belanja, jadi kalimatnya menyesuaikan.
         Notifier::terapkanKeadaan(
             berlaku: $procurement->isMenungguPenerimaan(),
             penerima: $penerima,
@@ -508,15 +527,58 @@ class NotificationScanner
             dedupKey: NotificationType::RealisasiMenungguPenerimaan->dedupKey($procurement->procurement_id),
             title: "Realisasi menunggu penerimaan: {$judul}",
             body: sprintf(
-                '%s dari %s menunggu konfirmasi barang diterima. Periksa fisik barang lalu konfirmasi penerimaan supaya stok bertambah.',
+                '%s dari %s %s dan menunggu konfirmasi barang diterima. Periksa fisik barang lalu konfirmasi penerimaan supaya stok bertambah.',
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
+                $procurement->purchased_at
+                    ? 'sudah dibelanjakan '.$procurement->purchased_at->translatedFormat('j F Y')
+                    : 'sudah disetujui',
             ),
             actionUrl: route('procurements.show', $procurement, false),
             subject: $procurement,
         );
 
         self::periksaBerkasBast($procurement, $penerima);
+    }
+
+    /**
+     * Keadaan: realisasi sudah disetujui berhari-hari lalu, tetapi belum juga
+     * ditandai sudah dibelanjakan.
+     *
+     * Menutup jarak yang terbuka oleh ADR 0035. Dulu tagihan
+     * RealisasiMenungguPenerimaan terbit seketika saat disetujui dan menjaga
+     * seluruh rentang sampai barang diterima; kini ia baru terbit setelah
+     * belanja, sehingga rentang disetujui&rarr;dibelanjakan butuh penagihnya
+     * sendiri. Tidak seketika, karena peristiwa RealisasiDisetujui sudah
+     * memberi tahu Pejabat Pengadaan pada saat itu — yang ditagih di sini
+     * adalah kelalaian, bukan belanja yang wajar memakan beberapa hari.
+     *
+     * Ambangnya dihitung dari `reviewed_at`, yaitu kapan persetujuan yang
+     * sedang berlaku diberikan.
+     *
+     * @param  EloquentCollection<int, User>  $penerima
+     */
+    private static function periksaBelumDibelanjakan(Procurement $procurement, EloquentCollection $penerima): void
+    {
+        $terlupakan = $procurement->isProsesBelanja()
+            && $procurement->reviewed_at !== null
+            && $procurement->reviewed_at->lt(now()->subDays(self::HARI_REALISASI_BELUM_DIBELANJAKAN));
+
+        Notifier::terapkanKeadaan(
+            berlaku: $terlupakan,
+            penerima: $penerima,
+            type: NotificationType::RealisasiBelumDibelanjakan,
+            dedupKey: NotificationType::RealisasiBelumDibelanjakan->dedupKey($procurement->procurement_id),
+            title: "Belum dibelanjakan: {$procurement->judul()}",
+            body: sprintf(
+                '%s dari %s sudah disetujui %s tetapi belum ditandai sudah dibelanjakan. Setelah belanja, buka realisasinya lalu tekan Tandai Sudah Dibelanjakan beserta fotonya, atau batalkan bila barangnya tidak jadi dibeli.',
+                $procurement->judul(),
+                $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
+                $procurement->reviewed_at?->diffForHumans() ?? '',
+            ),
+            actionUrl: route('procurements.show', $procurement, false),
+            subject: $procurement,
+        );
     }
 
     /**
@@ -567,14 +629,15 @@ class NotificationScanner
     {
         $penerima = self::pengawasGudang();
         $pemberiPersetujuan = self::pemberiPersetujuan();
+        $pembelanja = self::pejabatPengadaan();
 
         // `details` ikut dimuat karena isi notifikasi persetujuan menyebut nilai
         // total realisasinya.
         Procurement::query()
             ->with('supplier', 'receipt', 'details')
-            ->chunk(100, function ($procurements) use ($penerima, $pemberiPersetujuan) {
+            ->chunk(100, function ($procurements) use ($penerima, $pemberiPersetujuan, $pembelanja) {
                 foreach ($procurements as $procurement) {
-                    self::periksaRealisasi($procurement, $penerima, $pemberiPersetujuan);
+                    self::periksaRealisasi($procurement, $penerima, $pemberiPersetujuan, $pembelanja);
                 }
             });
     }
@@ -626,8 +689,13 @@ class NotificationScanner
      * sebagai pengganti pun tidak mengirimi dirinya sendiri.
      *
      * Memanggil `periksaRealisasi()` lebih dulu supaya tagihan
-     * RealisasiMenungguPersetujuan tertutup seketika, dan — bila disetujui —
-     * tagihan RealisasiMenungguPenerimaan langsung terbit ke gudang.
+     * RealisasiMenungguPersetujuan tertutup seketika. Tagihan
+     * RealisasiMenungguPenerimaan baru terbit ke gudang bila barangnya sudah
+     * dibelanjakan sebelum realisasi diubah dan disetujui ulang; selebihnya
+     * menunggu ditandai sudah dibelanjakan (ADR 0035).
+     *
+     * "Disetujui" ditanyakan sebagai kebalikan dari Ditolak, bukan dari status
+     * tujuannya: sejak ADR 0035 persetujuan berujung pada dua status berbeda.
      *
      * Lihat ADR 0030.
      */
@@ -643,7 +711,7 @@ class NotificationScanner
         }
 
         $judul = $procurement->judul();
-        $disetujui = $procurement->isMenungguPenerimaan();
+        $disetujui = ! $procurement->isDitolak();
         $type = $disetujui ? NotificationType::RealisasiDisetujui : NotificationType::RealisasiDitolak;
 
         Notifier::catatPeristiwa(
@@ -653,10 +721,13 @@ class NotificationScanner
             title: $disetujui ? "Disetujui: {$judul}" : "Ditolak: {$judul}",
             body: $disetujui
                 ? sprintf(
-                    '%s menyetujui %s dari %s. Barang sudah boleh dipesan, dan gudang menunggu konfirmasi penerimaannya.%s',
+                    '%s menyetujui %s dari %s. %s%s',
                     $pelaku->fullname,
                     $judul,
                     $procurement->supplier?->supplier_name ?? 'penyedia',
+                    $procurement->isProsesBelanja()
+                        ? 'Barang sudah boleh dibelanjakan; setelah belanja, tandai sudah dibelanjakan beserta fotonya supaya gudang menunggu barangnya.'
+                        : 'Barangnya sudah dibelanjakan sebelumnya, jadi gudang langsung menunggu konfirmasi penerimaannya.',
                     $procurement->review_note ? ' Catatan: '.$procurement->review_note : '',
                 )
                 : sprintf(

@@ -17,9 +17,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * Realisasi pengadaan — lahir dari satu ProcurementRequest yang disetujui,
  * atau berdiri sendiri tanpa usulan sama sekali (ADR 0031).
  *
- * Berhenti di status MenungguPenerimaan sampai Pengelola Gudang
- * mengonfirmasi penerimaan lewat ProcurementReceipt; baru saat itu stok
- * bertambah. Lihat ADR 0008 dan ADR 0015.
+ * Setelah disetujui, realisasi berada di ProsesBelanja sampai Pejabat
+ * Pengadaan menandainya sudah dibelanjakan (ADR 0035), lalu berhenti di
+ * MenungguPenerimaan sampai Pengelola Gudang mengonfirmasi penerimaan lewat
+ * ProcurementReceipt; baru saat itu stok bertambah. Lihat ADR 0008 dan
+ * ADR 0015.
  */
 class Procurement extends Model
 {
@@ -43,6 +45,7 @@ class Procurement extends Model
             'basis_reason' => AlasanPengadaan::class,
             'status' => ProcurementStatus::class,
             'reviewed_at' => 'datetime',
+            'purchased_at' => 'date',
             'cancelled_at' => 'datetime',
             'cancel_reason' => AlasanPembatalan::class,
         ];
@@ -88,6 +91,11 @@ class Procurement extends Model
         return $this->status === ProcurementStatus::MenungguPersetujuan;
     }
 
+    public function isProsesBelanja(): bool
+    {
+        return $this->status === ProcurementStatus::ProsesBelanja;
+    }
+
     public function isMenungguPenerimaan(): bool
     {
         return $this->status === ProcurementStatus::MenungguPenerimaan;
@@ -126,6 +134,32 @@ class Procurement extends Model
     public function sudahDireview(): bool
     {
         return $this->reviewed_at !== null;
+    }
+
+    /**
+     * Barangnya sudah dibelanjakan, apa pun statusnya sekarang.
+     *
+     * Ditanyakan dari `purchased_at`, bukan dari status: realisasi yang sudah
+     * dibelanjakan lalu diubah kembali menunggu persetujuan, dan saat itu
+     * statusnya tidak lagi mengatakan apa pun tentang belanjanya. Karena itu
+     * pula persetujuan ulang langsung membawanya ke MenungguPenerimaan —
+     * mengubah dokumen mengulang penilaian, bukan mengulang belanja.
+     * Lihat ADR 0035.
+     */
+    public function sudahDibelanjakan(): bool
+    {
+        return $this->purchased_at !== null;
+    }
+
+    /**
+     * Jumlah foto belanja yang sudah diunggah — syarat menandai realisasi
+     * sudah dibelanjakan (ADR 0035).
+     */
+    public function jumlahFotoBelanja(): int
+    {
+        return $this->documents()
+            ->where('type', ProcurementDocumentType::FotoBelanja)
+            ->count();
     }
 
     /**
@@ -232,6 +266,11 @@ class Procurement extends Model
     public function reviewedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by', 'user_id');
+    }
+
+    public function purchasedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'purchased_by', 'user_id');
     }
 
     public function cancelledBy(): BelongsTo

@@ -36,8 +36,13 @@ class ProcurementApprovalController extends Controller
             return back()->with('error', "{$procurement->judul()} sudah diputuskan sebelumnya.");
         }
 
+        // Persetujuan membuka tahap belanja (ADR 0035). Realisasi yang sudah
+        // dibelanjakan lalu diubah dan diajukan ulang tidak disuruh belanja
+        // lagi: mengubah dokumen mengulang penilaian, bukan mengulang belanja.
+        $sudahDibelanjakan = $procurement->sudahDibelanjakan();
+
         $procurement->forceFill([
-            'status' => ProcurementStatus::MenungguPenerimaan,
+            'status' => $sudahDibelanjakan ? ProcurementStatus::MenungguPenerimaan : ProcurementStatus::ProsesBelanja,
             'reviewed_at' => now(),
             'reviewed_by' => $request->user()->user_id,
             'review_note' => $request->input('review_note'),
@@ -57,7 +62,9 @@ class ProcurementApprovalController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} disetujui dan menunggu penerimaan barang.");
+            ->with('status', $sudahDibelanjakan
+                ? "{$procurement->judul()} disetujui. Barangnya sudah dibelanjakan, jadi langsung menunggu penerimaan."
+                : "{$procurement->judul()} disetujui. Pejabat Pengadaan dapat membelanjakan barangnya.");
     }
 
     public function reject(RejectProcurementRealizationRequest $request, Procurement $procurement): RedirectResponse

@@ -45,7 +45,8 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
 | Usulan Disetujui Belum Direalisasi | Perhatian | Pejabat Pengadaan + Admin | Tekan Realisasikan, atau tinjau ulang kebutuhannya |
 | Realisasi Menunggu Persetujuan | Perhatian | Kasubbag Umum dan TI + Admin | Periksa penyedia, barang, dan harganya; setujui atau tolak sebelum barang dipesan |
-| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Periksa fisik barang, konfirmasi penerimaan |
+| Realisasi Belum Dibelanjakan | Perhatian | Pejabat Pengadaan + Admin | Sudah &gt;7 hari disetujui; tandai sudah dibelanjakan beserta fotonya, atau batalkan |
+| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Barang sudah dibelanjakan; periksa fisiknya, konfirmasi penerimaan |
 | BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 | Usulan Barang Baru Menunggu Keputusan | Perhatian | Gudang + Admin | Periksa apakah barangnya benar-benar belum ada, lalu daftarkan atau tolak |
 
@@ -59,7 +60,7 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Pengadaan Disetujui | Info | Pengaju | Tahu usulannya lanjut ke realisasi |
 | Usulan Pengadaan Ditolak | Perhatian | Pengaju | Tahu perlu revisi atau usulan baru |
 | Penerimaan Barang Dikonfirmasi | Info | Pejabat Pengadaan yang merealisasi | Tahu barang yang direalisasikannya sudah sampai |
-| Realisasi Pengadaan Disetujui | Info | Pejabat Pengadaan yang merealisasi | Tahu barang sudah boleh dipesan |
+| Realisasi Pengadaan Disetujui | Info | Pejabat Pengadaan yang merealisasi | Tahu barang sudah boleh dibelanjakan |
 | Realisasi Pengadaan Ditolak | Perhatian | Pejabat Pengadaan yang merealisasi | Tahu apa yang harus diperbaiki; penolakan tidak terminal |
 | Realisasi Pengadaan Dibatalkan | Perhatian | Gudang + Admin, **kecuali pelaku** | Sudah disuruh menunggu barang; harus tahu barangnya tidak jadi datang |
 | Usulan Barang Baru Disetujui | Info | Pengusul | Tahu barangnya sudah terdaftar dan siap diadakan |
@@ -70,7 +71,11 @@ Tiga baris realisasi milik
 — Menunggu Persetujuan, Disetujui, dan Ditolak — baru dicatat di katalog ini
 pada 16 September 2026; tipenya sendiri sudah hidup sejak ADR 0030 dibangun.
 Dua baris Usulan Barang Baru berasal dari
-[ADR 0032](../keputusan/0032-usulan-barang-baru.md).
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md). Realisasi Belum
+Dibelanjakan berasal dari
+[ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md), yang
+sekaligus menggeser Realisasi Menunggu Penerimaan: kini ia baru terbit setelah
+barangnya ditandai sudah dibelanjakan, bukan saat realisasi disetujui.
 
 **Mutasi Manual Sensitif** mencakup Barang Rusak, Barang Hilang, Kadaluarsa, dan
 Koreksi Pencatatan — jenis yang mengurangi stok **tanpa dokumen sumber**. Pada
@@ -89,6 +94,7 @@ siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian
 | Jelang akhir periode | 30 hari | `NotificationScanner::HARI_JELANG_AKHIR_PERIODE` |
 | Usulan pengadaan menggantung | 7 hari | `NotificationScanner::HARI_USULAN_MENGGANTUNG` |
 | Usulan disetujui belum direalisasi | 7 hari | `NotificationScanner::HARI_USULAN_BELUM_DIREALISASI` |
+| Realisasi disetujui belum dibelanjakan | 7 hari | `NotificationScanner::HARI_REALISASI_BELUM_DIBELANJAKAN` |
 | BAST belum diunggah | 3 hari | `NotificationScanner::HARI_BAST_BELUM_DIUNGGAH` |
 | Simpan notifikasi selesai | 30 hari | `Notifier::HARI_SIMPAN` |
 
@@ -143,7 +149,10 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 | `ItemController::destroy()` | `Notifier::hapusUntukSubjek()` |
 | `OpnamePoster::post()` | `catatOpnameDiposting()` + `ProcurementDraftScanner::perbaruiBarangTerdampak()`, di luar transaksi |
 | `ProcurementController::store()` | `periksaRealisasi()` + `periksaUsulan()` — usulannya berhenti menganggur |
-| `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan |
+| `ProcurementController::update()` | `periksaRealisasi()` — tagihan lama tutup, tagihan persetujuan terbit |
+| `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan maupun belum dibelanjakan |
+| `ProcurementApprovalController::approve()` / `reject()` | `catatRealisasiDiputuskan()` |
+| `ProcurementPurchaseController::store()` | `periksaRealisasi()` — menutup belum dibelanjakan, menerbitkan menunggu penerimaan |
 | `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
 | `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
 | `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
@@ -242,7 +251,10 @@ unggah, dan yang ditagih adalah kelalaian, bukan jeda yang normal.
 [ADR 0024](../keputusan/0024-pembatalan-realisasi-pengadaan.md), rantai
 pengadaan tertutup penuh: usulan&rarr;keputusan dijaga `UsulanMenungguPersetujuan`
 dan `UsulanMenggantung`, keputusan&rarr;realisasi oleh `UsulanBelumDirealisasi`,
-realisasi&rarr;penerimaan oleh `RealisasiMenungguPenerimaan`, dan
+realisasi&rarr;persetujuan oleh `RealisasiMenungguPersetujuan`,
+persetujuan&rarr;belanja oleh `RealisasiBelumDibelanjakan` (sejak
+[ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md)),
+belanja&rarr;penerimaan oleh `RealisasiMenungguPenerimaan`, dan
 penerimaan&rarr;berkas oleh `BastBelumDiunggah`. Jarak antara "disetujui" dan
 "direalisasi" adalah yang terakhir ditutup — dulu satu-satunya yang sunyi,
 padahal justru di situ barang yang sudah disetujui dapat terlupakan tanpa jejak.

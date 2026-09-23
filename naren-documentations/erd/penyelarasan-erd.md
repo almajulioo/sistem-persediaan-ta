@@ -162,6 +162,8 @@ ERD pada naskah Naren diperbarui.
 | `procurements` | `procurement_request_id` menjadi **nullable**, indeks uniknya **dipertahankan** — realisasi tanpa usulan boleh banyak (NULL berulang diizinkan), tetapi satu usulan tetap paling banyak satu realisasi | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
 | `procurements` | Tambah `basis_reason`, `basis_note` — dasar pengadaan, wajib pada realisasi tanpa usulan; NULL berarti dasarnya adalah usulannya | [0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) |
 | `item_proposals` | Tabel baru — usulan barang baru; `item_id` nullable terisi saat Pengelola Gudang mendaftarkan barangnya | [0032](../keputusan/0032-usulan-barang-baru.md) |
+| `procurements` | Tambah `purchased_at` (date), `purchased_by` (FK `users`, restrictOnDelete), `purchase_note` — fakta belanja, bertahan walau realisasinya diubah dan disetujui ulang. Nilai `status` baru `proses_belanja`, tanpa migrasi | [0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) |
+| `procurement_documents` | Nilai `type` baru `foto_belanja`, tanpa migrasi — kolomnya string polos | [0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

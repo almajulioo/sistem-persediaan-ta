@@ -201,7 +201,7 @@ class ProcurementController extends Controller
             'title' => $procurement->judul(),
             'procurement' => $procurement->load([
                 'user', 'supplier', 'procurementRequest', 'details.item',
-                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy', 'reviewedBy',
+                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy', 'reviewedBy', 'purchasedBy',
             ]),
         ]);
     }
@@ -245,7 +245,8 @@ class ProcurementController extends Controller
         }
 
         $data = $request->validated();
-        $sebelumnyaDisetujui = $procurement->isMenungguPenerimaan();
+        // Sejak ADR 0035 persetujuan yang masih berlaku ada di dua status.
+        $sebelumnyaDisetujui = $procurement->isProsesBelanja() || $procurement->isMenungguPenerimaan();
 
         DB::transaction(function () use ($procurement, $data) {
             $procurement->forceFill([
@@ -537,8 +538,8 @@ class ProcurementController extends Controller
      * `total` maupun `nilai`: keduanya dokumen yang pernah ada tetapi tidak
      * pernah menjadi transaksi. Cacahnya berdiri sendiri, sehingga tidak ada
      * yang disembunyikan sekaligus menyisakan invarian yang enak dibaca —
-     * `total = menunggu_persetujuan + menunggu + diterima`. Lihat ADR 0026 dan
-     * ADR 0030.
+     * `total = menunggu_persetujuan + proses_belanja + menunggu + diterima`.
+     * Lihat ADR 0026, ADR 0030, dan ADR 0035.
      *
      * `langsung` adalah **irisan** dari `total`, bukan penjumlahnya, sehingga
      * invarian di atas tidak terganggu. Angka ini yang membuat kebiasaan
@@ -566,6 +567,7 @@ class ProcurementController extends Controller
             'total' => (clone $base)->whereNotIn('status', $gagal)->count(),
             'langsung' => (clone $base)->whereNotIn('status', $gagal)->whereNull('procurement_request_id')->count(),
             'menunggu_persetujuan' => (clone $base)->where('status', ProcurementStatus::MenungguPersetujuan)->count(),
+            'proses_belanja' => (clone $base)->where('status', ProcurementStatus::ProsesBelanja)->count(),
             'menunggu' => (clone $base)->where('status', ProcurementStatus::MenungguPenerimaan)->count(),
             'diterima' => (clone $base)->where('status', ProcurementStatus::Diterima)->count(),
             'ditolak' => (clone $base)->where('status', ProcurementStatus::Ditolak)->count(),

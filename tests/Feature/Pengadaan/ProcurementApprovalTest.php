@@ -11,7 +11,7 @@ use App\Models\Supplier;
 use App\Models\User;
 
 // Nama pembantu di berkas Pest bersifat global: `buatUsulan`, `setujuiUsulan`,
-// `buatRealisasi`, `buatRealisasiDisetujui`, `kasubbagUmumTi`, `pengelolaGudang`,
+// `buatRealisasi`, `buatRealisasiSiapDiterima`, `kasubbagUmumTi`, `pengelolaGudang`,
 // dan `pejabatPengadaan` dipakai ulang dari berkas uji Tahap 2, 3, dan 4.
 
 /**
@@ -77,7 +77,7 @@ describe('hak akses persetujuan', function () {
             ->patch("{$this->url}/setujui")
             ->assertRedirect($this->url);
 
-        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::MenungguPenerimaan);
+        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::ProsesBelanja);
     });
 
     it('mengizinkan Kasubbag Umum dan TI membaca daftar dan detail realisasi', function () {
@@ -87,14 +87,17 @@ describe('hak akses persetujuan', function () {
 });
 
 describe('menyetujui realisasi', function () {
-    it('memindahkan status ke menunggu penerimaan beserta jejak peninjaunya', function () {
+    it('memindahkan status ke proses belanja beserta jejak peninjaunya', function () {
+        // ADR 0035: persetujuan membuka tahap belanja, bukan langsung
+        // menunggu penerimaan — barangnya belum dibeli siapa pun.
         $this->actingAs($this->kasubbag)
             ->patch("{$this->url}/setujui", ['review_note' => 'Harga sudah wajar.'])
             ->assertSessionHas('status');
 
         $segar = $this->procurement->fresh();
 
-        expect($segar->status)->toBe(ProcurementStatus::MenungguPenerimaan)
+        expect($segar->status)->toBe(ProcurementStatus::ProsesBelanja)
+            ->and($segar->sudahDibelanjakan())->toBeFalse()
             ->and($segar->reviewed_by)->toBe($this->kasubbag->user_id)
             ->and($segar->reviewed_at)->not->toBeNull()
             ->and($segar->review_note)->toBe('Harga sudah wajar.')
@@ -106,7 +109,7 @@ describe('menyetujui realisasi', function () {
             ->patch("{$this->url}/setujui")
             ->assertSessionHasNoErrors();
 
-        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::MenungguPenerimaan);
+        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::ProsesBelanja);
     });
 
     it('mencatat jejak audit', function () {
@@ -125,7 +128,7 @@ describe('menyetujui realisasi', function () {
             ->patch("{$this->url}/tolak", ['review_note' => 'Berubah pikiran.'])
             ->assertSessionHas('error');
 
-        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::MenungguPenerimaan);
+        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::ProsesBelanja);
     });
 });
 
@@ -249,7 +252,7 @@ describe('persetujuan gugur setelah realisasi diubah', function () {
         // Lubang tata kelola yang ditutup ADR 0030: tanpa aturan ini, harga
         // dapat diubah setelah persetujuan terbit dan barang tetap masuk.
         $this->actingAs($this->kasubbag)->patch("{$this->url}/setujui");
-        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::MenungguPenerimaan);
+        expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::ProsesBelanja);
 
         $this->actingAs($this->pejabat)
             ->put($this->url, ubahPayload($this->procurement->fresh('details'), [
@@ -303,16 +306,27 @@ describe('notifikasi persetujuan', function () {
             $this->procurement->procurement_id,
         ))->toBe(0);
 
-        // Tagihan berikutnya berpindah ke gudang, bukan menghilang begitu saja.
+        // ADR 0035: gudang belum ditagih — barangnya belum dibelanjakan.
+        // Tagihan penerimaan baru terbit setelah ditandai sudah dibelanjakan.
         expect(notifikasiAktifUntuk(
             NotificationType::RealisasiMenungguPenerimaan,
             $this->procurement->procurement_id,
-        ))->toBeGreaterThan(0);
+        ))->toBe(0);
 
-        expect(Notification::query()
+        // Regresi: `catatRealisasiDiputuskan()` dulu menilai "disetujui" dari
+        // status MenungguPenerimaan, sehingga persetujuan yang kini berujung
+        // di ProsesBelanja akan terkirim sebagai kabar penolakan.
+        $kabar = Notification::query()
             ->where('user_id', $this->pejabat->user_id)
             ->where('type', NotificationType::RealisasiDisetujui)
-            ->exists())->toBeTrue();
+            ->first();
+
+        expect($kabar)->not->toBeNull()
+            ->and($kabar->body)->toContain('boleh dibelanjakan')
+            ->and(Notification::query()
+                ->where('user_id', $this->pejabat->user_id)
+                ->where('type', NotificationType::RealisasiDitolak)
+                ->exists())->toBeFalse();
     });
 
     it('memberi tahu perealisasi beserta alasannya ketika ditolak', function () {

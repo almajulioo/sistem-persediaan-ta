@@ -69,17 +69,21 @@
          Realisasi yang dibatalkan maupun ditolak tidak ikut dihitung — keduanya
          dokumen yang pernah ada tetapi tidak pernah menjadi transaksi — dan
          tampil sebagai angka kecil tersendiri supaya tidak ada yang
-         disembunyikan (ADR 0026, ADR 0030). --}}
-    <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-6 xl:grid-cols-6">
+         disembunyikan (ADR 0026, ADR 0030).
+
+         Tujuh kartu, jadi Jumlah Realisasi dibuat dua kolom supaya kisinya
+         genap dua baris empat kolom. --}}
+    <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
         @foreach ([
-            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $catatanTotal],
+            ['label' => 'Jumlah Realisasi', 'value' => number_format($summary['total'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => $catatanTotal, 'lebar' => 'col-span-2'],
             ['label' => 'Menunggu Persetujuan', 'value' => number_format($summary['menunggu_persetujuan'], 0, ',', '.'), 'class' => 'text-purple-600 dark:text-purple-400', 'catatan' => []],
+            ['label' => 'Proses Belanja', 'value' => number_format($summary['proses_belanja'], 0, ',', '.'), 'class' => 'text-blue-light-600 dark:text-blue-light-500', 'catatan' => []],
             ['label' => 'Menunggu Penerimaan', 'value' => number_format($summary['menunggu'], 0, ',', '.'), 'class' => 'text-warning-600 dark:text-orange-400', 'catatan' => []],
             ['label' => 'Sudah Diterima', 'value' => number_format($summary['diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => []],
             ['label' => 'Nilai Dipesan', 'value' => 'Rp' . number_format($summary['nilai'], 0, ',', '.'), 'class' => 'text-gray-800 dark:text-white/90', 'catatan' => []],
             ['label' => 'Nilai Diterima', 'value' => 'Rp' . number_format($summary['nilai_diterima'], 0, ',', '.'), 'class' => 'text-success-600 dark:text-success-500', 'catatan' => []],
         ] as $card)
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] {{ $card['lebar'] ?? '' }}">
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
                 <h4 class="text-title-sm mt-2 font-bold {{ $card['class'] }}">{{ $card['value'] }}</h4>
                 @foreach ($card['catatan'] as $catatan)

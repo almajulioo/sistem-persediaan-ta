@@ -24,10 +24,19 @@ class ProcurementReceiptController extends Controller
 {
     public function create(Procurement $procurement): View|RedirectResponse
     {
+        // Gudang tidak menerima barang yang belum ditandai dibelanjakan: fakta
+        // belanja dan fotonya dicatat oleh yang membelanjakan, bukan ditebak
+        // oleh yang menerima (ADR 0035).
+        if ($procurement->isProsesBelanja()) {
+            return redirect()
+                ->route('procurements.show', $procurement)
+                ->with('error', ProcurementTidakSiapException::belumDibelanjakan()->getMessage());
+        }
+
         if (! $procurement->isMenungguPenerimaan()) {
             return redirect()
                 ->route('procurements.show', $procurement)
-                ->with('error', "{$procurement->judul()} sudah dikonfirmasi diterima atau dibatalkan.");
+                ->with('error', "{$procurement->judul()} belum disetujui, sudah dikonfirmasi diterima, atau dibatalkan.");
         }
 
         return view('pages.procurements.confirm-receipt', [

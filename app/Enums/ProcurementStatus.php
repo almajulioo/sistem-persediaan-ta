@@ -10,6 +10,13 @@ namespace App\Enums;
  * Dokumennya memang sudah tersimpan — penyedia, barang, dan harganya justru
  * yang dinilai — tetapi belum berlaku sampai disetujui.
  *
+ * Persetujuan tidak langsung berarti barang ditunggu gudang: sejak ADR 0035
+ * realisasi yang disetujui masuk `ProsesBelanja`, dan baru berpindah ke
+ * `MenungguPenerimaan` setelah Pejabat Pengadaan menandainya sudah
+ * dibelanjakan beserta foto buktinya. "Sudah dibelanjakan" sengaja bukan
+ * status tersendiri — keadaannya sama persis dengan menunggu penerimaan, dan
+ * tidak ada siapa pun yang memicu perpindahan di antara keduanya.
+ *
  * `MenungguPenerimaan` sengaja memakai istilah yang sama persis dengan
  * ADR 0008: realisasi berhenti di situ sampai Pengelola Gudang mengonfirmasi
  * barang fisik diterima, dan baru saat itu stok bertambah.
@@ -27,6 +34,7 @@ namespace App\Enums;
 enum ProcurementStatus: string
 {
     case MenungguPersetujuan = 'menunggu_persetujuan';
+    case ProsesBelanja = 'proses_belanja';
     case MenungguPenerimaan = 'menunggu_penerimaan';
     case Diterima = 'diterima';
     case Ditolak = 'ditolak';
@@ -36,6 +44,7 @@ enum ProcurementStatus: string
     {
         return match ($this) {
             self::MenungguPersetujuan => 'Menunggu Persetujuan',
+            self::ProsesBelanja => 'Proses Belanja',
             self::MenungguPenerimaan => 'Menunggu Penerimaan',
             self::Diterima => 'Diterima',
             self::Ditolak => 'Ditolak',
@@ -47,7 +56,8 @@ enum ProcurementStatus: string
     {
         return match ($this) {
             self::MenungguPersetujuan => 'Menunggu penilaian Kasubbag Umum dan TI; barang belum boleh dipesan.',
-            self::MenungguPenerimaan => 'Realisasi berjalan, barang belum dikonfirmasi diterima gudang.',
+            self::ProsesBelanja => 'Disetujui Kasubbag Umum dan TI; Pejabat Pengadaan sedang membelanjakan barangnya.',
+            self::MenungguPenerimaan => 'Barang sudah dibelanjakan, menunggu konfirmasi diterima Pengelola Gudang.',
             self::Diterima => 'Barang telah dikonfirmasi diterima Pengelola Gudang; stok sudah bertambah.',
             self::Ditolak => 'Ditolak Kasubbag Umum dan TI; masih dapat diperbaiki lalu diajukan ulang.',
             self::Dibatalkan => 'Realisasi tidak dilanjutkan; alasan dan keterangannya tercatat pada dokumen.',
@@ -58,6 +68,7 @@ enum ProcurementStatus: string
     {
         return match ($this) {
             self::MenungguPersetujuan => 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400',
+            self::ProsesBelanja => 'bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-500',
             self::MenungguPenerimaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::Diterima => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
             self::Ditolak => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
@@ -71,12 +82,14 @@ enum ProcurementStatus: string
      * Satu predikat untuk dua kebutuhan karena himpunannya memang sama persis:
      * selama barang belum dikonfirmasi diterima, belum ada apa pun yang terjadi
      * secara fisik — tidak ada mutasi, tidak ada BAST, stok belum bertambah.
-     * Lihat ADR 0025 dan ADR 0030.
+     * Barang yang sudah dibelanjakan pun belum menyentuh stok, jadi
+     * `ProsesBelanja` dan `MenungguPenerimaan` sama-sama masih berjalan.
+     * Lihat ADR 0025, ADR 0030, dan ADR 0035.
      */
     public function masihBerjalan(): bool
     {
         return match ($this) {
-            self::MenungguPersetujuan, self::Ditolak, self::MenungguPenerimaan => true,
+            self::MenungguPersetujuan, self::Ditolak, self::ProsesBelanja, self::MenungguPenerimaan => true,
             default => false,
         };
     }

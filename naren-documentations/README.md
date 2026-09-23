@@ -63,6 +63,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0032](keputusan/0032-usulan-barang-baru.md) | Usulan barang baru: pintu depan katalog | Diterima |
 | [0033](keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md) | `item_proposals` resmi jadi tabel bersama dengan sub sistem Permintaan | Diterima |
 | [0034](keputusan/0034-log-aktivitas-terstruktur.md) | Log aktivitas: kolom terstruktur mendampingi kalimat audit | Diterima |
+| [0035](keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) | Tahap belanja pada realisasi pengadaan, berbukti foto belanja | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

@@ -81,6 +81,10 @@
                 <span class="nilai">{{ number_format($summary['menunggu_persetujuan'], 0, ',', '.') }}</span>
             </td>
             <td>
+                <span class="label">Proses Belanja</span>
+                <span class="nilai">{{ number_format($summary['proses_belanja'], 0, ',', '.') }}</span>
+            </td>
+            <td>
                 <span class="label">Menunggu Penerimaan</span>
                 <span class="nilai">{{ number_format($summary['menunggu'], 0, ',', '.') }}</span>
             </td>

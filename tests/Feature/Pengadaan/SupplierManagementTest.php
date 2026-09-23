@@ -237,7 +237,7 @@ describe('cacah pengadaan penyedia', function () {
             ]));
             // Disetujui dulu supaya yang tersisa benar-benar "pengadaan
             // berjalan", bukan dokumen yang masih menunggu keputusan.
-            $procurement = buatRealisasiDisetujui($pejabat, $usulan, $supplier);
+            $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, $supplier);
 
             if ($dibatalkan) {
                 test()->actingAs($pejabat)

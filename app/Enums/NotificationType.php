@@ -47,6 +47,7 @@ enum NotificationType: string
 
     // --- Keadaan realisasi pengadaan ---
     case RealisasiMenungguPersetujuan = 'realisasi_menunggu_persetujuan';
+    case RealisasiBelumDibelanjakan = 'realisasi_belum_dibelanjakan';
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
     case BastBelumDiunggah = 'bast_belum_diunggah';
 
@@ -89,6 +90,7 @@ enum NotificationType: string
             self::UsulanMenggantung => 'Usulan Pengadaan Menggantung',
             self::UsulanBelumDirealisasi => 'Usulan Disetujui Belum Direalisasi',
             self::RealisasiMenungguPersetujuan => 'Realisasi Menunggu Persetujuan',
+            self::RealisasiBelumDibelanjakan => 'Realisasi Belum Dibelanjakan',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
             self::BastBelumDiunggah => 'BAST Belum Diunggah',
             self::UsulanBarangMenungguKeputusan => 'Usulan Barang Baru Menunggu Keputusan',
@@ -127,7 +129,8 @@ enum NotificationType: string
             self::UsulanMenggantung => 'Usulan pengadaan sudah lama diajukan tanpa disetujui maupun ditolak.',
             self::UsulanBelumDirealisasi => 'Usulan sudah disetujui tetapi belum ditindaklanjuti menjadi realisasi pengadaan.',
             self::RealisasiMenungguPersetujuan => 'Realisasi pengadaan menunggu keputusan Kasubbag Umum dan TI sebelum barang dipesan.',
-            self::RealisasiMenungguPenerimaan => 'Realisasi pengadaan menunggu konfirmasi barang diterima Pengelola Gudang.',
+            self::RealisasiBelumDibelanjakan => 'Realisasi pengadaan sudah lama disetujui tetapi belum ditandai sudah dibelanjakan.',
+            self::RealisasiMenungguPenerimaan => 'Barang pengadaan sudah dibelanjakan dan menunggu konfirmasi diterima Pengelola Gudang.',
             self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
             self::UsulanBarangMenungguKeputusan => 'Ada usulan barang baru yang menunggu diperiksa dan didaftarkan Pengelola Gudang.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
@@ -136,7 +139,7 @@ enum NotificationType: string
             self::UsulanDisetujui => 'Usulan pengadaan yang diajukan telah disetujui, sebagian atau seluruhnya.',
             self::UsulanDitolak => 'Usulan pengadaan yang diajukan tidak dilanjutkan ke realisasi.',
             self::PenerimaanDikonfirmasi => 'Barang pengadaan telah dikonfirmasi diterima gudang; stok sudah bertambah.',
-            self::RealisasiDisetujui => 'Realisasi pengadaan disetujui Kasubbag Umum dan TI; barang sudah boleh dipesan.',
+            self::RealisasiDisetujui => 'Realisasi pengadaan disetujui Kasubbag Umum dan TI; barang sudah boleh dibelanjakan.',
             self::RealisasiDitolak => 'Realisasi pengadaan ditolak Kasubbag Umum dan TI; masih dapat diperbaiki lalu diajukan ulang.',
             self::RealisasiDibatalkan => 'Realisasi pengadaan tidak dilanjutkan, sehingga barangnya tidak akan datang.',
             self::UsulanBarangDisetujui => 'Barang yang diusulkan sudah didaftarkan di master barang dan siap diadakan.',
@@ -192,6 +195,7 @@ enum NotificationType: string
             self::UsulanMenggantung,
             self::UsulanBelumDirealisasi,
             self::RealisasiMenungguPersetujuan,
+            self::RealisasiBelumDibelanjakan,
             self::RealisasiMenungguPenerimaan,
             self::BastBelumDiunggah,
             self::UsulanBarangMenungguKeputusan,

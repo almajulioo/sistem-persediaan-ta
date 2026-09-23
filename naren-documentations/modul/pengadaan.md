@@ -31,9 +31,20 @@ Pejabat Pengadaan            Kasubbag Umum & TI    [LUAR SISTEM]    Pengelola Gu
   (+ dasar pengadaan wajib)
 ```
 
+Sejak [ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md)
+pembelian nyata itu tidak lagi sunyi. Kegiatannya tetap di luar sistem, tetapi
+realisasi yang disetujui berstatus **Proses Belanja** sampai Pejabat Pengadaan
+menandainya sudah dibelanjakan beserta foto belanjanya. Baru setelah itu gudang
+menunggu barangnya:
+
+```
+... disetujui ──▶ Proses Belanja ──[pembelian nyata]──▶ ditandai dibelanjakan (+foto) ──▶ Menunggu Penerimaan ──▶ Diterima
+```
+
 Rincian keputusan: [ADR 0016](../keputusan/0016-alur-pengadaan-tiga-dokumen.md),
 [ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md),
-dan [ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md).
+[ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md), dan
+[ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md).
 
 ## Pemisahan tugas
 
@@ -47,6 +58,7 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Menyetujui / menolak usulan | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
 | **Menyetujui / menolak realisasi** | **Kasubbag Umum dan TI** | `procurements.reviewed_by` |
+| Menandai sudah dibelanjakan (+ foto) | Pejabat Pengadaan | `procurements.purchased_by` |
 | Membatalkan realisasi | Pejabat Pengadaan | `procurements.cancelled_by` |
 | Mengonfirmasi diterima | Pengelola Gudang | `procurement_receipts.received_by` |
 
@@ -100,6 +112,11 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
    Barang yang belum ada diusulkan lebih dulu lewat Usulan Barang Baru, dan
    Pengelola Gudang yang mendaftarkannya
    ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)).
+11. **Barang baru dapat diterima setelah realisasinya ditandai sudah
+   dibelanjakan**, dan penandaan itu wajib disertai minimal satu foto belanja.
+   Perubahan realisasi setelah dibelanjakan mengulang persetujuan, tetapi tidak
+   mengulang belanjanya
+   ([ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md)).
 
 ## Tabel
 
@@ -361,8 +378,9 @@ melampirkan bukti bukan bagian dari pemisahan tugas ADR 0016:
 | GET | `/pengadaan/laporan/pdf` | `procurements.pdf` | Laporan pengadaan, mengikuti penyaring aktif |
 | GET | `/pengadaan/laporan/csv` | `procurements.csv` | Ekspor CSV, kolom identik dengan PDF |
 | GET | `/pengadaan/{procurement}/bast` | `procurements.bast` | BAST siap tanda tangan |
-| POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai atau SPK/kontrak |
+| POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai, SPK/kontrak, atau foto belanja |
 | GET | `/pengadaan/{procurement}/dokumen/{document}/unduh` | `procurement-documents.download` | Unduhan terautentikasi; tidak ada URL berkas |
+| GET | `/pengadaan/{procurement}/dokumen/{document}/lihat` | `procurement-documents.show` | Tampil *inline* untuk JPEG/PNG/WEBP/PDF, tetap dicatat (ADR 0035) |
 | DELETE | `/pengadaan/{procurement}/dokumen/{document}` | `procurement-documents.destroy` | Hanya pengunggah atau Admin |
 
 ### Berkas pendukung
@@ -375,8 +393,12 @@ path sendiri.
 
 **Aturan.**
 
-- Unggahan: `mimes:pdf,jpg,jpeg,png`, maksimal 5 MB, jenis divalidasi dengan
-  `Rule::enum(ProcurementDocumentType::class)`.
+- Unggahan: format per jenis dari `ProcurementDocumentType::formatBerkas()` —
+  Foto Belanja hanya `jpg,jpeg,png,webp,heic,heif`, jenis lain ditambah `pdf` —
+  maksimal 10 MB, jenis divalidasi dengan
+  `Rule::enum(ProcurementDocumentType::class)`. Sebelum ADR 0035:
+  `pdf,jpg,jpeg,png`, 5 MB. Batas 10 MB hanya berlaku bila `upload_max_filesize`
+  dan `post_max_size` di php.ini cukup besar; lihat bagian tahap belanja.
 - `uploaded_by` diisi dari sesi, tidak pernah dari klien; tiap unggahan,
   **tiap unduhan**, dan tiap penghapusan menulis satu baris `audit_logs`.
   Unduhan ikut dicatat sejak 16 September 2026
@@ -468,6 +490,9 @@ Admin dipegang staf TI, dan `Gate::before` meloloskan Admin pada seluruh gate.
 | `Diterima` | Final; stok sudah bertambah | Tidak |
 | `Ditolak` | Ditolak, masih dapat diperbaiki lalu diajukan ulang | Ya |
 | `Dibatalkan` | Terminal; usulan asalnya ikut selesai riwayatnya | Tidak |
+
+Sejak ADR 0035 ada status keenam, `ProsesBelanja`, di antara persetujuan dan
+`MenungguPenerimaan` — lihat bagian *Tahap belanja dan foto belanja* di bawah.
 
 **Aturan.**
 
@@ -723,9 +748,97 @@ permintaan barang dapat memakainya kelak tanpa perubahan skema, tetapi yang
 dibangun sekarang hanya pintu Pengadaan dan layar keputusan Gudang. Tidak ada
 berkas sub sistem permintaan yang disentuh.
 
+## Tahap belanja dan foto belanja
+
+Ditambahkan 23 September 2026 atas permintaan langsung Pejabat Pengadaan di
+lapangan. Setelah disetujui Kasubbag Umum dan TI, realisasi seharusnya tidak
+langsung "menunggu penerimaan", karena barangnya baru akan dibelanjakan. Beliau
+juga meminta realisasi dapat dilampiri foto barang atau foto kegiatan
+belanjanya. Rincian keputusan:
+[ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md).
+
+**Enam status realisasi:**
+
+| Status | Arti | Boleh diubah / dibatalkan |
+|---|---|---|
+| `MenungguPersetujuan` | Keadaan kelahiran. Barang belum boleh dibeli | Ya |
+| **`ProsesBelanja`** | Disetujui; Pejabat Pengadaan sedang membelanjakan | Ya (persetujuannya gugur) |
+| `MenungguPenerimaan` | Sudah dibelanjakan; menunggu konfirmasi barang diterima | Ya (persetujuannya gugur) |
+| `Diterima` | Final; stok sudah bertambah | Tidak |
+| `Ditolak` | Ditolak, masih dapat diperbaiki lalu diajukan ulang | Ya |
+| `Dibatalkan` | Terminal; usulan asalnya ikut selesai riwayatnya | Tidak |
+
+**Rute:**
+
+| Metode | URL | Nama | Gate |
+|---|---|---|---|
+| PATCH | `/pengadaan/{procurement}/dibelanjakan` | `procurements.purchase` | `kelola-pengadaan` |
+
+**Aturan.**
+
+- Hanya **satu** status baru. "Sudah dibelanjakan" dan "menunggu penerimaan"
+  adalah keadaan fisik yang sama. Dua status untuk keduanya berarti ada
+  perpindahan yang tidak dipicu siapa pun.
+- Persetujuan membawa realisasi ke `ProsesBelanja`. Tombol **Tandai Sudah
+  Dibelanjakan** (Pejabat Pengadaan dan Admin) membuka dialog berisi tanggal
+  belanja, foto (maks. 5 per kiriman, masing-masing maks. 10 MB), dan catatan
+  opsional. Menyimpannya memindahkan status ke `MenungguPenerimaan` dan mengisi
+  `purchased_at`, `purchased_by`, dan `purchase_note`.
+- **Foto belanja wajib minimal satu**, dihitung dari keadaan: foto
+  `FotoBelanja` yang sudah diunggah lebih dulu lewat Berkas Pendukung ikut
+  dihitung, berkas jenis lain tidak. Berbeda dari BAST yang boleh menyusul
+  (ADR 0018) karena foto belanja sudah ada di ponsel ketika tombolnya ditekan.
+- Tanggal belanja tidak boleh melewati hari ini maupun mendahului tanggal
+  realisasi.
+- Selama `ProsesBelanja`, gudang **tidak** dapat mengonfirmasi penerimaan.
+  Halaman detail menjelaskan sebabnya, dan pesan galatnya menunjuk Pejabat
+  Pengadaan.
+- **Mengubah realisasi setelah dibelanjakan** tetap mengembalikannya ke
+  `MenungguPersetujuan` (ADR 0030), tetapi `purchased_*` tidak dikosongkan.
+  Setelah disetujui ulang, ia **langsung** kembali ke `MenungguPenerimaan`.
+  Mengubah dokumen mengulang penilaian, bukan mengulang belanja. Keputusannya
+  ada di `ProcurementApprovalController::approve()`, lewat
+  `Procurement::sudahDibelanjakan()`.
+- Kartu **Belanja** di halaman detail menampilkan tanggal, penanda, jumlah foto,
+  dan catatan belanja. Kartu ini tetap tampil saat realisasi yang sudah
+  dibelanjakan menunggu persetujuan ulang, disertai penjelasannya.
+- Berkas foto ditulis ke disk sebelum transaksi, dan dibuang lagi lewat
+  `DocumentStorage::hapusBerkas()` bila transaksinya gagal.
+- Jejak audit: satu baris `Pengadaan / UbahStatus`, ditambah satu baris
+  `DokumenPengadaan / Unggah` per foto.
+- Tombol **Lihat** pada daftar berkas membuka JPEG, PNG, WEBP, dan PDF langsung
+  di tab baru (`DocumentStorage::tampilkan()`, dengan `nosniff`). HEIC tetap
+  diunduh. Melihat dicatat seperti mengunduh. Karena itu tidak ada gambar kecil
+  di halaman: setiap tampilan halaman akan tercatat sebagai pembacaan berkas.
+
+**Notifikasi.**
+
+- `RealisasiMenungguPenerimaan` kini baru terbit setelah barang ditandai sudah
+  dibelanjakan, bukan saat disetujui. Isinya menyebut tanggal belanja.
+- `RealisasiBelumDibelanjakan` (keadaan, ke Pejabat Pengadaan + Admin): muncul
+  bila realisasi berada di `ProsesBelanja` lebih dari **7 hari** sejak
+  disetujui, dan menutup dirinya sendiri begitu ditandai, diubah, atau
+  dibatalkan.
+- Isi peristiwa `RealisasiDisetujui` kini menyuruh membelanjakan lalu
+  menandai. Bila barangnya ternyata sudah dibelanjakan sebelum diubah, isinya
+  mengatakan gudang langsung menunggu.
+
+**Rekap.** Kartu dan laporan PDF mendapat angka *Proses Belanja*. Invarian
+rekap menjadi `total = menunggu_persetujuan + proses_belanja + menunggu + diterima`.
+
+**Lingkungan.** Batas unggah PHP harus menampung foto ponsel. PHP di laptop
+pengembangan ternyata memuat `upload_max_filesize=2M` dan `post_max_size=8M`,
+sehingga foto di atas 2 MB ditolak PHP sebelum Laravel sempat memvalidasinya.
+Naikkan, misalnya, ke `upload_max_filesize=12M` dan `post_max_size=64M`, di
+laptop maupun server.
+
 ---
 
 ## Butir yang masih menunggu lapangan
+
+**Label "Proses Belanja"** perlu dikonfirmasi ke Pejabat Pengadaan. Bila istilah
+lapangannya lain ("Sedang Dibelanjakan", "Menunggu Dibelanjakan"), cukup ganti
+`ProcurementStatus::label()`.
 
 **Format nomor dokumen resmi BPK** untuk `procurement_receipts.bast_number`
 belum dikonfirmasi. Formulir konfirmasi penerimaan sudah menyediakan saran

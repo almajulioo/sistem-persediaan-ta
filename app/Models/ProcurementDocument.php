@@ -56,6 +56,18 @@ class ProcurementDocument extends Model
         return number_format($bytes / (1024 * 1024), 1, ',', '.').' MB';
     }
 
+    /**
+     * Jenis isi yang aman ditampilkan langsung di peramban: gambar raster dan
+     * PDF. HEIC tidak termasuk karena kebanyakan peramban belum dapat
+     * membukanya — berkas seperti itu tetap diunduh. `mime_type` berasal dari
+     * isi berkas yang diperiksa saat unggah, bukan dari ekstensi kiriman
+     * klien. Lihat ADR 0035.
+     */
+    public function dapatDitampilkan(): bool
+    {
+        return in_array($this->mime_type, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], true);
+    }
+
     public function procurement(): BelongsTo
     {
         return $this->belongsTo(Procurement::class, 'procurement_id', 'procurement_id');

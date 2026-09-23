@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\AuditEvent;
 use App\Enums\NotificationType;
 use App\Enums\ProcurementDocumentType;
 use App\Enums\UserRole;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Support\DocumentStorage;
 use App\Support\NotificationScanner;
 use App\Support\ProcurementReceiptPoster;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -32,7 +34,7 @@ function realisasiDiterima(User $pejabat, User $petugas, int $diterimaHariLalu =
     ]));
 
     // Persetujuan Kasubbag Umum dan TI adalah prasyarat penerimaan (ADR 0030).
-    $procurement = buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
+    $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
 
     ProcurementReceiptPoster::post(
         procurement: $procurement,
@@ -56,7 +58,19 @@ function realisasiMenunggu(User $pejabat, User $petugas): Procurement
         ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
     ]));
 
-    return buatRealisasiDisetujui($pejabat, $usulan, Supplier::factory()->create());
+    return buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
+}
+
+/**
+ * Berkas BAST pada seluruh pengadaan.
+ *
+ * Sejak ADR 0035 setiap realisasi yang sampai ke penerimaan sudah membawa satu
+ * Foto Belanja dari fixture, jadi hitungan "berkas yang diunggah uji ini"
+ * dipersempit ke BAST. Namanya unik lintas berkas karena fungsi Pest global.
+ */
+function bastTerunggah(): Builder
+{
+    return ProcurementDocument::where('type', ProcurementDocumentType::Bast);
 }
 
 beforeEach(function () {
@@ -119,7 +133,7 @@ describe('hak akses berkas', function () {
             ])
             ->assertRedirect();
 
-        expect(ProcurementDocument::count())->toBe(1);
+        expect(bastTerunggah()->count())->toBe(1);
     });
 });
 
@@ -131,7 +145,7 @@ describe('mengunggah berkas', function () {
             'notes' => 'Hasil pindai lengkap tiga halaman.',
         ]);
 
-        $document = ProcurementDocument::firstOrFail();
+        $document = bastTerunggah()->firstOrFail();
 
         expect($document->original_name)->toBe('BAST Ditandatangani.pdf')
             ->and($document->type)->toBe(ProcurementDocumentType::Bast)
@@ -163,16 +177,58 @@ describe('mengunggah berkas', function () {
             ])
             ->assertSessionHasErrors('file');
 
-        expect(ProcurementDocument::count())->toBe(0);
+        expect(bastTerunggah()->count())->toBe(0);
     });
 
-    it('menolak berkas melebihi 5 MB', function () {
+    it('menolak berkas melebihi 10 MB', function () {
         $this->actingAs($this->petugas)
             ->post($this->url, [
                 'type' => 'bast',
-                'file' => UploadedFile::fake()->create('besar.pdf', 6000, 'application/pdf'),
+                'file' => UploadedFile::fake()->create('besar.pdf', 11000, 'application/pdf'),
             ])
             ->assertSessionHasErrors('file');
+    });
+
+    it('menerima foto ponsel berformat WEBP dan HEIC', function () {
+        // ADR 0035: HEIC adalah format bawaan kamera iPhone.
+        $this->actingAs($this->pejabat)
+            ->post($this->url, [
+                'type' => 'foto_belanja',
+                'file' => UploadedFile::fake()->create('barang.webp', 200, 'image/webp'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->pejabat)
+            ->post($this->url, [
+                'type' => 'foto_belanja',
+                'file' => UploadedFile::fake()->create('IMG_0001.heic', 200, 'image/heic'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        // Satu dari fixture, dua dari uji ini.
+        expect(ProcurementDocument::where('type', ProcurementDocumentType::FotoBelanja)->count())->toBe(3);
+    });
+
+    it('menolak SVG walau berupa gambar', function () {
+        // Berkas dapat ditampilkan langsung di peramban, dan SVG dapat
+        // membawa skrip (ADR 0035).
+        $this->actingAs($this->pejabat)
+            ->post($this->url, [
+                'type' => 'foto_belanja',
+                'file' => UploadedFile::fake()->create('gambar.svg', 5, 'image/svg+xml'),
+            ])
+            ->assertSessionHasErrors('file');
+    });
+
+    it('menolak PDF yang diunggah sebagai foto belanja', function () {
+        // Foto belanja adalah syarat menandai sudah dibelanjakan; PDF yang
+        // diberi jenis "foto" akan meloloskan syarat itu tanpa satu pun foto.
+        $this->actingAs($this->pejabat)
+            ->post($this->url, [
+                'type' => 'foto_belanja',
+                'file' => UploadedFile::fake()->create('nota.pdf', 20, 'application/pdf'),
+            ])
+            ->assertSessionHasErrors(['file' => 'Foto belanja harus berformat JPG, PNG, WEBP, atau HEIC.']);
     });
 
     it('menolak jenis dokumen yang tidak dikenal', function () {
@@ -194,7 +250,8 @@ describe('mengunggah berkas', function () {
             'file' => UploadedFile::fake()->create('spk.pdf', 10, 'application/pdf'),
         ]);
 
-        expect($this->procurement->fresh()->documents)->toHaveCount(2);
+        expect($this->procurement->fresh()->documents
+            ->whereIn('type', [ProcurementDocumentType::Bast, ProcurementDocumentType::SpkKontrak]))->toHaveCount(2);
     });
 });
 
@@ -205,7 +262,7 @@ describe('mengunduh berkas', function () {
             'file' => UploadedFile::fake()->create('bast-asli.pdf', 32, 'application/pdf'),
         ]);
 
-        $this->document = ProcurementDocument::firstOrFail();
+        $this->document = bastTerunggah()->firstOrFail();
     });
 
     it('mengembalikan berkas dengan nama aslinya', function () {
@@ -249,6 +306,66 @@ describe('mengunduh berkas', function () {
     });
 });
 
+describe('melihat berkas', function () {
+    beforeEach(function () {
+        $this->actingAs($this->pejabat)->post($this->url, [
+            'type' => 'foto_belanja',
+            'file' => UploadedFile::fake()->image('rak-kertas.jpg'),
+        ]);
+
+        $this->foto = ProcurementDocument::where('type', ProcurementDocumentType::FotoBelanja)
+            ->where('original_name', 'rak-kertas.jpg')
+            ->firstOrFail();
+        $this->lihat = "{$this->url}/{$this->foto->procurement_document_id}/lihat";
+    });
+
+    it('menampilkan foto langsung di peramban, bukan mengunduhnya', function () {
+        $response = $this->actingAs($this->petugas)->get($this->lihat);
+
+        $response->assertOk();
+        expect($response->headers->get('content-disposition'))->toContain('inline')
+            ->and($response->headers->get('x-content-type-options'))->toBe('nosniff');
+    });
+
+    it('tetap mencatat pembacaannya seperti unduhan', function () {
+        $this->actingAs($this->petugas)->get($this->lihat);
+
+        expect(AuditLog::where('activity', 'like', 'Melihat Foto Belanja (rak-kertas.jpg)%')
+            ->where('event', AuditEvent::Unduh)
+            ->exists())->toBeTrue();
+    });
+
+    it('mengunduh berkas yang tidak dapat dibuka peramban', function () {
+        $this->actingAs($this->pejabat)->post($this->url, [
+            'type' => 'foto_belanja',
+            'file' => UploadedFile::fake()->create('IMG_0002.heic', 50, 'image/heic'),
+        ]);
+        $heic = ProcurementDocument::where('original_name', 'IMG_0002.heic')->firstOrFail();
+
+        $response = $this->actingAs($this->petugas)
+            ->get("{$this->url}/{$heic->procurement_document_id}/lihat");
+
+        $response->assertOk();
+        expect($response->headers->get('content-disposition'))->toContain('attachment');
+    });
+
+    it('menolak tamu dan peran di luar pengadaan, tetapi meloloskan Admin', function () {
+        auth()->logout();
+        $this->get($this->lihat)->assertRedirect('/login');
+
+        $this->actingAs(User::factory()->role(UserRole::KepalaUnit)->create())->get($this->lihat)->assertForbidden();
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())->get($this->lihat)->assertOk();
+    });
+
+    it('menganggap berkas milik pengadaan lain sebagai tidak ada', function () {
+        $lain = realisasiMenunggu($this->pejabat, $this->petugas);
+
+        $this->actingAs($this->petugas)
+            ->get("/pengadaan/{$lain->procurement_id}/dokumen/{$this->foto->procurement_document_id}/lihat")
+            ->assertNotFound();
+    });
+});
+
 describe('menghapus berkas', function () {
     beforeEach(function () {
         $this->actingAs($this->petugas)->post($this->url, [
@@ -256,7 +373,7 @@ describe('menghapus berkas', function () {
             'file' => UploadedFile::fake()->create('bast.pdf', 16, 'application/pdf'),
         ]);
 
-        $this->document = ProcurementDocument::firstOrFail();
+        $this->document = bastTerunggah()->firstOrFail();
         $this->hapus = "{$this->url}/{$this->document->procurement_document_id}";
     });
 
@@ -265,7 +382,7 @@ describe('menghapus berkas', function () {
 
         $this->actingAs($this->petugas)->delete($this->hapus)->assertRedirect();
 
-        expect(ProcurementDocument::count())->toBe(0);
+        expect(bastTerunggah()->count())->toBe(0);
         Storage::disk(DocumentStorage::DISK)->assertMissing($path);
     });
 
@@ -275,7 +392,7 @@ describe('menghapus berkas', function () {
             ->delete($this->hapus)
             ->assertSessionHas('error');
 
-        expect(ProcurementDocument::count())->toBe(1);
+        expect(bastTerunggah()->count())->toBe(1);
     });
 
     it('mengizinkan Admin menghapus berkas siapa pun', function () {
@@ -283,7 +400,7 @@ describe('menghapus berkas', function () {
             ->delete($this->hapus)
             ->assertRedirect();
 
-        expect(ProcurementDocument::count())->toBe(0);
+        expect(bastTerunggah()->count())->toBe(0);
     });
 
     it('mencatat jejak audit penghapusan', function () {

@@ -57,9 +57,35 @@ class DocumentStorage
         return Storage::disk(self::DISK)->download($document->file_path, $document->original_name);
     }
 
+    /**
+     * Tampilkan berkas di peramban alih-alih mengunduhnya — untuk foto belanja
+     * dan PDF yang cukup dilihat sekilas (ADR 0035).
+     *
+     * Hanya untuk jenis yang lolos `ProcurementDocument::dapatDitampilkan()`,
+     * dan `nosniff` dipasang supaya peramban tidak menebak-nebak jenis isinya
+     * menjadi sesuatu yang dapat dijalankan.
+     */
+    public static function tampilkan(ProcurementDocument $document): StreamedResponse
+    {
+        return Storage::disk(self::DISK)->response(
+            $document->file_path,
+            $document->original_name,
+            ['Content-Type' => $document->mime_type, 'X-Content-Type-Options' => 'nosniff'],
+        );
+    }
+
     public static function hapus(ProcurementDocument $document): void
     {
-        Storage::disk(self::DISK)->delete($document->file_path);
+        self::hapusBerkas($document->file_path);
+    }
+
+    /**
+     * Membuang berkas yang belum sempat punya baris dokumen — misalnya foto
+     * yang sudah tertulis ke disk ketika transaksi penandaan belanja gagal.
+     */
+    public static function hapusBerkas(string $path): void
+    {
+        Storage::disk(self::DISK)->delete($path);
     }
 
     /**
