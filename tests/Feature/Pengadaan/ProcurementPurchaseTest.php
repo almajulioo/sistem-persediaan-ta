@@ -72,7 +72,6 @@ function notifikasiAktifBelanja(NotificationType $type, Procurement $procurement
     return Notification::query()
         ->where('type', $type)
         ->where('subject_id', $procurement->procurement_id)
-        ->aktif()
         ->count();
 }
 
@@ -441,7 +440,6 @@ describe('notifikasi tahap belanja', function () {
             ->where('user_id', $this->gudang->user_id)
             ->where('type', NotificationType::RealisasiMenungguPenerimaan)
             ->where('subject_id', $this->procurement->procurement_id)
-            ->aktif()
             ->first();
 
         expect($kabar)->not->toBeNull()
@@ -463,7 +461,6 @@ describe('notifikasi tahap belanja', function () {
             ->where('user_id', $this->pejabat->user_id)
             ->where('type', NotificationType::RealisasiBelumDibelanjakan)
             ->where('subject_id', $this->procurement->procurement_id)
-            ->aktif()
             ->first();
 
         expect($kabar)->not->toBeNull()

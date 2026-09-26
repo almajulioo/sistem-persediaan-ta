@@ -416,7 +416,6 @@ describe('notifikasi BAST belum diunggah', function () {
         return Notification::query()
             ->where('type', NotificationType::BastBelumDiunggah)
             ->where('subject_id', $procurement->procurement_id)
-            ->aktif()
             ->count();
     };
 

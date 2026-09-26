@@ -1,4 +1,6 @@
-{{-- Lonceng notifikasi. Datanya disiapkan App\View\Components\header\NotificationDropdown. --}}
+{{-- Lonceng notifikasi. Datanya disiapkan App\View\Components\header\NotificationDropdown.
+     Hanya berisi yang belum dibaca, dan hanya judulnya: kalimat lengkapnya ada
+     di halaman notifikasi (ADR 0036). --}}
 <div class="relative" x-data="{
     dropdownOpen: false,
     toggleDropdown() { this.dropdownOpen = !this.dropdownOpen },
@@ -64,22 +66,24 @@
 
         <ul class="custom-scrollbar flex h-auto flex-col overflow-y-auto">
             @if ($perluTindakan->isEmpty() && $aktivitas->isEmpty())
+                {{-- Sengaja tidak menyatakan "semua aman": keadaan yang sudah dibaca
+                     bisa saja masih berlangsung, hanya tidak lagi ditampilkan di sini. --}}
                 <li class="px-4 py-10 text-center">
                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                        Tidak ada yang perlu ditindak. Stok aman dan tidak ada dokumen yang menggantung.
+                        Tidak ada notifikasi baru. Yang sudah dibaca tetap dapat dilihat di halaman notifikasi.
                     </p>
                 </li>
             @endif
 
             @foreach ([
-                ['judul' => 'Perlu Tindakan', 'items' => $perluTindakan],
-                ['judul' => 'Aktivitas Terbaru', 'items' => $aktivitas],
+                ['judul' => 'Perlu Tindakan', 'items' => $perluTindakan, 'jumlah' => $jumlahPerluTindakan, 'sifat' => 'keadaan'],
+                ['judul' => 'Aktivitas Terbaru', 'items' => $aktivitas, 'jumlah' => $jumlahAktivitas, 'sifat' => 'peristiwa'],
             ] as $bagian)
                 @continue($bagian['items']->isEmpty())
 
                 <li class="px-1 pt-2 pb-1">
                     <p class="text-theme-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500">
-                        {{ $bagian['judul'] }}
+                        {{ $bagian['judul'] }} &middot; {{ $bagian['jumlah'] }}
                     </p>
                 </li>
 
@@ -97,15 +101,8 @@
                                     class="mt-1.5 size-2 shrink-0 rounded-full {{ $notification->level->dotClass() }}"></span>
 
                                 <span class="block">
-                                    <span @class([
-                                        'text-theme-sm mb-0.5 block text-gray-800 dark:text-white/90',
-                                        'font-semibold' => !$notification->sudahDibaca(),
-                                    ])>
+                                    <span class="text-theme-sm mb-1 block font-semibold text-gray-800 dark:text-white/90">
                                         {{ $notification->title }}
-                                    </span>
-
-                                    <span class="text-theme-xs mb-1 block text-gray-500 dark:text-gray-400">
-                                        {{ Str::limit($notification->body, 90) }}
                                     </span>
 
                                     <span
@@ -119,6 +116,17 @@
                         </form>
                     </li>
                 @endforeach
+
+                {{-- Tiap bagian hanya memuat lima baris; sisanya disebut, bukan
+                     disembunyikan, supaya lonceng tidak terkesan sudah habis. --}}
+                @if ($bagian['jumlah'] > $bagian['items']->count())
+                    <li class="px-3 pt-1 pb-2">
+                        <a href="{{ route('notifications.index', ['status' => 'belum_dibaca', 'sifat' => $bagian['sifat']]) }}"
+                            class="text-theme-xs hover:text-brand-500 dark:hover:text-brand-400 font-medium text-gray-500 dark:text-gray-400">
+                            Lihat {{ $bagian['jumlah'] - $bagian['items']->count() }} lainnya
+                        </a>
+                    </li>
+                @endif
             @endforeach
         </ul>
 

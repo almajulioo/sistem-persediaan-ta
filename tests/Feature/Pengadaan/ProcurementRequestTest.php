@@ -115,7 +115,6 @@ describe('mengajukan usulan', function () {
         expect(Notification::query()
             ->where('user_id', $pejabat->user_id)
             ->where('type', NotificationType::UsulanMenungguPersetujuan)
-            ->aktif()
             ->exists())->toBeTrue();
     });
 
@@ -207,7 +206,6 @@ describe('menyetujui usulan', function () {
         expect(Notification::query()
             ->where('user_id', $pejabat->user_id)
             ->where('type', NotificationType::UsulanMenungguPersetujuan)
-            ->aktif()
             ->exists())->toBeFalse();
     });
 

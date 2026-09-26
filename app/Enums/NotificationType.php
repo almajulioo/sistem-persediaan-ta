@@ -9,12 +9,15 @@ namespace App\Enums;
  * menyatakan dirinya **keadaan** atau **peristiwa** lewat `bersifatKeadaan()`.
  *
  * - **Keadaan** adalah sesuatu yang *sedang* benar, mis. "stok kertas habis".
- *   Ia boleh sembuh sendiri: begitu barang masuk, notifikasinya ditutup tanpa
+ *   Ia boleh sembuh sendiri: begitu barang masuk, barisnya dihapus tanpa
  *   pengguna perlu mengklik apa pun. Satu baris bertahan selama keadaannya
  *   bertahan, berapa kali pun pemeriksaan dijalankan.
  * - **Peristiwa** adalah fakta historis, mis. "opname triwulan III diposting".
- *   Ia tidak pernah berubah dan tidak pernah ditutup sendiri; ia hilang dari
- *   lonceng setelah dibaca.
+ *   Ia tidak punya kondisi pulih, jadi barisnya dihapus setelah berumur tujuh
+ *   hari (ADR 0036).
+ *
+ * Keduanya hilang dari lonceng begitu dibaca; halaman notifikasi tetap
+ * menampilkannya sampai barisnya dihapus.
  *
  * Pemisahan ini yang menjaga lonceng tetap layak dibaca. Bila keadaan
  * diperlakukan sebagai peristiwa, satu barang yang habis akan melahirkan
@@ -178,6 +181,34 @@ enum NotificationType: string
             self::PermintaanSelesai => false,
             default => true,
         };
+    }
+
+    /**
+     * Seluruh jenis keadaan — isi bagian "Perlu Tindakan" pada lonceng, dan
+     * satu-satunya yang diingatkan ulang (ADR 0037).
+     *
+     * @return list<self>
+     */
+    public static function keadaan(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $type) => $type->bersifatKeadaan(),
+        ));
+    }
+
+    /**
+     * Seluruh jenis peristiwa. Dipakai pembersihan: peristiwa tidak punya
+     * kondisi pulih, jadi umurnyalah yang menentukan kapan ia dibuang.
+     *
+     * @return list<self>
+     */
+    public static function peristiwa(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            fn (self $type) => ! $type->bersifatKeadaan(),
+        ));
     }
 
     public function level(): NotificationLevel

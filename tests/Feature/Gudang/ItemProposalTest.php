@@ -216,11 +216,12 @@ describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
             ->where('type', NotificationType::UsulanBarangMenungguKeputusan)
             ->first();
 
-        expect($sebelum->resolved_at)->toBeNull();
+        expect($sebelum)->not->toBeNull();
 
         $this->actingAs($gudang)->post('/barang', payloadBarangDariUsulan($proposal));
 
-        expect($sebelum->fresh()->resolved_at)->not->toBeNull();
+        // Keadaan yang selesai dihapus, bukan ditandai (ADR 0036).
+        expect($sebelum->fresh())->toBeNull();
     });
 
     it('menolak formulir barang yang menunjuk usulan yang sudah diputuskan', function () {
@@ -315,7 +316,7 @@ describe('menolak usulan barang', function () {
             ->where('type', NotificationType::UsulanBarangMenungguKeputusan)
             ->first();
 
-        expect($tagihan->resolved_at)->not->toBeNull();
+        expect($tagihan)->toBeNull();
     });
 });
 

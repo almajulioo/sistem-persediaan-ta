@@ -164,6 +164,7 @@ ERD pada naskah Naren diperbarui.
 | `item_proposals` | Tabel baru — usulan barang baru; `item_id` nullable terisi saat Pengelola Gudang mendaftarkan barangnya | [0032](../keputusan/0032-usulan-barang-baru.md) |
 | `procurements` | Tambah `purchased_at` (date), `purchased_by` (FK `users`, restrictOnDelete), `purchase_note` — fakta belanja, bertahan walau realisasinya diubah dan disetujui ulang. Nilai `status` baru `proses_belanja`, tanpa migrasi | [0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) |
 | `procurement_documents` | Nilai `type` baru `foto_belanja`, tanpa migrasi — kolomnya string polos | [0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) |
+| `user_notifications` | Hapus `resolved_at` beserta indeks `(user_id, resolved_at, read_at)`, diganti indeks `(user_id, read_at)` — notifikasi yang selesai kini dihapus, bukan ditandai. Tabelnya sendiri lahir di ADR 0013 | [0036](../keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

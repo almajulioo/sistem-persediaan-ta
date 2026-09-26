@@ -41,7 +41,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Diterima |
 | [0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) | Alasan selisih: enum baku berpasangan keterangan wajib | Diterima |
 | [0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) | Periode opname sebagai enum jenis + tahun | Diterima |
-| [0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md) | Notifikasi memisahkan keadaan dari peristiwa | Diterima |
+| [0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md) | Notifikasi memisahkan keadaan dari peristiwa | Sebagian digantikan oleh 0036 |
 | [0014](keputusan/0014-pemeriksaan-notifikasi-dipanggil-eksplisit.md) | Pemeriksaan notifikasi dipanggil eksplisit, bukan lewat hook di `StockLedger` | Diterima |
 | [0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) | Usulan pengadaan dan penerimaan barang: skema diperbaiki dan dipisah tegas dari sub sistem Permintaan | Diterima |
 | [0016](keputusan/0016-alur-pengadaan-tiga-dokumen.md) | Alur pengadaan tiga dokumen dan pemisahan tugas | Diterima |
@@ -64,6 +64,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0033](keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md) | `item_proposals` resmi jadi tabel bersama dengan sub sistem Permintaan | Diterima |
 | [0034](keputusan/0034-log-aktivitas-terstruktur.md) | Log aktivitas: kolom terstruktur mendampingi kalimat audit | Diterima |
 | [0035](keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) | Tahap belanja pada realisasi pengadaan, berbukti foto belanja | Diterima |
+| [0036](keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md) | Lonceng sebagai kotak masuk; notifikasi yang selesai dihapus | Sebagian digantikan oleh 0037 |
+| [0037](keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md) | Lonceng: kuota per bagian, pengingat ulang keadaan, dan peristiwa berulang | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

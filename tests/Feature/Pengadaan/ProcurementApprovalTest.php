@@ -291,7 +291,6 @@ describe('notifikasi persetujuan', function () {
             ->where('user_id', $this->kasubbag->user_id)
             ->where('type', NotificationType::RealisasiMenungguPersetujuan)
             ->where('subject_id', $this->procurement->procurement_id)
-            ->aktif()
             ->first();
 
         expect($kabar)->not->toBeNull()
@@ -348,6 +347,41 @@ describe('notifikasi persetujuan', function () {
             NotificationType::RealisasiMenungguPenerimaan,
             $this->procurement->procurement_id,
         ))->toBe(0);
+    });
+
+    it('memberi tahu perealisasi lagi ketika ditolak untuk kedua kalinya', function () {
+        // ADR 0037: penolakan kedua memakai baris notifikasi yang sama, tetapi
+        // harus terdengar lagi walau penolakan pertama sudah dibaca.
+        $kabar = fn () => Notification::query()
+            ->where('user_id', $this->pejabat->user_id)
+            ->where('type', NotificationType::RealisasiDitolak)
+            ->sole();
+
+        $this->actingAs($this->kasubbag)->patch("{$this->url}/tolak", ['review_note' => 'Harga kemahalan.']);
+        $pertama = $kabar();
+
+        $this->actingAs($this->pejabat)->patch("/notifikasi/{$pertama->notification_id}/baca");
+        expect($kabar()->sudahDibaca())->toBeTrue();
+
+        $this->actingAs($this->pejabat)
+            ->put($this->url, ubahPayload($this->procurement->fresh('details'), [
+                'items' => [[
+                    'procurement_detail_id' => $this->procurement->details->first()->procurement_detail_id,
+                    'amount' => 10,
+                    'unit_price' => 7500,
+                ]],
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->kasubbag)->patch("{$this->url}/tolak", [
+            'review_note' => 'Penyedianya belum terdaftar di katalog elektronik.',
+        ]);
+
+        $kedua = $kabar();
+
+        expect($kedua->notification_id)->toBe($pertama->notification_id)
+            ->and($kedua->sudahDibaca())->toBeFalse()
+            ->and($kedua->body)->toContain('katalog elektronik');
     });
 
     it('menagih ulang persetujuan setelah realisasi yang sudah disetujui diubah', function () {

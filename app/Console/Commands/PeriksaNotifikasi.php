@@ -15,11 +15,15 @@ use Illuminate\Console\Command;
  * jatuh tempo, draf yang menggantung, barang yang tidak bergerak — sekaligus
  * menjadi jaring pengaman bagi perubahan stok yang lewat tanpa pemeriksaan
  * reaktif. Aman dijalankan berkali-kali: seluruh pemeriksaan idempoten.
+ *
+ * Di sini pula keadaan yang sudah lama dibaca tetapi belum pulih dikembalikan
+ * ke lonceng (ADR 0037) — sesudah pemeriksaan, supaya yang baru saja pulih
+ * sudah terhapus lebih dulu dan tidak ikut ditagih.
  */
 class PeriksaNotifikasi extends Command
 {
     protected $signature = 'notifikasi:periksa
-                            {--bersihkan : Ikut membuang notifikasi lama yang sudah selesai dan sudah dibaca}';
+                            {--bersihkan : Ikut membuang peristiwa yang berumur lebih dari 7 hari}';
 
     protected $description = 'Memeriksa keadaan gudang dan menyelaraskan notifikasi dalam aplikasi';
 
@@ -30,13 +34,16 @@ class PeriksaNotifikasi extends Command
         NotificationScanner::periksaSemua();
         ProcurementDraftScanner::perbaruiSeluruh();
 
-        $aktif = Notification::query()->aktif()->count();
-        $this->line("Notifikasi aktif setelah pemeriksaan: {$aktif}");
+        $diingatkan = Notifier::ingatkanUlang();
+        $this->line("Keadaan yang diingatkan ulang: {$diingatkan}");
 
         if ($this->option('bersihkan')) {
             $dibuang = Notifier::bersihkan();
-            $this->line("Notifikasi lama dibuang: {$dibuang}");
+            $this->line("Peristiwa lama dibuang: {$dibuang}");
         }
+
+        $tersimpan = Notification::query()->count();
+        $this->line("Notifikasi tersimpan setelah pemeriksaan: {$tersimpan}");
 
         $this->info('Selesai.');
 

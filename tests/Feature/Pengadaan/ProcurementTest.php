@@ -199,14 +199,12 @@ describe('membuat realisasi', function () {
         expect(Notification::query()
             ->where('user_id', $kasubbag->user_id)
             ->where('type', NotificationType::RealisasiMenungguPersetujuan)
-            ->aktif()
             ->exists())->toBeTrue();
 
         // Gudang belum ditagih apa pun: barangnya belum tentu jadi dipesan.
         expect(Notification::query()
             ->where('user_id', $gudang->user_id)
             ->where('type', NotificationType::RealisasiMenungguPenerimaan)
-            ->aktif()
             ->exists())->toBeFalse();
     });
 
@@ -420,7 +418,6 @@ describe('konfirmasi penerimaan', function () {
         expect(Notification::query()
             ->where('user_id', $gudang->user_id)
             ->where('type', NotificationType::RealisasiMenungguPenerimaan)
-            ->aktif()
             ->exists())->toBeFalse();
     });
 

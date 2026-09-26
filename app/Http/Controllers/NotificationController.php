@@ -89,6 +89,7 @@ class NotificationController extends Controller
             'type' => (string) $request->query('type', ''),
             'level' => (string) $request->query('level', ''),
             'status' => (string) $request->query('status', ''),
+            'sifat' => (string) $request->query('sifat', ''),
         ];
     }
 
@@ -99,11 +100,13 @@ class NotificationController extends Controller
     {
         $base = fn () => Notification::query()->untuk($request->user());
 
+        // Tanpa penyaring "masih aktif": setiap baris yang tersisa memang masih
+        // berlaku, karena yang selesai langsung dihapus (ADR 0036).
         return [
-            'mendesak' => $base()->aktif()->where('level', NotificationLevel::Mendesak)->count(),
-            'perhatian' => $base()->aktif()->where('level', NotificationLevel::Perhatian)->count(),
+            'mendesak' => $base()->where('level', NotificationLevel::Mendesak)->count(),
+            'perhatian' => $base()->where('level', NotificationLevel::Perhatian)->count(),
             'belum_dibaca' => $base()->belumDibaca()->count(),
-            'aktif' => $base()->aktif()->count(),
+            'total' => $base()->count(),
         ];
     }
 }

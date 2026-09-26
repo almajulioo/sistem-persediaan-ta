@@ -260,7 +260,6 @@ describe('menuntaskan draf', function () {
         expect(Notification::query()
             ->where('user_id', $pejabat->user_id)
             ->where('type', NotificationType::UsulanMenungguPersetujuan)
-            ->aktif()
             ->exists())->toBeTrue();
     });
 
@@ -316,8 +315,8 @@ describe('notifikasi draf tersedia', function () {
 
         seedDraf();
 
-        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->aktif()->exists())->toBeTrue()
-            ->and(Notification::query()->where('user_id', $admin->user_id)->where('type', NotificationType::DraftUsulanTersedia)->aktif()->exists())->toBeTrue()
+        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeTrue()
+            ->and(Notification::query()->where('user_id', $admin->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeTrue()
             ->and(Notification::query()->where('user_id', $pejabat->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeFalse();
     });
 
@@ -327,7 +326,7 @@ describe('notifikasi draf tersedia', function () {
 
         $this->actingAs($gudang)->delete('/usulan-pengadaan/draf');
 
-        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->aktif()->exists())->toBeFalse();
+        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeFalse();
     });
 
     it('menutup diri saat draf diajukan', function () {
@@ -336,7 +335,7 @@ describe('notifikasi draf tersedia', function () {
 
         $this->actingAs($gudang)->post('/usulan-pengadaan/draf/ajukan');
 
-        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->aktif()->exists())->toBeFalse();
+        expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeFalse();
     });
 });
 

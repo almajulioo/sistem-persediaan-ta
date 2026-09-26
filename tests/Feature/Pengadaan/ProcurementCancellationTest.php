@@ -36,7 +36,6 @@ function notifikasiAktifUntuk(NotificationType $type, string $subjectId): int
     return Notification::query()
         ->where('type', $type)
         ->where('subject_id', $subjectId)
-        ->aktif()
         ->count();
 }
 

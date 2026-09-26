@@ -17,9 +17,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * bertabrakan dengan trait Notifiable bawaan Laravel yang sudah terpasang pada
  * model User. Lihat migrasi 2026_09_04_000001.
  *
- * Baris bersifat keadaan (lihat NotificationType::bersifatKeadaan) ditutup
- * dengan mengisi `resolved_at`, bukan dihapus, supaya keadaan yang kambuh dapat
- * menghidupkan kembali baris yang sama alih-alih menumpuk baris baru.
+ * Tidak ada baris yang hidup dalam keadaan "selesai": keadaan yang pulih
+ * langsung dihapus, dan peristiwa dihapus setelah berumur tujuh hari
+ * (ADR 0036). Karena itu setiap baris yang ada adalah notifikasi yang masih
+ * berlaku, dan pembedanya hanya satu — sudah dibaca atau belum.
  */
 class Notification extends Model
 {
@@ -35,7 +36,7 @@ class Notification extends Model
 
     protected $fillable = [
         'user_id', 'type', 'level', 'title', 'body', 'action_url',
-        'subject_type', 'subject_id', 'dedup_key', 'read_at', 'resolved_at',
+        'subject_type', 'subject_id', 'dedup_key', 'read_at',
     ];
 
     protected function casts(): array
@@ -44,22 +45,12 @@ class Notification extends Model
             'type' => NotificationType::class,
             'level' => NotificationLevel::class,
             'read_at' => 'datetime',
-            'resolved_at' => 'datetime',
         ];
     }
 
     public function sudahDibaca(): bool
     {
         return $this->read_at !== null;
-    }
-
-    /**
-     * Keadaan yang masih berlangsung, atau peristiwa yang memang tak pernah
-     * ditutup.
-     */
-    public function masihAktif(): bool
-    {
-        return $this->resolved_at === null;
     }
 
     public function bersifatKeadaan(): bool
@@ -81,16 +72,33 @@ class Notification extends Model
     }
 
     /**
-     * Keadaan yang masih berlangsung dan peristiwa yang belum ditutup.
+     * Isi lonceng: yang sudah dibaca menyingkir dari sana, tetapi tetap
+     * tersedia di halaman notifikasi.
      */
-    public function scopeAktif(Builder $query): Builder
-    {
-        return $query->whereNull('resolved_at');
-    }
-
     public function scopeBelumDibaca(Builder $query): Builder
     {
         return $query->whereNull('read_at');
+    }
+
+    public function scopeSudahDibaca(Builder $query): Builder
+    {
+        return $query->whereNotNull('read_at');
+    }
+
+    /**
+     * Isi bagian "Perlu Tindakan" pada lonceng.
+     */
+    public function scopeKeadaan(Builder $query): Builder
+    {
+        return $query->whereIn('type', NotificationType::keadaan());
+    }
+
+    /**
+     * Isi bagian "Aktivitas Terbaru" pada lonceng.
+     */
+    public function scopePeristiwa(Builder $query): Builder
+    {
+        return $query->whereIn('type', NotificationType::peristiwa());
     }
 
     /**
@@ -108,7 +116,22 @@ class Notification extends Model
 
         return $query
             ->orderByRaw("CASE level {$cases} ELSE 99 END")
-            ->latest('created_at');
+            ->terbaru();
+    }
+
+    /**
+     * Urut menurut kebaruan saja — untuk peristiwa, yang dibaca sebagai
+     * linimasa, bukan antrean pekerjaan.
+     *
+     * UUID dipakai sebagai penentu seri karena `HasUuids` membangkitkannya
+     * berurut waktu: dua baris yang lahir pada detik yang sama tetap punya
+     * urutan yang pasti.
+     */
+    public function scopeTerbaru(Builder $query): Builder
+    {
+        return $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('notification_id');
     }
 
     /**
@@ -126,16 +149,20 @@ class Notification extends Model
                 fn (Builder $query, NotificationLevel $level) => $query->where('level', $level),
             )
             ->when(
-                ($filters['status'] ?? '') === 'aktif',
-                fn (Builder $query) => $query->aktif(),
-            )
-            ->when(
-                ($filters['status'] ?? '') === 'selesai',
-                fn (Builder $query) => $query->whereNotNull('resolved_at'),
-            )
-            ->when(
                 ($filters['status'] ?? '') === 'belum_dibaca',
                 fn (Builder $query) => $query->belumDibaca(),
+            )
+            ->when(
+                ($filters['status'] ?? '') === 'sudah_dibaca',
+                fn (Builder $query) => $query->sudahDibaca(),
+            )
+            ->when(
+                ($filters['sifat'] ?? '') === 'keadaan',
+                fn (Builder $query) => $query->keadaan(),
+            )
+            ->when(
+                ($filters['sifat'] ?? '') === 'peristiwa',
+                fn (Builder $query) => $query->peristiwa(),
             );
     }
 

@@ -4,6 +4,10 @@
 
 Diterima — 4 September 2026
 
+Sebagian digantikan oleh [ADR 0036](0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md)
+— 27 September 2026: keadaan yang pulih kini dihapus (kolom `resolved_at`
+dibuang), dan lonceng hanya berisi notifikasi yang belum dibaca.
+
 ## Konteks
 
 Kebutuhan yang diajukan sederhana: pengguna ingin diberi tahu ketika stok sebuah

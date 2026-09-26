@@ -56,6 +56,23 @@ enum NotificationLevel: string
     }
 
     /**
+     * Berapa hari setelah dibaca sebuah keadaan yang masih berlangsung
+     * dikembalikan ke lonceng; null berarti tidak pernah (ADR 0037).
+     *
+     * Mengikuti `description()`: yang mendesak memang harus ditindak hari ini
+     * juga, jadi ditagih tiap pagi; yang perlu perhatian menjadi masalah bila
+     * diabaikan, jadi ditagih sepekan sekali; informasi tidak punya tenggat.
+     */
+    public function hariIngatkanUlang(): ?int
+    {
+        return match ($this) {
+            self::Mendesak => 1,
+            self::Perhatian => 7,
+            self::Info => null,
+        };
+    }
+
+    /**
      * Bobot pengurutan; makin kecil makin dahulu tampil.
      */
     public function bobot(): int

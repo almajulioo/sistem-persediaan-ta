@@ -5,6 +5,142 @@ perubahan.
 
 ---
 
+## 27 September 2026 (lanjutan) — Kuota lonceng, pengingat ulang, peristiwa berulang
+
+Lanjutan langsung sesi ADR 0036, menutup tiga hal yang sengaja dibiarkan
+terbuka di sana: "Aktivitas Terbaru" dapat kosong (selisih nomor 2), keadaan
+yang sudah dibaca tidak pernah menagih lagi (konsekuensi yang diterima ADR 0036),
+dan peristiwa yang terulang tidak terdengar (selisih nomor 3).
+
+**Rencana diajukan lebih dulu**, dengan tiga pertanyaan keputusan; pengguna
+menyetujui seluruh rekomendasinya:
+
+1. Pengingat ulang menurut tingkat — Mendesak tiap pagi, Perlu Perhatian tujuh
+   hari setelah dibaca, Informasi tidak pernah — bukan Mendesak saja. Alasan
+   penentunya: `RealisasiMenungguPersetujuan` tidak punya keadaan lanjutan
+   seperti `UsulanMenggantung`, jadi tanpa pengingat Perlu Perhatian, Kasubbag
+   yang sekali membacanya lalu lupa tidak pernah ditagih siapa pun.
+2. Peristiwa yang terulang memakai baris lama tetapi disetel ulang, bukan satu
+   baris per kejadian.
+3. Filter **Sifat** dan tautan "Lihat N lainnya" ikut dikerjakan.
+
+Lihat [ADR 0037](keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md);
+ADR 0036 berstatus *sebagian digantikan*.
+
+**Yang dikerjakan.** `NotificationDropdown` mengambil kedua bagian dengan kueri
+terpisah; aktivitas diurutkan menurut waktu saja, keduanya dengan UUID sebagai
+penentu seri; hitungan per jenis dalam satu kueri `GROUP BY` untuk badge dan
+jumlah tiap bagian. Scope baru `keadaan()`, `peristiwa()`, `terbaru()` pada
+`Notification`, dan `NotificationType::keadaan()`. `NotificationLevel::hariIngatkanUlang()`
+dan `Notifier::ingatkanUlang()`, dipanggil `notifikasi:periksa` sesudah
+pemeriksaan. `catatPeristiwa()` menyetel ulang `read_at`/`created_at`;
+`terapkanKeadaan()` tidak. Penyaring Sifat di halaman notifikasi.
+`bersihkan()` kini memakai scope `peristiwa()`.
+
+**Kesalahan yang ditemukan dan dikoreksi di tengah jalan.** Uji pengingat
+ulang mula-mula memakai waktu relatif (`now()->subDay()`, `now()->subDays(7)`).
+Saat dibuktikan dengan memasang sementara ambang 24 jam, ujinya memang gagal —
+tetapi karena alasan yang salah: kolom waktu hanya menyimpan sampai detik, jadi
+"dibaca tepat 24 jam lalu" jatuh di detik yang sama dengan ambangnya. Diganti
+waktu tepat di batas hari (`endOfDay()` kemarin, `startOfDay()` hari ini, dan
+kedua sisi batas hari ketujuh), lalu dibuktikan ulang: ambang 24 jam dan ambang
+yang meleset sehari sama-sama tertangkap. Mematikan reset peristiwa dan
+melewatkan `ingatkanUlang()` juga masing-masing tertangkap.
+
+**Uji dan pemeriksaan.** `php artisan test`: **488 lolos** (479 + 9 baru; satu
+di antaranya alur nyata "ditolak dua kali" di `ProcurementApprovalTest`). Pint
+terbatas pada 9 berkas PHP yang disentuh: bersih. Kueri lonceng yang baru
+dijalankan hanya-baca terhadap MySQL lokal sebagai `admin`: angka badge sama
+dengan jumlah belum dibaca di basis data.
+
+**Masih terbuka:** notifikasi Permintaan milik Alma (selisih nomor 5) — Alma
+perlu diberi tahu, dan kini juga bahwa keadaan Perlu Perhatian di sisi
+Pengadaan diingatkan ulang sepekan sekali, sementara "Permintaan menunggu
+persetujuan" miliknya, karena berupa peristiwa, tidak.
+
+---
+
+## 27 September 2026 — Lonceng sebagai kotak masuk; notifikasi yang selesai dihapus
+
+Sesi dibuka dengan permintaan menjelaskan mekanisme notifikasi sebelum
+perilakunya diubah. Penjelasan itu sekaligus menjadi audit, dan menemukan
+**lima selisih** antara kode dan rancangan:
+
+1. Peristiwa tidak pernah hilang dari lonceng — dokumentasi dan ADR 0013
+   bilang "hilang saat dibaca", tetapi lonceng hanya menyaring `resolved_at`,
+   yang pada peristiwa selamanya null. Tidak ada uji atas isi lonceng.
+2. Lonceng mengambil 10 baris **sebelum** membaginya ke dua bagian, sehingga
+   "Aktivitas Terbaru" bisa kosong bila keadaan menghabiskan kuota.
+3. Peristiwa yang terulang pada subjek yang sama memakai baris lama tanpa
+   menyetel ulang `read_at`/`created_at` — realisasi yang ditolak dua kali,
+   penolakan keduanya tidak terdengar.
+4. Badge menghitung keadaan yang sudah pulih tetapi belum dibaca, yang tidak
+   lagi ditampilkan lonceng.
+5. Tiga notifikasi Permintaan (Alma) menuntut tindakan tetapi berupa peristiwa;
+   dan `PermintaanDitolak` tidak punya penerima sama sekali.
+
+**Permintaan pengguna**, empat butir: "Tandai semua dibaca" membuat lonceng
+benar-benar bersih sementara isinya tetap dapat dilihat di halaman notifikasi;
+lonceng tidak menampilkan kalimat lengkap; baris yang selesai langsung dihapus
+sehingga status "Sudah selesai" tidak diperlukan; peristiwa dapat selesai saat
+diklik, lewat "Tandai semua dibaca", lewat "Tindak Lanjuti", dan sendiri
+setelah tujuh hari.
+
+**Bentrokan yang ditanyakan sebelum membangun.** Butir 3 + 4 dibaca harfiah
+berarti peristiwa yang ditandai dibaca langsung dihapus — padahal butir 1
+meminta ia tetap terlihat di halaman notifikasi. Pengguna memilih:
+**peristiwa yang dibaca disimpan sampai berumur tujuh hari**, lalu dihapus
+bersama yang belum dibaca.
+
+**Keputusan rancangan yang diambil tanpa ditanyakan**, dicatat di ADR berikut
+alternatifnya: lonceng berisi **yang belum dibaca saja** — satu aturan untuk
+kedua sifat, sehingga keadaan yang diklik satu per satu pun ikut menyingkir
+dari lonceng walau kondisinya masih berlangsung (bukan penanda `dismissed_at`
+terpisah). Kolom `resolved_at` **dibuang**, bukan dibiarkan selalu null.
+Batas tujuh hari hanya ditegakkan pemeriksaan terjadwal, bukan juga saat kueri,
+sejalan dengan ADR 0014.
+
+Lihat [ADR 0036](keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md);
+ADR 0013 berstatus *sebagian digantikan*.
+
+**Yang dikerjakan.** Migrasi `2026_09_27_000001_drop_resolved_at_from_user_notifications_table`.
+`Notifier::selesaikan()` kini menghapus; logika "kambuh" dibuang karena baris
+baru sudah memberi hasil yang sama; `bersihkan()` membuang peristiwa berumur
+lebih dari tujuh hari lewat `NotificationType::peristiwa()` yang baru.
+`NotificationDropdown` membaca `belumDibaca()`, lonceng tidak lagi mencetak
+isi. Halaman notifikasi: penyaring *Belum dibaca*/*Sudah dibaca*, kartu
+*Total*, penanda "Sudah pulih" dibuang. `scopeAktif()` dan `masihAktif()`
+dihapus; `->aktif()` dilepas dari tujuh berkas uji Pengadaan — adanya baris
+kini berarti keadaannya masih berlaku. Lima uji baru, termasuk isi lonceng
+yang sebelumnya tidak diuji sama sekali.
+
+**Kesalahan yang ditemukan dan dikoreksi di tengah jalan.**
+
+- **Migrasi yang menghidupkan kembali keadaan lama.** Versi pertama langsung
+  membuang kolom `resolved_at`. Keadaan yang dulu sudah pulih akan kembali
+  tampil sebagai notifikasi yang masih berlaku — dan yang belum sempat dibaca
+  masuk lagi ke lonceng. Migrasinya kini menghapus baris itu lebih dulu.
+  (Basis data lokal kebetulan tidak punya baris selesai, jadi tidak ada yang
+  terlihat salah; server bisa berbeda.)
+- **Uji yang tidak menguji apa-apa.** Uji "lonceng tanpa kalimat lengkap" mula-mula
+  memakai notifikasi Stok Habis yang kalimatnya panjang. Lonceng lama memotong
+  isi di 90 karakter, jadi `assertDontSee(isi lengkap)` lolos juga pada Blade
+  lama. Diganti peristiwa berkalimat pendek, lalu dibuktikan gagal dengan
+  memasang kembali Blade lama sementara.
+
+**Uji dan pemeriksaan.** `php artisan test`: **479 lolos** (474 + 5 baru).
+Pint terbatas pada 17 berkas yang disentuh: bersih. Migrasi dijalankan di
+MySQL lokal, lalu `rollback --step=1` dan `migrate` lagi — keduanya berhasil,
+7 baris lokal utuh.
+
+**Belum dikerjakan**, dijadwalkan sesi berikut: selisih nomor 2 (Aktivitas
+Terbaru dapat kosong). Selisih nomor 3 dan 5 masih terbuka; nomor 5 menyangkut
+alur Alma, dan sejak sesi ini notifikasi Permintaan ikut terhapus setelah tujuh
+hari — **Alma perlu diberi tahu**. Selisih nomor 4 tertutup dengan sendirinya:
+tidak ada lagi keadaan pulih yang tersisa untuk dihitung badge.
+
+---
+
 ## 23 September 2026 — Tahap belanja pada realisasi pengadaan, berbukti foto
 
 Permintaan langsung **Pejabat Pengadaan** di lapangan. Setelah disetujui

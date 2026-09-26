@@ -12,9 +12,10 @@ Artisan::command('inspire', function () {
 |--------------------------------------------------------------------------
 | Penjadwalan
 |--------------------------------------------------------------------------
-| Pemeriksaan notifikasi berjalan tiap pagi sebelum jam kerja, dengan
-| pembersihan notifikasi lama sekalian. Perintahnya idempoten, sehingga
-| menjalankannya lebih sering atau secara manual tidak merusak apa pun.
+| Pemeriksaan notifikasi berjalan tiap pagi sebelum jam kerja, sekalian
+| membuang peristiwa yang berumur lebih dari 7 hari (ADR 0036). Perintahnya
+| idempoten, sehingga menjalankannya lebih sering atau secara manual tidak
+| merusak apa pun.
 |
 | Di server, penjadwal dijalankan lewat satu entri cron:
 |   * * * * * cd /path/proyek && php artisan schedule:run >> /dev/null 2>&1

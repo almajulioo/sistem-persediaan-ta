@@ -12,15 +12,22 @@ Ini inti rancangannya, dan yang membedakannya dari kotak masuk biasa.
 |---|---|---|
 | Contoh | Stok kertas habis | Opname triwulan III diposting |
 | Sifat | Sedang benar sekarang | Fakta historis |
-| Menutup sendiri | Ya, saat kondisinya pulih | Tidak pernah |
-| Hilang dari lonceng | Saat pulih | Saat dibaca |
-| Kolom penentu | `resolved_at` terisi | `resolved_at` selamanya null |
+| Bagian lonceng | Perlu Tindakan | Aktivitas Terbaru |
+| Hilang dari lonceng | Saat dibaca, atau saat pulih | Saat dibaca |
+| Kembali ke lonceng | Diingatkan ulang: Mendesak tiap pagi, Perlu Perhatian 7 hari setelah dibaca, Informasi tidak pernah | Saat terulang pada dokumen yang sama |
+| Barisnya dihapus | Saat kondisinya pulih | 7 hari setelah kejadian terakhir, dibaca atau belum |
 
 Sifat melekat pada jenisnya lewat `NotificationType::bersifatKeadaan()`. Lihat
 [ADR 0013](../keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md)
 untuk alasan lengkapnya, termasuk dua jalan buntu yang dihindari: banjir
 notifikasi bila keadaan diperlakukan sebagai peristiwa, dan kabar basi yang
 menyesatkan bila keadaan tidak pernah ditutup.
+
+Sejak [ADR 0036](../keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md)
+tidak ada baris yang hidup dalam keadaan "selesai": yang selesai dihapus, dan
+kolom `resolved_at` sudah dibuang. **Setiap baris yang ada adalah notifikasi
+yang masih berlaku**; pembedanya hanya sudah dibaca atau belum. Lonceng berisi
+yang belum dibaca, halaman `/notifikasi` berisi semuanya.
 
 ## Katalog notifikasi
 
@@ -96,7 +103,10 @@ siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian
 | Usulan disetujui belum direalisasi | 7 hari | `NotificationScanner::HARI_USULAN_BELUM_DIREALISASI` |
 | Realisasi disetujui belum dibelanjakan | 7 hari | `NotificationScanner::HARI_REALISASI_BELUM_DIBELANJAKAN` |
 | BAST belum diunggah | 3 hari | `NotificationScanner::HARI_BAST_BELUM_DIUNGGAH` |
-| Simpan notifikasi selesai | 30 hari | `Notifier::HARI_SIMPAN` |
+| Umur peristiwa sebelum dibuang | 7 hari | `Notifier::HARI_UMUR_PERISTIWA` |
+| Pengingat ulang keadaan Mendesak | tiap pagi (1 hari kalender) | `NotificationLevel::hariIngatkanUlang()` |
+| Pengingat ulang keadaan Perlu Perhatian | 7 hari kalender setelah dibaca | `NotificationLevel::hariIngatkanUlang()` |
+| Kuota tiap bagian lonceng | 5 baris | `NotificationDropdown::MAKS_PER_BAGIAN` |
 
 Ambang stok memakai `items.stock_min` dan `items.stock_max` yang sudah ada sejak
 modul master barang — tidak ada kolom ambang baru.
@@ -108,7 +118,7 @@ atas notifikasinya sendiri. Yang dijaga adalah kepemilikan tiap baris.
 
 | Metode | URL | Nama | Aksi |
 |---|---|---|---|
-| GET | `/notifikasi` | `notifications.index` | Daftar + 3 penyaring + rekap |
+| GET | `/notifikasi` | `notifications.index` | Daftar + 4 penyaring + rekap |
 | PATCH | `/notifikasi/{notification}/baca` | `notifications.read` | Tandai dibaca, antar ke tujuan |
 | POST | `/notifikasi/baca-semua` | `notifications.read-all` | Tandai seluruhnya dibaca |
 
@@ -131,9 +141,17 @@ Karena itu **pemeriksaan reaktif hanyalah percepatan, bukan syarat kebenaran**.
 Jalur perubahan stok yang lupa memanggilnya tetap tertangkap pemeriksaan
 terjadwal; yang hilang hanya kesegeraan.
 
-Keadaan yang **kambuh** memakai ulang baris yang sama — `resolved_at` dan
-`read_at` dikosongkan, `created_at` disetel ulang — sehingga barang yang stoknya
-bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
+Idempotensi itu milik **keadaan**. Peristiwa sengaja tidak: sejak
+[ADR 0037](../keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md)
+setiap `catatPeristiwa()` adalah kejadian baru, jadi baris yang sudah ada
+dikembalikan ke lonceng (`read_at` dikosongkan, `created_at` disetel ulang).
+Aman karena peristiwa hanya dicatat dari tindakan pengguna, tidak pernah dari
+pemeriksaan terjadwal. `terapkanKeadaan()` tidak pernah menyentuh status baca.
+
+Keadaan yang pulih dihapus barisnya, jadi keadaan yang **kambuh** lahir sebagai
+baris baru yang belum dibaca. Barang yang stoknya bergoyang di sekitar batas
+minimum tetap hanya punya satu baris pada satu waktu. (Sebelum ADR 0036 baris
+lama dipakai ulang lewat `resolved_at`; hasilnya sama, kodenya lebih banyak.)
 
 ## Pemicu
 
@@ -163,7 +181,7 @@ bergoyang di sekitar batas minimum tidak menumpuk puluhan baris.
 
 ```bash
 php artisan notifikasi:periksa              # aman dijalankan kapan saja
-php artisan notifikasi:periksa --bersihkan  # sekaligus buang yang lama
+php artisan notifikasi:periksa --bersihkan  # sekaligus buang peristiwa > 7 hari
 ```
 
 Sejak [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md), perintah
@@ -175,6 +193,14 @@ periode opname, seluruh usulan pengadaan, seluruh realisasi, dan — sejak
 [ADR 0032](../keputusan/0032-usulan-barang-baru.md) — seluruh usulan barang
 baru.
 
+Sesudah menyapu, perintahnya menjalankan `Notifier::ingatkanUlang()`
+([ADR 0037](../keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md)):
+keadaan yang masih berlangsung tetapi sudah lama dibaca dikembalikan menjadi
+belum dibaca menurut tingkatnya. Urutannya disengaja — yang baru saja pulih
+sudah terhapus lebih dulu, jadi tidak ikut ditagih. Ambangnya per hari
+kalender, sehingga menjalankan perintahnya dua kali sehari tidak menagih dua
+kali.
+
 Di server dibutuhkan satu entri cron:
 
 ```
@@ -183,38 +209,55 @@ Di server dibutuhkan satu entri cron:
 
 Tanpa cron, notifikasi stok tetap muncul lewat pemicu reaktif; yang tertunda
 hanya yang berbasis waktu — periode jatuh tempo, draf menggantung, barang tidak
-bergerak.
+bergerak, pengingat ulang keadaan yang sudah dibaca, dan pembuangan peristiwa
+yang sudah berumur tujuh hari (peristiwa lama hanya bertahan lebih lama sampai
+perintahnya dijalankan).
 
 ## Antarmuka
 
-**Lonceng** di header seluruh halaman. Badge berisi **angka** jumlah yang belum
-dibaca, berwarna merah bila ada yang mendesak. Isinya dibagi dua bagian:
-"Perlu Tindakan" (keadaan) dan "Aktivitas Terbaru" (peristiwa), masing-masing
-maksimal 5 baris. Datanya diambil komponen `NotificationDropdown` sendiri, bukan
-disuntikkan tiap controller, sehingga tidak ada halaman yang bisa lupa
-menyediakannya — biayanya dua kueri ringan per permintaan.
+**Lonceng** di header seluruh halaman — sebuah **kotak masuk**: hanya berisi
+notifikasi yang **belum dibaca**, dan hanya **judul, jenis, dan waktunya**;
+kalimat lengkapnya ada di halaman `/notifikasi`. Badge berisi **angka** jumlah
+yang belum dibaca, berwarna merah bila ada yang mendesak. Isinya dibagi dua
+bagian yang **kuotanya terpisah**, masing-masing maksimal 5 baris:
+
+- **Perlu Tindakan** (keadaan), urut menurut tingkat lalu kebaruan — antrean
+  pekerjaan;
+- **Aktivitas Terbaru** (peristiwa), urut menurut kebaruan saja — linimasa.
+
+Tiap bagian menyebut jumlahnya, dan menampilkan **"Lihat N lainnya"** bila
+isinya lebih dari lima, menuju `/notifikasi?status=belum_dibaca&sifat=…`.
+Angka badge adalah jumlah kedua bagian. Mengklik satu baris, atau "Tandai
+semua dibaca", menyingkirkannya dari lonceng — termasuk keadaan yang
+kondisinya masih berlangsung, sampai pengingat ulang mengembalikannya. Datanya
+diambil komponen `NotificationDropdown` sendiri, bukan disuntikkan tiap
+controller, sehingga tidak ada halaman yang bisa lupa menyediakannya —
+biayanya tiga kueri ringan per permintaan (dua daftar, satu hitungan per
+jenis).
 
 **Halaman `/notifikasi`** menyajikan daftar, bukan tabel: isi notifikasi berupa
-kalimat utuh yang tidak terbaca dalam sel sempit. Penyaring jenis, tingkat, dan
-status; kartu rekap Mendesak / Perlu Perhatian / Belum Dibaca / Total Aktif.
-Baris yang sudah pulih tetap ditampilkan dengan penanda "Sudah pulih".
+kalimat utuh yang tidak terbaca dalam sel sempit. Penyaring jenis, tingkat,
+status (*Belum dibaca* / *Sudah dibaca*), dan sifat (*Perlu tindakan* /
+*Aktivitas*, sejajar dua bagian lonceng); kartu rekap Mendesak / Perlu
+Perhatian / Belum Dibaca / Total. Yang sudah dibaca tetap tampil di sini,
+tanpa huruf tebal, sampai barisnya dihapus.
 
 ## Berkas terkait
 
 | Berkas | Peran |
 |---|---|
 | [app/Enums/NotificationType.php](../../app/Enums/NotificationType.php) | 25 jenis, `bersifatKeadaan()`, `level()`, `dedupKey()` |
-| [app/Enums/NotificationLevel.php](../../app/Enums/NotificationLevel.php) | Mendesak / Perhatian / Info, `bobot()`, `dotClass()` |
-| [app/Support/Notifier.php](../../app/Support/Notifier.php) | `terapkanKeadaan()`, `catatPeristiwa()`, `selesaikan()`, `bersihkan()` |
+| [app/Enums/NotificationLevel.php](../../app/Enums/NotificationLevel.php) | Mendesak / Perhatian / Info, `bobot()`, `dotClass()`, `hariIngatkanUlang()` |
+| [app/Support/Notifier.php](../../app/Support/Notifier.php) | `terapkanKeadaan()`, `catatPeristiwa()`, `selesaikan()` (menghapus), `bersihkan()` (peristiwa &gt; 7 hari), `ingatkanUlang()` |
 | [app/Support/NotificationScanner.php](../../app/Support/NotificationScanner.php) | Seluruh pemeriksaan domain |
 | [app/Support/ProcurementDraftScanner.php](../../app/Support/ProcurementDraftScanner.php) | Sejajar NotificationScanner, tetapi menjaga draf usulan pengadaan (ADR 0027), bukan baris notifikasi |
-| [app/Models/Notification.php](../../app/Models/Notification.php) | Tabel `user_notifications`, scope `aktif()`, `terpenting()` |
+| [app/Models/Notification.php](../../app/Models/Notification.php) | Tabel `user_notifications`, scope `belumDibaca()`, `sudahDibaca()`, `keadaan()`, `peristiwa()`, `terpenting()`, `terbaru()` |
 | [app/Console/Commands/PeriksaNotifikasi.php](../../app/Console/Commands/PeriksaNotifikasi.php) | `notifikasi:periksa` |
 | [app/Http/Controllers/NotificationController.php](../../app/Http/Controllers/NotificationController.php) | Daftar, tandai dibaca |
 | [app/View/Components/header/NotificationDropdown.php](../../app/View/Components/header/NotificationDropdown.php) | Data lonceng |
 | [resources/views/components/header/notification-dropdown.blade.php](../../resources/views/components/header/notification-dropdown.blade.php) | Lonceng |
 | [resources/views/pages/notifications/index.blade.php](../../resources/views/pages/notifications/index.blade.php) | Halaman daftar |
-| [tests/Feature/NotificationTest.php](../../tests/Feature/NotificationTest.php) | 19 uji |
+| [tests/Feature/NotificationTest.php](../../tests/Feature/NotificationTest.php) | 32 uji |
 
 ## Catatan penamaan
 

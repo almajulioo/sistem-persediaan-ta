@@ -6,8 +6,8 @@
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Notifikasi</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Keadaan yang perlu ditindak dan peristiwa yang perlu diketahui.
-                Keadaan menutup dirinya sendiri begitu pulih — stok yang terisi kembali
-                tidak lagi muncul di sini.
+                Keadaan hilang sendiri begitu pulih — stok yang terisi kembali tidak lagi
+                muncul di sini — dan peristiwa dihapus setelah berumur 7 hari.
             </p>
         </div>
 
@@ -29,7 +29,7 @@
             ['label' => 'Mendesak', 'value' => $summary['mendesak'], 'class' => 'text-error-600 dark:text-error-500'],
             ['label' => 'Perlu Perhatian', 'value' => $summary['perhatian'], 'class' => 'text-warning-600 dark:text-orange-400'],
             ['label' => 'Belum Dibaca', 'value' => $summary['belum_dibaca'], 'class' => 'text-gray-800 dark:text-white/90'],
-            ['label' => 'Total Aktif', 'value' => $summary['aktif'], 'class' => 'text-gray-800 dark:text-white/90'],
+            ['label' => 'Total', 'value' => $summary['total'], 'class' => 'text-gray-800 dark:text-white/90'],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
@@ -51,10 +51,16 @@
                 placeholder="Semua tingkat" />
 
             <x-form.select-field name="status" label="Status" :options="[
-                'aktif' => 'Masih berlangsung',
-                'selesai' => 'Sudah selesai',
                 'belum_dibaca' => 'Belum dibaca',
+                'sudah_dibaca' => 'Sudah dibaca',
             ]" :selected="$filters['status']" placeholder="Semua status" />
+
+            {{-- Sejajar dua bagian lonceng, supaya tautan "Lihat N lainnya" di
+                 sana mendarat pada daftar yang sama. --}}
+            <x-form.select-field name="sifat" label="Sifat" :options="[
+                'keadaan' => 'Perlu tindakan (keadaan)',
+                'peristiwa' => 'Aktivitas (peristiwa)',
+            ]" :selected="$filters['sifat']" placeholder="Semua sifat" />
 
             <div class="flex items-end gap-3">
                 <button type="submit"
@@ -74,10 +80,8 @@
              alih-alih tabel supaya isinya tetap terbaca. --}}
         <ul>
             @forelse ($notifications as $notification)
-                <li @class([
-                    'flex flex-wrap items-start gap-4 border-b border-gray-100 p-5 sm:flex-nowrap sm:px-6 dark:border-gray-800',
-                    'bg-gray-50/60 dark:bg-white/[0.02]' => !$notification->masihAktif(),
-                ])>
+                <li
+                    class="flex flex-wrap items-start gap-4 border-b border-gray-100 p-5 sm:flex-nowrap sm:px-6 dark:border-gray-800">
                     <span class="mt-2 size-2.5 shrink-0 rounded-full {{ $notification->level->dotClass() }}"
                         title="{{ $notification->level->label() }}"></span>
 
@@ -94,22 +98,12 @@
                                 class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $notification->level->badgeClass() }}">
                                 {{ $notification->type->label() }}
                             </span>
-
-                            @unless ($notification->masihAktif())
-                                <span
-                                    class="text-theme-xs bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 inline-block rounded-full px-2.5 py-1 font-medium">
-                                    Sudah pulih
-                                </span>
-                            @endunless
                         </div>
 
                         <p class="text-theme-sm mt-1 text-gray-500 dark:text-gray-400">{{ $notification->body }}</p>
 
                         <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
                             {{ $notification->waktu() }}
-                            @unless ($notification->masihAktif())
-                                &middot; pulih {{ $notification->resolved_at->diffForHumans() }}
-                            @endunless
                         </p>
                     </div>
 
