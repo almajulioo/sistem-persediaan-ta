@@ -5,6 +5,16 @@ perubahan.
 
 ---
 
+## 1 Oktober 2026 (lanjutan) — Kotak pencarian bawaan template dibuang dari header
+
+Kotak "Search or type command..." (beserta tombol ⌘K) di
+`layouts/app-header.blade.php` hanyalah hiasan bawaan TailAdmin: `<form>`
+tanpa `action`, tidak ada skrip yang menanganinya, dan tidak ada uji yang
+bergantung padanya. Dibuang seluruhnya atas permintaan pengguna. Uji
+`ProfileTest` dan `NotificationTest` (merender layout yang sama): 63 lolos.
+
+---
+
 ## 1 Oktober 2026 (lanjutan) — UI profil dibersihkan, sandi tanpa simbol, pemotong foto
 
 Tiga permintaan susulan pada hari yang sama:
