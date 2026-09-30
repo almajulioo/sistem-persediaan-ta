@@ -52,7 +52,7 @@
             @endif
         </div>
     </div>
-    
+
     <x-ui.flash />
 
 
@@ -153,7 +153,7 @@
                                 @endif
                             @endif
                         </td>
-                        <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">{{ number_format($detail->quantity_requested, 0, ',', '.') }}</td>
+                        <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">{{ $detail->quantity_approved ? number_format($detail->quantity_approved, 0, ',', '.') : number_format($detail->quantity_requested, 0, ',', '.') }}</td>
                     </tr>
                     @empty
                         <tr>

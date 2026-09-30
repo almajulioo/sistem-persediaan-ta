@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\AuditEvent;
+use App\Enums\AuditModule;
 use App\Enums\MutationType;
 use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Request as ModelsRequest;
 use App\Models\User;
+use App\Support\AuditLogger;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
 use App\Support\StockLedger;
@@ -68,6 +71,19 @@ class RequestWorkflowService
         });
 
         $request = $request->fresh('user');
+
+        AuditLogger::record(
+            user: $actor,
+            activity: sprintf(
+                '%s permintaan barang %s (status menjadi %s)',
+                $action === 'approve' ? 'Menyetujui' : 'Menolak',
+                $request->request_number,
+                $this->labelStatus($request->status),
+            ),
+            module: AuditModule::Permintaan,
+            event: $action === 'approve' ? AuditEvent::Setuju : AuditEvent::Tolak,
+            subject: $request,
+        );
         NotificationScanner::periksaPermintaan($request);
 
         return $request;
@@ -137,6 +153,19 @@ class RequestWorkflowService
         return $request->status === 'processed_by_staff'
             ? 'in_issuance'
             : 'completed';
+    }
+
+    private function labelStatus(string $status): string
+    {
+        return match ($status) {
+            'submitted' => 'Menunggu Persetujuan',
+            'approved_by_head' => 'Disetujui Kepala Unit',
+            'processed_by_staff' => 'Diproses Pengelola Gudang',
+            'in_issuance' => 'Dalam Pengeluaran Barang',
+            'completed' => 'Selesai',
+            'rejected' => 'Ditolak',
+            default => $status,
+        };
     }
 
     private function recordIssuance(ModelsRequest $request, User $actor): void

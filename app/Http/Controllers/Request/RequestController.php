@@ -453,6 +453,13 @@ class RequestController extends Controller
             app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
         }
 
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Membuat permintaan barang: {$itemRequest->request_number}",
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Tambah,
+            subject: $itemRequest,
+        );
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
         $itemRequest->item()
             ->with('itemProposal')
@@ -523,6 +530,14 @@ class RequestController extends Controller
         if ($error !== null) {
             return redirect()->back()->withInput()->with('error', $error);
         }
+
+        AuditLogger::record(
+            user: $httpRequest->user(),
+            activity: "Mengubah permintaan barang: {$request->request_number} (status menjadi {$request->status})",
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Ubah,
+            subject: $request,
+        );
 
         return redirect()
             ->route('request.index')
