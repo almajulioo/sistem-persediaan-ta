@@ -5,6 +5,122 @@ perubahan.
 
 ---
 
+## 1 Oktober 2026 (lanjutan) — UI profil dibersihkan, sandi tanpa simbol, pemotong foto
+
+Tiga permintaan susulan pada hari yang sama:
+
+1. **Kata sandi tidak lagi mewajibkan simbol** — `->symbols()` dibuang dari
+   `Password::defaults()`, berlaku juga di formulir Admin. Atas permintaan
+   pengguna, tanpa ADR.
+2. **Tampilan profil dibersihkan dari kalimat penjelasan.** Satu-satunya
+   keterangan yang tersisa adalah "Hubungi Admin untuk mengubah data ini."
+   Daftar syarat kata sandi baru muncul saat mengetik. Pedomannya — apa yang
+   dipertahankan, apa yang dibuang — dan daftar cicilan halaman lain dicatat
+   di bagian "UI copy" CLAUDE.md, untuk dikerjakan per kelompok halaman.
+3. **Pemotong foto interaktif seperti WhatsApp** — jendela "Atur foto" dengan
+   bingkai lingkaran, geser, perbesar, cubit; menu Lihat / Ganti / Hapus pada
+   avatar. Ditulis sendiri dengan Alpine, tanpa pustaka. Lihat
+   [ADR 0039](keputusan/0039-pemotong-foto-profil-interaktif.md); ADR 0038
+   berstatus *sebagian digantikan*.
+
+**Kesalahan kecil di tengah jalan.** Heredoc bash yang memuat seluruh skrip
+pemotong terpotong oleh lapisan tool ("unexpected EOF") — gotcha yang memang
+sudah tercatat di CLAUDE.md. Skripnya ditulis ke berkas lalu disambung.
+
+**Uji dan pemeriksaan.** `ProfileTest` dan `UserManagementTest`: 53 lolos
+(satu uji baru untuk menu avatar; satu uji simbol dihapus). Hitungan pemotong
+diuji di Node dengan elemen tiruan: batas geser tanpa celah, perbesaran di
+sekitar pusat, cubitan tanpa loncatan saat jari diangkat, perubahan ukuran
+layar, koordinat potongan. `npm run build` berhasil.
+
+**Kesalahan yang ditemukan pengguna, lalu dikoreksi.** Versi pertama pemotong
+menampilkan pratinjau kosong dan mengunggah JPEG putih polos. Penyebabnya
+urutan waktu Alpine: `x-show` menampilkan modal pada *animation frame*
+berikutnya, sedangkan `$nextTick` — tempat bingkai diukur — selesai lebih dulu
+lewat `setTimeout`. Lebar bingkai terbaca 0, skala 0, foto disembunyikan, dan
+koordinat potongan menjadi `NaN` sehingga kanvas hanya berisi latar putih. Uji
+Node tidak menangkapnya karena lebar bingkainya diisi tangan. Diperbaiki
+dengan mengukur lewat `ResizeObserver` (terpicu tepat saat bingkai mendapat
+ukuran, juga saat layar berubah), dan `simpan()` kini menolak mengirim bila
+skalanya masih 0.
+
+Dibuktikan ujung-ke-ujung di **Edge headless lewat Chrome DevTools Protocol**
+terhadap server dev: masuk sebagai `gudang`, memilih gambar uji 800×600
+(kiri merah, kanan biru), menyeret dengan tetikus 150 px, menyimpan. Bingkai
+terukur 408 px dan foto tampil; seretan berhenti tepat di tepi foto (68 px);
+berkas tersimpan JPEG 512×512 dengan kiri dan tengah merah, kanan biru —
+persis potongan yang dipilih. Foto uji dihapus lagi (baris audit unggah dan
+hapusnya tetap tersisa di basis data lokal). Cubitan dua jari di layar sentuh
+masih hanya teruji lewat hitungan di Node.
+
+Temuan sampingan, **tidak disentuh**: skrip tema di `<head>` kedua layout
+memanggil `document.body.classList` sebelum `<body>` ada, sehingga setiap
+halaman melempar `TypeError` di konsol sejak 1 September 2026.
+
+---
+
+## 1 Oktober 2026 — Profil pengguna dan foto profil
+
+Menu "Profil Saya" selama ini merender halaman contoh TailAdmin berisi data
+palsu, dan **tidak ada satu pun pengguna yang dapat mengganti kata sandinya
+sendiri** — kata sandi awal buatan Admin tidak pernah berganti. Permintaan
+pengguna: profil fungsional dari data `users`, swalayan untuk sebagian data
+pribadi, foto profil dengan gambar bawaan, sekaligus pendapat tentang data
+mana yang pantas diubah sendiri.
+
+**Rencana diajukan lebih dulu**, dengan empat pertanyaan keputusan; pengguna
+memilih seluruh rekomendasi:
+
+1. Nama lengkap **hanya lewat Admin** — ia tercetak di blok tanda tangan BAST
+   dan laporan, dan PDF dirender ulang dari data terkini.
+2. Foto di kolom baru `users.avatar_path`, bukan path tetap tanpa kolom —
+   dengan konsekuensi perlu persetujuan Alma.
+3. Gambar bawaan berupa **avatar inisial**, bukan siluet generik.
+4. Dari tambahan opsional, hanya **moderasi foto oleh Admin**. Riwayat
+   aktivitas sendiri dan info login sebelumnya tidak diambil.
+
+Lihat [ADR 0038](keputusan/0038-profil-pengguna-dan-foto-profil.md) dan
+[modul/profil.md](modul/profil.md).
+
+**Yang dikerjakan.** Migrasi `avatar_path`; `ProfileController` (halaman,
+email, kata sandi) dan `ProfileAvatarController` (unggah, hapus, sajikan);
+tiga form request di `Requests/Profile/`; `AvatarStorage` meniru
+`DocumentStorage` di disk privat; `User::punyaFoto()`/`urlFoto()`; kasus
+`AuditModule::Profil`. Halaman profil ditulis ulang menjadi empat kartu —
+identitas + foto, informasi akun (baca saja), email, kata sandi dengan daftar
+syarat yang tercentang saat mengetik. Foto diolah di peramban (potong tengah,
+512 px, JPEG) sebelum dikirim. Komponen `x-ui.user-avatar` menggantikan empat
+lingkaran inisial yang ditulis tangan; `x-profile.hapus-foto` dipakai di
+profil dan di halaman Ubah Pengguna (yang juga baru mendapat `x-ui.flash`).
+`UserController::destroy()` ikut membuang berkas foto. Komponen `x-profile.*`
+bawaan template dan `pages/profile.blade.php` lama dihapus.
+
+**Temuan di tengah jalan.**
+
+- Ekstensi `exif` PHP tidak aktif di mesin pengembangan. Memotong foto dengan
+  GD di server akan menyimpan foto potret dari ponsel dalam keadaan miring —
+  inilah yang memindahkan pengolahan foto ke peramban.
+- Proyek belum punya `lang/id`, sehingga pesan `Password::defaults()` keluar
+  berbahasa Inggris, **termasuk di formulir Admin yang sudah ada**. Formulir
+  profil membawa pesannya sendiri; formulir Admin belum disentuh.
+- Pint menandai urutan `use` di `routes/web.php` — impor `Profile*` semula
+  disisipkan sebelum `Pengadaan\*`. Diperbaiki.
+
+**Uji dan pemeriksaan.** `php artisan test`: **519 lolos** (488 + 31 baru di
+`ProfileTest`, termasuk uji bahwa sesi lain yang memegang hash kata sandi lama
+dikeluarkan). Pint terbatas pada 12 berkas PHP yang disentuh: bersih.
+`migrate:fresh --seed` di MySQL dan `npm run build` berhasil. Skrip pengolah
+foto diperiksa sintaksnya dengan Node, dan logika syarat kata sandinya
+dijalankan terhadap contoh; **pengolahan kanvasnya sendiri belum dicoba di
+peramban sungguhan.**
+
+**Masih terbuka:** persetujuan Alma atas `users.avatar_path`; uji manual unggah
+foto ponsel berorientasi potret; batas unggah PHP di server tetap perlu
+dinaikkan untuk foto belanja (butir lama), meski foto profil tidak
+memerlukannya.
+
+---
+
 ## 27 September 2026 (lanjutan) — Kuota lonceng, pengingat ulang, peristiwa berulang
 
 Lanjutan langsung sesi ADR 0036, menutup tiga hal yang sengaja dibiarkan

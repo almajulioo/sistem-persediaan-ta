@@ -41,7 +41,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Kebijakan kata sandi minimum untuk seluruh aplikasi.
         Password::defaults(function () {
-            $rule = Password::min(12)->letters()->mixedCase()->numbers()->symbols();
+            $rule = Password::min(12)->letters()->mixedCase()->numbers();
 
             // Pemeriksaan kebocoran memanggil layanan luar; hanya relevan di produksi.
             return $this->app->isProduction() ? $rule->uncompromised() : $rule;

@@ -83,9 +83,7 @@
                             <tr class="border-b border-gray-100 dark:border-gray-800">
                                 <td class="px-5 py-4 sm:px-6">
                                     <div class="flex items-center gap-3">
-                                        <span class="bg-brand-500 text-theme-xs flex size-10 shrink-0 items-center justify-center rounded-full font-semibold text-white">
-                                            {{ $item->initials() }}
-                                        </span>
+                                        <x-ui.user-avatar :user="$item" class="text-theme-xs size-10" />
                                         <div>
                                             <span class="text-theme-sm block font-medium text-gray-800 dark:text-white/90">
                                                 {{ $item->fullname }}

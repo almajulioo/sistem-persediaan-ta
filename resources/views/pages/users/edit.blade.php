@@ -19,6 +19,8 @@
         </nav>
     </div>
 
+    <x-ui.flash />
+
     @if ($errors->any())
         <div class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mb-6 rounded-lg px-4 py-3 text-sm"
             role="alert" aria-live="assertive">
@@ -30,9 +32,7 @@
         {{-- Ringkas identitas akun --}}
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-6 dark:border-gray-800">
             <div class="flex items-center gap-4">
-                <span class="bg-brand-500 flex size-12 shrink-0 items-center justify-center rounded-full font-semibold text-white">
-                    {{ $user->initials() }}
-                </span>
+                <x-ui.user-avatar :user="$user" class="size-12" />
                 <div>
                     <p class="font-medium text-gray-800 dark:text-white/90">{{ $user->fullname }}</p>
                     <p class="text-theme-xs text-gray-500 dark:text-gray-400">
@@ -43,9 +43,18 @@
                 </div>
             </div>
 
-            <span class="text-theme-xs inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">
-                {{ $user->role->label() }}
-            </span>
+            <div class="flex flex-wrap items-center gap-3">
+                {{-- Moderasi saja: Admin dapat menghapus foto, tidak mengunggahnya (ADR 0038). --}}
+                @if ($user->punyaFoto())
+                    <x-profile.hapus-foto
+                        :action="route('users.avatar.destroy', $user)"
+                        :pesan="'Foto profil '.$user->fullname.' akan dihapus dan diganti avatar inisial. Pemilik akun dapat mengunggah foto baru kapan saja.'" />
+                @endif
+
+                <span class="text-theme-xs inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">
+                    {{ $user->role->label() }}
+                </span>
+            </div>
         </div>
 
         @include('pages.users._form', [

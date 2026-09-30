@@ -17,6 +17,7 @@ peran, sehingga `role:` tepat dipakai di sini.
 | PUT | `/pengguna/{user}` | `users.update` | Perbarui |
 | PATCH | `/pengguna/{user}/status` | `users.toggle-status` | Aktifkan / nonaktifkan |
 | DELETE | `/pengguna/{user}` | `users.destroy` | Hapus |
+| DELETE | `/pengguna/{user}/foto` | `users.avatar.destroy` | Hapus foto profil pengguna (moderasi) |
 
 ## Aturan bisnis
 
@@ -29,6 +30,12 @@ peran, sehingga `role:` tepat dipakai di sini.
 - Kata sandi bersifat opsional saat mengubah — kosongkan bila tidak diganti.
 - Menonaktifkan akun memutus sesi aktifnya pada permintaan berikutnya.
 - Setiap tambah, ubah, hapus, dan ubah status tercatat ke `audit_logs`.
+- Admin dapat **menghapus** foto profil pengguna lain dari halaman Ubah
+  Pengguna, tetapi tidak mengunggahnya — foto adalah pilihan pemilik akun.
+  Menghapus akun ikut membuang berkas fotonya. Kata sandi, email, dan foto
+  juga dapat diubah pemilik akun sendiri lewat [Profil](profil.md); nama
+  lengkap, nama pengguna, peran, unit, dan status tetap hanya lewat modul ini.
+  Lihat [ADR 0038](../keputusan/0038-profil-pengguna-dan-foto-profil.md).
 
 ## Validasi
 
@@ -53,7 +60,7 @@ dengan regex sendiri.
 | [app/Http/Controllers/Admin/UserController.php](../../app/Http/Controllers/Admin/UserController.php) | Seluruh aksi |
 | [app/Http/Requests/Admin/](../../app/Http/Requests/Admin/) | `StoreUserRequest`, `UpdateUserRequest`, `UserFormRules` |
 | [resources/views/pages/users/](../../resources/views/pages/users/) | `index`, `create`, `edit`, `_form` |
-| [app/Models/User.php](../../app/Models/User.php) | `blockingRelations()`, `hasRole()`, `initials()` |
+| [app/Models/User.php](../../app/Models/User.php) | `blockingRelations()`, `hasRole()`, `initials()`, `punyaFoto()`, `urlFoto()` |
 
 ## Komponen yang lahir dari modul ini
 
@@ -61,6 +68,8 @@ Dipakai ulang oleh seluruh modul berikutnya:
 
 - `x-form.text-field`, `x-form.select-field`, `x-form.password-field`
 - `x-ui.flash` — banner pesan sukses dan gagal
+- `x-ui.user-avatar` — foto profil atau avatar inisial (menyusul pada
+  [ADR 0038](../keputusan/0038-profil-pengguna-dan-foto-profil.md))
 - `resources/views/vendor/pagination/tailadmin.blade.php` — paginasi bergaya
   TailAdmin
 

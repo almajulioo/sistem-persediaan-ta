@@ -127,6 +127,7 @@ dikabarkan ke Alma dan tercermin di kedua naskah:
 |---|---|---|
 | `users` | Tambah `last_login_at`, `last_login_ip` | [0001](../keputusan/0001-autentikasi-sesi-tanpa-starter-kit.md) |
 | `users` | Nilai peran baru `kasubbag_umum_ti` pada kolom `role`. **Tanpa migrasi** — `role` hanya `string` tanpa constraint — tetapi tetap perubahan pada tabel bersama, jadi harus disepakati | [0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) |
+| `users` | Tambah `avatar_path` (string, nullable) — path foto profil di disk privat. Aditif; **menunggu persetujuan Alma** | [0038](../keputusan/0038-profil-pengguna-dan-foto-profil.md) |
 | `items` | Tambah `is_active` | [0003](../keputusan/0003-arsip-alih-alih-hapus.md) |
 | `stock_mutations` | Tambah `user_id`, `stock_after`, `reference_number`, `notes` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 | `stock_mutations` | `reference` diganti nama menjadi `reference_id` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |

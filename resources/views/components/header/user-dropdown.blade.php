@@ -20,9 +20,7 @@
         aria-haspopup="true"
         :aria-expanded="dropdownOpen"
     >
-        <span class="mr-3 flex size-11 items-center justify-center overflow-hidden rounded-full bg-brand-500 text-sm font-semibold text-white">
-            {{ $user->initials() }}
-        </span>
+        <x-ui.user-avatar :user="$user" class="mr-3 size-11 text-sm" />
 
         <span class="mr-1 hidden text-left sm:block">
             <span class="block font-medium text-theme-sm">{{ $user->fullname }}</span>

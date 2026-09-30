@@ -72,9 +72,7 @@
     <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 md:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="flex items-center gap-4">
-                <span class="bg-brand-500 flex size-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white">
-                    {{ $user->initials() }}
-                </span>
+                <x-ui.user-avatar :user="$user" class="size-14 text-lg" />
                 <div>
                     <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
                         Selamat datang, {{ $user->fullname }}

@@ -66,6 +66,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0035](keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) | Tahap belanja pada realisasi pengadaan, berbukti foto belanja | Diterima |
 | [0036](keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md) | Lonceng sebagai kotak masuk; notifikasi yang selesai dihapus | Sebagian digantikan oleh 0037 |
 | [0037](keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md) | Lonceng: kuota per bagian, pengingat ulang keadaan, dan peristiwa berulang | Diterima |
+| [0038](keputusan/0038-profil-pengguna-dan-foto-profil.md) | Profil pengguna: swalayan terbatas dan foto profil | Sebagian digantikan oleh 0039 |
+| [0039](keputusan/0039-pemotong-foto-profil-interaktif.md) | Pemotong foto profil interaktif, tanpa pustaka | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

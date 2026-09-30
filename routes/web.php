@@ -17,6 +17,8 @@ use App\Http\Controllers\Pengadaan\ProcurementPurchaseController;
 use App\Http\Controllers\Pengadaan\ProcurementReceiptController;
 use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
+use App\Http\Controllers\ProfileAvatarController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Request\ItemProposalController as RequestItemProposalController;
 use App\Http\Controllers\Request\RequestController;
 use Illuminate\Support\Facades\Route;
@@ -47,9 +49,19 @@ Route::middleware('auth')->group(function () {
     Route::redirect('/', '/dasbor');
     Route::get('/dasbor', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::get('/profil', function () {
-        return view('pages.profile', ['title' => 'Profil']);
-    })->name('profile');
+    // Profil milik sendiri, tanpa gate peran: setiap akun berhak atasnya dan
+    // tidak ada parameter yang menunjuk akun lain. Swalayan terbatas pada
+    // email, kata sandi, dan foto; sisanya wewenang Admin (ADR 0038).
+    Route::get('/profil', [ProfileController::class, 'show'])->name('profile');
+    Route::patch('/profil/email', [ProfileController::class, 'updateEmail'])->name('profile.email.update');
+    Route::put('/profil/kata-sandi', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
+    Route::post('/profil/foto', [ProfileAvatarController::class, 'update'])->name('profile.avatar.update');
+    Route::delete('/profil/foto', [ProfileAvatarController::class, 'destroy'])->name('profile.avatar.destroy');
+    // Foto siapa pun boleh dilihat pengguna yang sudah masuk — foto tampil di
+    // daftar pengguna dan tempat lain. Disk privat menjaga dari tamu.
+    Route::get('/profil/foto/{user}', [ProfileAvatarController::class, 'show'])
+        ->whereUuid('user')
+        ->name('profile.avatar.show');
 
     Route::get('/permintaan/create', [RequestController::class, 'create'])->name('request.create');
 
@@ -316,6 +328,9 @@ Route::middleware('auth')->group(function () {
 
         Route::patch('pengguna/{user}/status', [UserController::class, 'toggleStatus'])
             ->name('users.toggle-status');
+
+        Route::delete('pengguna/{user}/foto', [UserController::class, 'destroyAvatar'])
+            ->name('users.avatar.destroy');
 
         // Segmen statis lebih dulu, mengikuti kebiasaan modul lain: rute GET
         // berpola tetap yang didaftarkan setelah rute berparameter pada awalan

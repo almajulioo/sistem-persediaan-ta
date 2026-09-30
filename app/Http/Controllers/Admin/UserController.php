@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\AvatarStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -145,6 +146,33 @@ class UserController extends Controller
         return back()->with('status', "Akun {$user->username} berhasil di{$state}.");
     }
 
+    /**
+     * Hapus foto profil akun lain — moderasi, misalnya foto yang tidak pantas.
+     *
+     * Admin hanya dapat menghapus, tidak mengunggah: foto profil adalah
+     * pilihan pribadi pemilik akun. Lihat ADR 0038.
+     */
+    public function destroyAvatar(Request $request, User $user): RedirectResponse
+    {
+        if (! $user->punyaFoto()) {
+            return back()->with('error', "Akun {$user->username} tidak memiliki foto profil.");
+        }
+
+        $path = $user->avatar_path;
+        $user->forceFill(['avatar_path' => null])->save();
+        AvatarStorage::hapus($path);
+
+        AuditLogger::record(
+            user: $request->user(),
+            activity: "Menghapus foto profil akun pengguna: {$user->username}",
+            module: AuditModule::Pengguna,
+            event: AuditEvent::Hapus,
+            subject: $user,
+        );
+
+        return back()->with('status', "Foto profil {$user->username} berhasil dihapus.");
+    }
+
     public function destroy(Request $request, User $user): RedirectResponse
     {
         if ($user->is($request->user())) {
@@ -162,7 +190,11 @@ class UserController extends Controller
         }
 
         $username = $user->username;
+        $foto = $user->avatar_path;
         $user->delete();
+
+        // Barisnya sudah tiada, jadi tidak ada lagi yang menunjuk berkas ini.
+        AvatarStorage::hapus($foto);
 
         // Tanpa subjek: barisnya sudah tiada, dan menautkannya hanya akan
         // mengantar pembaca log ke halaman yang tidak ada.

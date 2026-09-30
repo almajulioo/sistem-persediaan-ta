@@ -108,6 +108,34 @@ class User extends Authenticatable
     }
 
     /**
+     * Apakah akun ini sudah mengunggah foto profil. Tanpa foto, UI memakai
+     * avatar inisial sebagai gantinya (ADR 0038).
+     */
+    public function punyaFoto(): bool
+    {
+        return filled($this->avatar_path);
+    }
+
+    /**
+     * URL foto profil lewat rute terautentikasi, atau null bila belum ada.
+     *
+     * Parameter `v` diturunkan dari path berkas, yang selalu nama acak baru
+     * pada tiap unggahan — sehingga responsnya aman di-cache lama oleh
+     * peramban tanpa risiko menampilkan foto yang sudah diganti.
+     */
+    public function urlFoto(): ?string
+    {
+        if (! $this->punyaFoto()) {
+            return null;
+        }
+
+        return route('profile.avatar.show', [
+            'user' => $this->user_id,
+            'v' => substr(md5($this->avatar_path), 0, 8),
+        ]);
+    }
+
+    /**
      * Relasi transaksional yang memakai onDelete restrict. Selama masih ada
      * isinya, akun tidak boleh dihapus dan sebaiknya dinonaktifkan saja.
      *
