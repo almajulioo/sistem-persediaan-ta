@@ -16,6 +16,7 @@
             'name' => 'Permintaan Barang',
             'description' => 'Pengajuan, verifikasi, dan penyerahan barang persediaan ke unit kerja.',
             'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+             'route' => 'request.index',
         ],
         [
             'name' => 'Pengadaan',

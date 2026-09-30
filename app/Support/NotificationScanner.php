@@ -945,14 +945,16 @@ class NotificationScanner
     }
 
     /**
-     * Peristiwa: permintaan barang berpindah ke tahap berikutnya.
+     * Keadaan permintaan barang sesuai tahap pekerjaan yang sedang terbuka.
      *
-     * Penerima sengaja berganti sesuai pemilik pekerjaan pada tahap tersebut:
-     * Kepala Unit dari unit pemohon, Pengelola Gudang, lalu Admin.
+     * Semua keadaan lama ditutup lebih dulu karena penerimanya berganti sesuai
+     * pemilik pekerjaan pada tahap tersebut: Kepala Unit, Pengelola Gudang,
+     * lalu Admin.
      */
-    public static function catatPermintaanDiajukan(ModelsRequest $request): void
+    public static function periksaPermintaan(ModelsRequest $request): void
     {
         $request->loadMissing('user');
+
         $kepalaUnit = $request->user?->unit
             ? User::query()
                 ->where('is_active', true)
@@ -961,55 +963,86 @@ class NotificationScanner
                 ->get()
             : new EloquentCollection;
 
-        Notifier::catatPeristiwa(
+        $peminta = $request->user?->is_active
+            ? new EloquentCollection([$request->user])
+            : new EloquentCollection;
+
+        $pengawas = self::pengawasGudang();
+        $admin = Notifier::penerimaBerperan(UserRole::Admin);
+
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'submitted',
             penerima: $kepalaUnit,
             type: NotificationType::PermintaanDiajukan,
             dedupKey: NotificationType::PermintaanDiajukan->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number} menunggu persetujuan",
             body: "Permintaan barang dari unit {$request->user?->unit} perlu diperiksa dan disetujui.",
-            actionUrl: route('request.index', absolute: false),
+            actionUrl: route('request.show', $request, absolute: false),
+            subject: $request,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'submitted',
+            penerima: $admin,
+            type: NotificationType::PermintaanDiajukan,
+            dedupKey: NotificationType::PermintaanDiajukan->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number} menunggu persetujuan",
+            body: "Permintaan barang dari unit {$request->user?->unit} perlu diperiksa dan disetujui.",
+            actionUrl: route('request.show', $request, absolute: false),
+            subject: $request,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'approved_by_head',
+            penerima: $pengawas,
+            type: NotificationType::PermintaanDisetujuiKepalaUnit,
+            dedupKey: NotificationType::PermintaanDisetujuiKepalaUnit->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiKepalaUnit->label(),
+            body: NotificationType::PermintaanDisetujuiKepalaUnit->description(),
+            actionUrl: route('request.show', $request, absolute: false),
+            subject: $request,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'processed_by_staff',
+            penerima: $admin,
+            type: NotificationType::PermintaanDisetujuiPengelolaGudang,
+            dedupKey: NotificationType::PermintaanDisetujuiPengelolaGudang->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiPengelolaGudang->label(),
+            body: NotificationType::PermintaanDisetujuiPengelolaGudang->description(),
+            actionUrl: route('request.show', $request, absolute: false),
+            subject: $request,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'completed',
+            penerima: $peminta,
+            type: NotificationType::PermintaanSelesai,
+            dedupKey: NotificationType::PermintaanSelesai->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanSelesai->label(),
+            body: NotificationType::PermintaanSelesai->description(),
+            actionUrl: route('request.show', $request, absolute: false),
+            subject: $request,
+        );
+        
+        Notifier::terapkanKeadaan(
+            berlaku: $request->status === 'rejected',
+            penerima: $peminta,
+            type: NotificationType::PermintaanDitolak,
+            dedupKey: NotificationType::PermintaanDitolak->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDitolak->label(),
+            body: NotificationType::PermintaanDitolak->description(),
+            actionUrl: route('request.show', $request, absolute: false),
             subject: $request,
         );
     }
 
     /**
-     * Catat perpindahan penerima setelah Kepala Unit, Pengelola Gudang, atau
-     * Admin mengubah status permintaan.
+     * Sinkronkan keadaan awal permintaan setelah diajukan.
      */
-    public static function catatPermintaanDiputuskan(ModelsRequest $request): void
+    public static function catatPermintaanDiajukan(ModelsRequest $request): void
     {
-        $request->loadMissing('user');
-        $penerima = match ($request->status) {
-            'approved_by_head' => self::pengawasGudang(),
-            'processed_by_staff' => Notifier::penerimaBerperan(UserRole::Admin),
-            'in_issuance', 'completed' => $request->user !== null
-                ? new EloquentCollection([$request->user])
-                : new EloquentCollection,
-            default => new EloquentCollection,
-        };
-
-        $type = match ($request->status) {
-            'approved_by_head' => NotificationType::PermintaanDisetujuiKepalaUnit,
-            'processed_by_staff' => NotificationType::PermintaanDisetujuiPengelolaGudang,
-            'in_issuance' => NotificationType::PermintaanDalamPengeluaran,
-            'rejected' => NotificationType::PermintaanDitolak,
-            'completed' => NotificationType::PermintaanSelesai,
-            default => null,
-        };
-
-        if ($type === null) {
-            return;
-        }
-
-        Notifier::catatPeristiwa(
-            penerima: $penerima,
-            type: $type,
-            dedupKey: $type->dedupKey($request->request_id),
-            title: "Permintaan {$request->request_number}: {$type->label()}",
-            body: $type->description(),
-            actionUrl: route('request.index', absolute: false),
-            subject: $request,
-        );
+        self::periksaPermintaan($request);
     }
 
     /**

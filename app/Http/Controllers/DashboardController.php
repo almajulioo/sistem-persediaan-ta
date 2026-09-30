@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\StockStatus;
 use App\Models\Item;
+use App\Models\Request as ModelsRequest;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -32,10 +33,10 @@ class DashboardController extends Controller
             ],
             [
                 'label' => 'Permintaan Menunggu',
-                'value' => '12',
+                'value' => (string) ModelsRequest::query()->whereNot('status', 'rejected')->orWhereNot('status', 'completed')->count(),
                 'caption' => 'perlu ditindaklanjuti',
                 'tone' => 'warning',
-                'dummy' => true,
+                'dummy' => false,
             ],
             [
                 'label' => 'Pengadaan Berjalan',

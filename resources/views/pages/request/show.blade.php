@@ -17,6 +17,8 @@
         $canRespond = $canRespond && (! $hasItemProposals || ($isAdmin && $requestData->status === 'submitted'));
     @endphp
 
+
+
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Detail Permintaan</h2>
@@ -50,6 +52,9 @@
             @endif
         </div>
     </div>
+    
+    <x-ui.flash />
+
 
     @if ($canRespond || $canEditQuantity)
         <div class="mt-6  p-5 dark:border-gray-800 dark:bg-white/[0.03]">

@@ -70,7 +70,7 @@ enum NotificationType: string
     case UsulanBarangDisetujui = 'usulan_barang_disetujui';
     case UsulanBarangDitolak = 'usulan_barang_ditolak';
 
-    // --- Permintaan ---
+    // --- Keadaan dan peristiwa permintaan ---
     case PermintaanDiajukan = 'permintaan_diajukan';
     case PermintaanDisetujuiKepalaUnit = 'permintaan_disetujui_kepala_unit';
     case PermintaanDisetujuiPengelolaGudang = 'permintaan_disetujui_pengelola_gudang';
@@ -173,12 +173,12 @@ enum NotificationType: string
             self::RealisasiDibatalkan,
             self::UsulanBarangDisetujui,
             self::UsulanBarangDitolak => false,
-            self::PermintaanDiajukan,
-            self::PermintaanDisetujuiKepalaUnit,
-            self::PermintaanDisetujuiPengelolaGudang,
             self::PermintaanDalamPengeluaran,
             self::PermintaanDitolak,
             self::PermintaanSelesai => false,
+            self::PermintaanDiajukan,
+            self::PermintaanDisetujuiKepalaUnit,
+            self::PermintaanDisetujuiPengelolaGudang => true,
             default => true,
         };
     }

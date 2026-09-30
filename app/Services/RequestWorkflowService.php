@@ -68,7 +68,7 @@ class RequestWorkflowService
         });
 
         $request = $request->fresh('user');
-        NotificationScanner::catatPermintaanDiputuskan($request);
+        NotificationScanner::periksaPermintaan($request);
 
         return $request;
     }

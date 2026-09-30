@@ -123,19 +123,19 @@ class MenuHelper
                 'path' => '/log-aktivitas',
                 'roles' => [UserRole::Admin],
             ],
-            [
-                'icon' => 'ai-assistant',
-                'name' => 'Referensi UI',
-                'roles' => [UserRole::Admin],
-                'subItems' => [
-                    ['name' => 'Form Elements', 'path' => '/form-elements'],
-                    ['name' => 'Basic Tables', 'path' => '/basic-tables'],
-                    ['name' => 'Charts', 'path' => '/line-chart'],
-                    ['name' => 'Alerts', 'path' => '/alerts'],
-                    ['name' => 'Buttons', 'path' => '/buttons'],
-                    ['name' => 'Blank Page', 'path' => '/blank'],
-                ],
-            ],
+            // [
+            //     'icon' => 'ai-assistant',
+            //     'name' => 'Referensi UI',
+            //     'roles' => [UserRole::Admin],
+            //     'subItems' => [
+            //         ['name' => 'Form Elements', 'path' => '/form-elements'],
+            //         ['name' => 'Basic Tables', 'path' => '/basic-tables'],
+            //         ['name' => 'Charts', 'path' => '/line-chart'],
+            //         ['name' => 'Alerts', 'path' => '/alerts'],
+            //         ['name' => 'Buttons', 'path' => '/buttons'],
+            //         ['name' => 'Blank Page', 'path' => '/blank'],
+            //     ],
+            // ],
         ];
     }
 
