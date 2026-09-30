@@ -112,8 +112,13 @@
                         </template>
 
                         <template x-if="filteredItems.length === 0">
-                            <li class="px-3 py-2 text-sm text-gray-400 text-center">
-                                Barang tidak ditemukan.
+                            <li class="px-3 py-3 text-center text-sm text-gray-400">
+                                <span class="block">Barang tidak ditemukan.</span>
+                                <button type="button"
+                                    @click="newItemMode = true; selectedItemCode = ''; selectedItemText = ''; open = false"
+                                    class="mt-2 font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">
+                                    Input barang belum terdaftar
+                                </button>
                             </li>
                         </template>
                     </ul>

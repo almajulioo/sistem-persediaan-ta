@@ -6,54 +6,65 @@ use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Models\ProcurementRequest;
 use App\Models\Request as ModelsRequest;
+use App\Support\ProcurementDraftScanner;
 use Illuminate\Support\Facades\DB;
 
 class RequestProcurementService
 {
     public function createForShortage(ModelsRequest $request): ?ProcurementRequest
     {
-        return DB::transaction(function () use ($request): ?ProcurementRequest {
+        $procurementDraft = DB::transaction(function () use ($request): ?ProcurementRequest {
             $request->loadMissing('item');
 
             $shortages = $request->item
                 ->filter(fn ($detail): bool => $detail->item !== null)
-                ->mapWithKeys(function ($detail): array {
-                    $shortage = (int) $detail->quantity_requested - (int) $detail->item->stock_current;
+                ->groupBy('item_id')
+                ->mapWithKeys(function ($details, string $itemId): array {
+                    $detail = $details->first();
+                    $shortage = (int) $details->sum('quantity_requested') - (int) $detail->item->stock_current;
 
-                    return $shortage > 0 ? [$detail->item_id => $shortage] : [];
+                    return $shortage > 0 ? [$itemId => $shortage] : [];
                 });
 
             if ($shortages->isEmpty()) {
                 return null;
             }
 
-            $existing = ProcurementRequest::query()
-                ->where('source', ProcurementRequestSource::DariPermintaan)
-                ->where('reference_type', 'permintaan')
-                ->where('reference_id', $request->request_id)
+            $procurementDraft = ProcurementRequest::query()
+                ->draf()
+                ->lockForUpdate()
                 ->first();
 
-            if ($existing !== null) {
-                return $existing;
-            }
-
-            $procurementRequest = ProcurementRequest::create([
-                'user_id' => $request->user_id,
+            $procurementDraft ??= ProcurementRequest::create([
+                'user_id' => null,
                 'source' => ProcurementRequestSource::DariPermintaan,
-                'reference_type' => 'permintaan',
-                'reference_id' => $request->request_id,
-                'status' => ProcurementRequestStatus::Diajukan,
+                'status' => ProcurementRequestStatus::Draf,
             ]);
 
-            $procurementRequest->details()->createMany(
-                $shortages->map(fn (int $amount, string $itemId): array => [
-                    'item_id' => $itemId,
-                    'amount_request' => $amount,
-                    'is_auto' => true,
-                ])->values()->all(),
-            );
+            foreach ($shortages as $itemId => $amount) {
+                $detail = $procurementDraft->details()
+                    ->where('item_id', $itemId)
+                    ->first();
 
-            return $procurementRequest;
+                if ($detail === null) {
+                    $procurementDraft->details()->create([
+                        'item_id' => $itemId,
+                        'amount_request' => $amount,
+                        'is_auto' => false,
+                    ]);
+                } else {
+                    $detail->update([
+                        'amount_request' => (int) $detail->amount_request + $amount,
+                        'is_auto' => false,
+                    ]);
+                }
+            }
+
+            return $procurementDraft;
         });
+
+        ProcurementDraftScanner::sinkronkanNotifikasi();
+
+        return $procurementDraft;
     }
 }

@@ -447,23 +447,13 @@ class RequestController extends Controller
             return [$itemRequest, $procurementRequest];
         });
 
-        [$itemRequest, $procurementRequest] = $itemRequest;
+        [$itemRequest, $procurementDraft] = $itemRequest;
 
         if ($itemRequest->type !== 'umum') {
             app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
         }
 
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
-        if ($procurementRequest !== null) {
-            AuditLogger::record(
-                user: $request->user(),
-                activity: "Membuat otomatis usulan pengadaan dari permintaan {$itemRequest->request_number}",
-                module: AuditModule::UsulanPengadaan,
-                event: AuditEvent::Ajukan,
-                subject: $procurementRequest,
-            );
-            NotificationScanner::periksaUsulan($procurementRequest->fresh(['user', 'details']));
-        }
         $itemRequest->item()
             ->with('itemProposal')
             ->get()
