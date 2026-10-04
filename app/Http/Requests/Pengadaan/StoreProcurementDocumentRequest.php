@@ -10,18 +10,22 @@ use Illuminate\Validation\Rule;
  * Unggahan berkas pendukung pengadaan: BAST bertanda tangan hasil pindai,
  * SPK/kontrak, dan foto belanja (ADR 0035).
  *
- * Diizinkan bagi kedua peran pengadaan lewat gate `akses-pengadaan`, bukan
- * dibagi per jenis berkas. Alasannya: pemisahan tugas ADR 0016 mengatur siapa
- * yang **memutuskan** — mengusulkan, merealisasi, mengonfirmasi diterima —
- * bukan siapa yang melampirkan buktinya. Yang memegang BAST bertanda tangan
- * adalah gudang, yang memegang kontrak adalah Pejabat Pengadaan, dan keduanya
- * mengunggah lewat satu jalur yang sama.
+ * Diizinkan bagi kedua peran pelaksana pengadaan lewat gate
+ * `unggah-berkas-pengadaan`, bukan dibagi per jenis berkas. Alasannya:
+ * pemisahan tugas ADR 0016 mengatur siapa yang **memutuskan** — mengusulkan,
+ * merealisasi, mengonfirmasi diterima — bukan siapa yang melampirkan buktinya.
+ * Yang memegang BAST bertanda tangan adalah gudang, yang memegang kontrak
+ * adalah Pejabat Pengadaan, dan keduanya mengunggah lewat satu jalur yang sama.
+ *
+ * Kasubbag Umum dan TI sengaja tidak termasuk walau ia membaca seluruh dokumen
+ * pengadaan: penilai tidak menambahkan bukti ke dokumen yang ia nilai sendiri
+ * (ADR 0041).
  */
 class StoreProcurementDocumentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('akses-pengadaan') ?? false;
+        return $this->user()?->can('unggah-berkas-pengadaan') ?? false;
     }
 
     /**

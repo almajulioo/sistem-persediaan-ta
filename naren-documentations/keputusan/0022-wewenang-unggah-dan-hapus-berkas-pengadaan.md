@@ -4,6 +4,11 @@
 
 Diterima — 6 September 2026
 
+Sebagian digantikan oleh [ADR 0041](0041-kasubbag-pengawas-baca-saja.md):
+mengunggah kini memakai gate `unggah-berkas-pengadaan` (Pejabat Pengadaan dan
+Pengelola Gudang), bukan `akses-pengadaan` yang sejak ADR 0030 juga meloloskan
+Kasubbag Umum dan TI.
+
 ## Konteks
 
 [ADR 0018](0018-berkas-unggahan-di-disk-privat.md) sudah menetapkan **di mana**

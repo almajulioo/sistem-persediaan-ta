@@ -50,7 +50,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) | Harga dicatat di realisasi pengadaan; penilaian persediaan di luar cakupan | Diterima |
 | [0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md) | Notifikasi usulan pengadaan dan persetujuan sebagian per barang | Diterima |
 | [0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md) | Realisasi dan penerimaan pengadaan: batas cakupan Tahap 3 | Diterima |
-| [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Diterima |
+| [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Sebagian digantikan oleh 0041 |
 | [0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md) | Laporan pengadaan berbutir barang, dan BAST mencetak jumlah diterima | Diterima |
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
 | [0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md) | Realisasi dapat diubah selama belum dikonfirmasi diterima | Diterima |
@@ -68,6 +68,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0037](keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md) | Lonceng: kuota per bagian, pengingat ulang keadaan, dan peristiwa berulang | Diterima |
 | [0038](keputusan/0038-profil-pengguna-dan-foto-profil.md) | Profil pengguna: swalayan terbatas dan foto profil | Sebagian digantikan oleh 0039 |
 | [0039](keputusan/0039-pemotong-foto-profil-interaktif.md) | Pemotong foto profil interaktif, tanpa pustaka | Diterima |
+| [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Diterima |
+| [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

@@ -5,7 +5,11 @@ pelaporannya. Merangkap infrastruktur laporan yang dipakai ulang modul lain.
 
 ## Rute
 
-Seluruhnya di bawah `middleware('can:kelola-gudang')`.
+Mencatat mutasi manual (`create`/`store`) di bawah
+`middleware('can:kelola-gudang')`. Riwayat dan cetak PDF/CSV di bawah
+`can:akses-gudang`, yang juga meloloskan Kasubbag Umum dan TI baca-saja —
+tombol "Catat Mutasi Manual" tidak tampil baginya
+([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)).
 
 | Metode | URL | Nama | Aksi |
 |---|---|---|---|

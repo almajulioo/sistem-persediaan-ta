@@ -5,6 +5,108 @@ perubahan.
 
 ---
 
+## 5 Oktober 2026 (lanjutan) — Kasubbag Umum dan TI sebagai pengawas baca-saja
+
+Kasubbag kini membuka seluruh menu gudang dan pengadaan seperti Admin, tanpa
+Manajemen Pengguna dan Log Aktivitas, dan **hanya membaca serta mencetak** —
+satu-satunya hal yang bisa ia ubah tetap keputusan persetujuan realisasi.
+Lihat [ADR 0041](keputusan/0041-kasubbag-pengawas-baca-saja.md).
+
+- Tiga gate baru: `akses-gudang` (Pengelola Gudang + Kasubbag),
+  `akses-penyedia` (Pejabat Pengadaan + Kasubbag), dan
+  `unggah-berkas-pengadaan` (Pejabat Pengadaan + Pengelola Gudang).
+- Rute barang, mutasi, opname, dan penyedia dipisah baca/tulis; grup baca
+  didaftarkan sesudah grup tulis supaya `…/create` tidak tertelan rute
+  berparameter. Gate `kelola-*` tidak berubah.
+- Tombol tulis di halaman barang, mutasi, opname, dan penyedia dibungkus
+  `@can`; kolom Aksi hilang bila kosong. Draf opname tampil "Lihat" bagi
+  Kasubbag. Tidak ada spanduk "baca-saja".
+- Sidebar: grup Pengadaan dan Manajemen Gudang terbuka bagi Kasubbag; tiga
+  sub-item kembar di grup Manajemen Gudang kini khusus Pengelola Gudang, jadi
+  Admin dan Kasubbag tidak lagi melihat "Usulan Pengadaan", "Realisasi
+  Pengadaan", dan "Usulan Barang Baru" dua kali.
+- Dasbor mengikuti gate baca baru (ADR 0040): Kasubbag mendapat 8 ubin, kondisi
+  stok bertaut, dan kedua grafik; antreannya tetap hanya persetujuan.
+
+**Celah yang ditemukan dan ditutup.** Rute unggah berkas pengadaan dijaga
+`akses-pengadaan`, yang sejak ADR 0030 ikut meloloskan Kasubbag — jadi
+penilai realisasi bisa melampirkan BAST, SPK, dan foto belanja ke realisasi
+yang ia nilai sendiri. ADR 0022 ditulis saat gate itu baru berisi dua peran
+pelaksana dan tidak pernah ditinjau ulang. Kini rute dan form request-nya
+memakai `unggah-berkas-pengadaan`; ADR 0022 berstatus *sebagian digantikan*.
+
+**Uji dan pemeriksaan.** `tests/Feature/Auth/PengawasanKasubbagTest.php` baru,
+16 uji: gate, seluruh rute baca 200 bagi Kasubbag, seluruh halaman formulir
+dan aksi tulis 403 (18 aksi, data tidak berubah), unggah ditolak tanpa berkas
+tersimpan, pelaksana tetap bisa mengunggah, tombol tulis tersembunyi bagi
+Kasubbag tetapi tampil bagi pelaksana, sidebar tanpa administrasi, tautan
+pengadaan tepat sekali di sidebar Admin/Kasubbag/Gudang, dan urutan rute
+`…/create`. Dua mutation-check: mengembalikan gate unggah ke
+`akses-pengadaan`, dan memaksa kolom Aksi penyedia tampil — keduanya membuat
+uji gagal. Dataset Kasubbag di `DashboardTest` disesuaikan. Seluruh suite 562
+lolos; `npm run build` berhasil. Pint terbatas bersih kecuali satu temuan
+**lama** di `MenuHelper.php` (baris "Daftar Permintaan" milik Alma: spasi di
+ujung baris dan koma), tidak disentuh. Tangkapan layar Edge headless akun
+`kasubbag` (dasbor, master barang, realisasi menunggu persetujuan) terhadap
+SQLite sementara seperti sesi sebelumnya.
+
+---
+
+## 5 Oktober 2026 — Dasbor berbasis peran dari data nyata
+
+Dasbor lama ditulis ulang: semua angka dummy dan kalimat penjelas dibuang,
+diganti lima bagian yang menyesuaikan gate pengguna — akses cepat (ubin modul
+berikon dan berwarna kontras), **Perlu Ditindaklanjuti** (antrean beban kerja,
+hanya baris > 0), **Kondisi Stok** (bilah tersegmen + lima barang paling
+mendesak), **Alur Pengadaan** (enam tahap dengan jumlah), dan grafik mutasi
+masuk/keluar serta nilai pengadaan diterima per bulan. Setiap angka yang
+bisa diklik menautkan filter daftar yang menghasilkan angka yang sama. Lihat
+[ADR 0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) dan
+[modul/dasbor.md](modul/dasbor.md).
+
+Keputusan pengguna saat perencanaan: grafik sesuai peran, strip alur
+pengadaan ditampilkan, dan baris permintaan barang milik Alma diisi minimal
+memakai status yang sudah dipakai notifikasinya — tanpa menyentuh berkasnya.
+
+**Bug lama yang ikut hilang.** Metrik "Permintaan Menunggu" memakai
+`whereNot('status', 'rejected')->orWhereNot('status', 'completed')`, yang
+selalu benar — angkanya adalah seluruh permintaan. Diganti baris antrean per
+peran dengan cakupan yang sama dengan `RequestController::index()`.
+
+**Satu perubahan dari rencana.** Tahap akhir alur menjadi "Diterima" (total),
+bukan "Diterima bulan ini": filter tanggal daftar realisasi menyaring
+`procurement_date`, bukan tanggal terima, sehingga angka bulanan tidak bisa
+ditautkan ke daftar yang sama.
+
+**Kesalahan di tengah jalan.** Hitungan grafik mula-mula menaikkan elemen
+`Collection` dengan `$koleksi[$kunci]++`; `ArrayAccess` menolak inkremen
+("Indirect modification of overloaded element"), padahal `+=` di grafik nilai
+lolos — jadi hanya uji grafik mutasi yang menangkapnya (500). Diganti array
+biasa. Uji juga sempat mengharapkan singkatan "Agu"; Carbon berbahasa
+Indonesia memakai "Agt". Lalu tangkapan layar menunjukkan batang grafik
+mutasi ~42 px: lebar piksel `columnWidth` ApexCharts berlaku **per batang**,
+bukan per kelompok. Disamakan 24 px.
+
+**Uji dan pemeriksaan.** `tests/Feature/DashboardTest.php` baru, 27 uji (tamu
+→ `/login`, keenam peran → 200 termasuk Admin, isi bersih, akses cepat per
+gate, antrean tiap peran termasuk cakupan permintaan, sebaran dan urutan stok,
+tautan barang hanya bagi `kelola-gudang`, alur tanpa draf, grafik per bulan,
+nilai dari `amount_received`, grafik per peran). Mutation-check: mengikutkan
+`SaldoAwal` membuat uji grafik gagal. `RoleAccessTest` disesuaikan — asersi
+"Gudang tidak melihat menu Persetujuan" kini mencocokkan `href` relatif khas
+sidebar, karena dasbor menautkan filter yang sama secara sah. Seluruh suite
+546 lolos; Pint terbatas bersih; `npm run build` berhasil. Palet grafik diuji
+dengan validator palet (CVD dan kontras, terang dan gelap).
+
+Tangkapan layar Edge headless (CDP) untuk `gudang` (terang, 1440 px), `admin`
+(gelap, 1440 px), `pengadaan` (ponsel, 390 px — tanpa gulir horizontal), dan
+`pengguna`, terhadap **SQLite sementara di folder scratch** yang diisi
+`migrate:fresh --seed` — MySQL XAMPP sedang mati, dan basis data dev tidak
+disentuh sama sekali. `TypeError` tema di `<head>` (temuan 1 Oktober) masih
+muncul di konsol, tetap tidak disentuh.
+
+---
+
 ## 1 Oktober 2026 (lanjutan) — Kotak pencarian bawaan template dibuang dari header
 
 Kotak "Search or type command..." (beserta tombol ⌘K) di

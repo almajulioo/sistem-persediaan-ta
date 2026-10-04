@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.querySelector('#chartThirteen')) {
         import('./components/chart/chart-13').then(module => module.initChartThirteen());
     }
+    if (document.querySelector('[data-grafik-dasbor]')) {
+        import('./components/chart/dasbor').then(module => module.initGrafikDasbor());
+    }
 
     // Calendar init
     if (document.querySelector('#calendar')) {

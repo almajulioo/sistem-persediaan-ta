@@ -20,10 +20,12 @@
             </nav>
         </div>
 
-        <a href="{{ route('suppliers.edit', $supplier) }}"
-            class="text-theme-sm rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-            Ubah Penyedia
-        </a>
+        @can('kelola-pengadaan')
+            <a href="{{ route('suppliers.edit', $supplier) }}"
+                class="text-theme-sm rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                Ubah Penyedia
+            </a>
+        @endcan
     </div>
 
     <x-ui.flash />

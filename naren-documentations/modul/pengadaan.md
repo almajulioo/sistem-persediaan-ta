@@ -142,7 +142,9 @@ dokumen serah terima memuat identitas penyedia, dan mengetik ulang alamat
 beserta narahubung pada tiap dokumen persis friksi yang membuat orang enggan
 memakai sistem.
 
-**Rute** — seluruhnya di bawah gate `kelola-pengadaan`:
+**Rute** — yang mengubah data di bawah gate `kelola-pengadaan`; daftar dan
+rincian di bawah `akses-penyedia`, yang juga meloloskan Kasubbag Umum dan TI
+baca-saja ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)):
 
 | Metode | URL | Nama | Keterangan |
 |---|---|---|---|
@@ -378,7 +380,7 @@ melampirkan bukti bukan bagian dari pemisahan tugas ADR 0016:
 | GET | `/pengadaan/laporan/pdf` | `procurements.pdf` | Laporan pengadaan, mengikuti penyaring aktif |
 | GET | `/pengadaan/laporan/csv` | `procurements.csv` | Ekspor CSV, kolom identik dengan PDF |
 | GET | `/pengadaan/{procurement}/bast` | `procurements.bast` | BAST siap tanda tangan |
-| POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai, SPK/kontrak, atau foto belanja |
+| POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai, SPK/kontrak, atau foto belanja. Ditambah gate `unggah-berkas-pengadaan` — hanya Pejabat Pengadaan dan Pengelola Gudang; Kasubbag tidak melampirkan bukti ke realisasi yang ia nilai ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)) |
 | GET | `/pengadaan/{procurement}/dokumen/{document}/unduh` | `procurement-documents.download` | Unduhan terautentikasi; tidak ada URL berkas |
 | GET | `/pengadaan/{procurement}/dokumen/{document}/lihat` | `procurement-documents.show` | Tampil *inline* untuk JPEG/PNG/WEBP/PDF, tetap dicatat (ADR 0035) |
 | DELETE | `/pengadaan/{procurement}/dokumen/{document}` | `procurement-documents.destroy` | Hanya pengunggah atau Admin |

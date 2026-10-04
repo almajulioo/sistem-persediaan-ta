@@ -49,10 +49,13 @@ class MenuHelper
                     // ['name' => 'Usulan Tambah Barang', 'path' => '/permintaan/usulan-barang'],
                 ],
             ],
+            // Kasubbag Umum dan TI melihat kedua grup ini baca-saja sebagai
+            // pengawas subbagiannya (ADR 0041); tombol ubahnya disembunyikan di
+            // tiap halaman dan rutenya tetap tertutup baginya.
             [
                 'icon' => 'pages',
                 'name' => 'Pengadaan',
-                'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
+                'roles' => [UserRole::Admin, UserRole::PejabatPengadaan, UserRole::KasubbagUmumTi],
                 'subItems' => [
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
                     ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang'],
@@ -63,14 +66,17 @@ class MenuHelper
             [
                 'icon' => 'tables',
                 'name' => 'Manajemen Gudang',
-                'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KasubbagUmumTi],
+                // Tiga sub-item pengadaan hanya untuk Pengelola Gudang, yang
+                // tidak melihat grup Pengadaan. Admin dan Kasubbag sudah
+                // mendapatkannya di sana, jadi tidak perlu muncul dua kali.
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
-                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang'],
+                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang', 'roles' => [UserRole::PengelolaGudang]],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stok Opname', 'path' => '/opname'],
-                    ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
-                    ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
+                    ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan', 'roles' => [UserRole::PengelolaGudang]],
+                    ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan', 'roles' => [UserRole::PengelolaGudang]],
                 ],
             ],
         ];

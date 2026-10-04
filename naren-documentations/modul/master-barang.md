@@ -5,8 +5,12 @@ lain memiliki foreign key ke `items`.
 
 ## Rute
 
-Seluruhnya di bawah `middleware('can:kelola-gudang')`, sehingga Pengelola Gudang
-**dan** Admin berhak. Lihat [ADR 0002](../keputusan/0002-otorisasi-peran-gate-dan-can.md).
+Rute yang mengubah data di bawah `middleware('can:kelola-gudang')`, sehingga
+Pengelola Gudang **dan** Admin berhak. Lihat
+[ADR 0002](../keputusan/0002-otorisasi-peran-gate-dan-can.md). Daftar, rincian,
+dan kartu persediaan di bawah `can:akses-gudang`, yang juga meloloskan Kasubbag
+Umum dan TI **baca-saja**: tombol Tambah/Ubah/Arsipkan/Hapus dan kolom Aksi
+tidak tampil baginya ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)).
 
 | Metode | URL | Nama | Aksi |
 |---|---|---|---|

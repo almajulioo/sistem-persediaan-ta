@@ -1,178 +1,273 @@
 @extends('layouts.app')
 
 @php
-    use App\Enums\UserRole;
+    // Kelas warna ditulis utuh, bukan dirangkai dari nama warna, supaya
+    // terbaca pemindai Tailwind. Kunci = `warna` dari DashboardController.
+    $chipUbin = [
+        'sky' => 'bg-sky-500',
+        'brand' => 'bg-brand-500',
+        'success' => 'bg-success-500',
+        'orange' => 'bg-orange-500',
+        'purple' => 'bg-purple-500',
+        'amber' => 'bg-amber-500',
+        'pink' => 'bg-pink-500',
+        'teal' => 'bg-teal-500',
+        'rose' => 'bg-rose-500',
+        'gray' => 'bg-gray-500 dark:bg-gray-600',
+    ];
 
-    $toneClasses = [
-        'brand' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-        'success' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-        'warning' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+    $chipTugas = [
+        'sky' => 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400',
+        'purple' => 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400',
+        'amber' => 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+        'pink' => 'bg-pink-50 text-pink-600 dark:bg-pink-500/15 dark:text-pink-400',
+        'orange' => 'bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400',
         'error' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
     ];
 
-    // Modul dan peran yang boleh mengaksesnya. Tautan menyusul saat modul dibangun.
-    $modules = [
-        [
-            'name' => 'Permintaan Barang',
-            'description' => 'Pengajuan, verifikasi, dan penyerahan barang persediaan ke unit kerja.',
-            'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
-             'route' => 'request.index',
-        ],
-        [
-            'name' => 'Pengadaan',
-            'description' => 'Usulan kebutuhan, proses pengadaan, hingga penerimaan barang.',
-            'roles' => [UserRole::Admin, UserRole::PejabatPengadaan],
-        ],
-        [
-            'name' => 'Persetujuan Pengadaan',
-            'description' => 'Menilai realisasi pengadaan yang diajukan Pejabat Pengadaan sebelum barang dipesan.',
-            'roles' => [UserRole::Admin, UserRole::KasubbagUmumTi],
-            'route' => 'procurements.index',
-        ],
-        [
-            'name' => 'Manajemen Gudang',
-            'description' => 'Stok, mutasi barang, dan stock opname persediaan.',
-            'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
-            'route' => 'mutations.index',
-        ],
-        [
-            'name' => 'Master Data Barang',
-            'description' => 'Data induk barang beserta batas stok minimum dan maksimum.',
-            'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
-            'route' => 'items.index',
-        ],
-        [
-            'name' => 'Manajemen Pengguna',
-            'description' => 'Pembuatan akun, pengaturan peran, dan penonaktifan pengguna.',
-            'roles' => [UserRole::Admin],
-            'route' => 'users.index',
-        ],
-        [
-            'name' => 'Log Aktivitas',
-            'description' => 'Jejak audit seluruh aktivitas pengguna di dalam sistem.',
-            'roles' => [UserRole::Admin],
-            'route' => 'activity-logs.index',
-        ],
+    // Isi bilah memakai warna status; lintasannya tingkat yang lebih terang
+    // dari warna yang sama, sehingga barang habis (isi nol) tetap terbaca merah.
+    $warnaStok = [
+        'habis' => ['isi' => 'bg-error-500', 'lintasan' => 'bg-error-100 dark:bg-error-500/20'],
+        'menipis' => ['isi' => 'bg-warning-500', 'lintasan' => 'bg-warning-100 dark:bg-warning-500/20'],
+        'aman' => ['isi' => 'bg-success-500', 'lintasan' => 'bg-success-100 dark:bg-success-500/20'],
+        'berlebih' => ['isi' => 'bg-brand-500', 'lintasan' => 'bg-brand-100 dark:bg-brand-500/20'],
     ];
 
-    $accessibleModules = array_values(array_filter(
-        $modules,
-        fn ($module) => $user->hasRole(...$module['roles']),
-    ));
+    $kartu = 'rounded-2xl border border-gray-200 bg-white p-5 md:p-6 dark:border-gray-800 dark:bg-white/[0.03]';
+    $judulKartu = 'text-lg font-semibold text-gray-800 dark:text-white/90';
+    $rupiah = fn (int $nilai) => 'Rp'.number_format($nilai, 0, ',', '.');
 @endphp
 
 @section('content')
-    <div class="mb-6">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Dasbor</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Ringkasan sistem persediaan BPK Perwakilan Provinsi Lampung.
-        </p>
-    </div>
-
-    {{-- Kartu sambutan --}}
-    <div class="mb-6 rounded-2xl border border-gray-200 bg-white p-5 md:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <x-ui.user-avatar :user="$user" class="size-14 text-lg" />
-                <div>
-                    <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
-                        Selamat datang, {{ $user->fullname }}
-                    </h3>
-                    <div class="mt-2 flex flex-wrap items-center gap-2">
-                        <span class="text-theme-xs inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">
-                            {{ $user->role->label() }}
-                        </span>
-                        <span class="text-theme-xs text-gray-500 dark:text-gray-400">
-                            {{ $user->unit }} &middot; {{ '@'.$user->username }}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-theme-xs text-gray-500 dark:text-gray-400 sm:text-right">
-                <p>Login terakhir</p>
-                <p class="mt-1 font-medium text-gray-700 dark:text-gray-300">
-                    {{ $user->last_login_at?->timezone(config('app.timezone'))->translatedFormat('d F Y, H:i') ?? 'Baru pertama kali' }}
-                </p>
-                @if ($user->last_login_ip)
-                    <p class="mt-0.5">dari {{ $user->last_login_ip }}</p>
-                @endif
-            </div>
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">
+                {{ $salam }}, {{ $user->fullname }}
+            </h2>
+            <span class="text-theme-xs mt-2 inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">
+                {{ $user->role->label() }}
+            </span>
         </div>
-
-        <p class="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-            {{ $user->role->description() }}
-        </p>
+        <p class="text-theme-sm text-gray-500 dark:text-gray-400">{{ now()->translatedFormat('l, j F Y') }}</p>
     </div>
 
-    {{-- Metrik ringkas --}}
-    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 md:gap-6">
-        @foreach ($metrics as $metric)
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-                <span class="text-sm text-gray-500 dark:text-gray-400">{{ $metric['label'] }}</span>
-                <div class="mt-3 flex items-end justify-between">
-                    <h4 class="text-title-sm font-bold text-gray-800 dark:text-white/90">{{ $metric['value'] }}</h4>
-                    @if ($metric['dummy'])
-                        <span class="text-theme-xs rounded-full px-2.5 py-1 font-medium {{ $toneClasses[$metric['tone']] }}">
-                            dummy
-                        </span>
-                    @endif
-                </div>
-                <p class="text-theme-xs mt-2 text-gray-500 dark:text-gray-400">{{ $metric['caption'] }}</p>
-            </div>
+    {{-- Akses cepat --}}
+    <nav aria-label="Akses cepat" class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] md:gap-4">
+        @foreach ($aksesCepat as $ubin)
+            <a href="{{ $ubin['url'] }}"
+                class="hover:shadow-theme-sm flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 dark:border-gray-800 dark:bg-white/[0.03] dark:hover:border-gray-700 dark:hover:bg-white/[0.05]">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-xl text-white {{ $chipUbin[$ubin['warna']] }}">
+                    <x-ui.icon :name="$ubin['ikon']" class="size-5" />
+                </span>
+                <span class="text-theme-sm leading-snug font-medium text-gray-800 dark:text-white/90">{{ $ubin['label'] }}</span>
+            </a>
         @endforeach
-    </div>
+    </nav>
 
-    {{-- Modul yang dapat diakses --}}
-    <div class="rounded-2xl border border-gray-200 bg-white p-5 md:p-6 dark:border-gray-800 dark:bg-white/[0.03]">
-        <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
-            Modul yang Dapat Anda Akses
-        </h3>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Daftar berikut mengikuti peran <span class="font-medium">{{ $user->role->label() }}</span>.
-        </p>
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+        {{-- Perlu ditindaklanjuti --}}
+        <section @class([$kartu, 'xl:col-span-2' => $stok !== null, 'xl:col-span-5' => $stok === null])>
+            <h3 class="{{ $judulKartu }}">Perlu Ditindaklanjuti</h3>
 
-        <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-            @foreach ($accessibleModules as $module)
-                @php
-                    $ready = isset($module['route']);
-                    $cardClass = 'block rounded-xl border border-gray-200 p-4 transition dark:border-gray-800';
-                    $cardClass .= $ready
-                        ? ' hover:border-brand-300 dark:hover:border-brand-800 dark:hover:bg-white/[0.03]'
-                        : '';
-                @endphp
-
-                @if ($ready)
-                    <a href="{{ route($module['route']) }}" class="{{ $cardClass }}">
-                @else
-                    <div class="{{ $cardClass }}">
-                @endif
-
-                <div class="flex items-start justify-between gap-3">
-                    <h4 class="font-medium text-gray-800 dark:text-white/90">{{ $module['name'] }}</h4>
-                    @if ($ready)
-                        <span class="text-theme-xs bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 shrink-0 rounded-full px-2.5 py-1 font-medium">
-                            tersedia
-                        </span>
-                    @else
-                        <span class="text-theme-xs shrink-0 rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                            segera
-                        </span>
-                    @endif
+            @if ($tugas === [])
+                <div class="flex flex-col items-center py-10 text-center">
+                    <span class="bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 flex size-12 items-center justify-center rounded-full">
+                        <x-ui.icon name="check-circle" class="size-6" />
+                    </span>
+                    <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">Tidak ada yang perlu ditindaklanjuti.</p>
                 </div>
-                <p class="text-theme-sm mt-1.5 text-gray-500 dark:text-gray-400">{{ $module['description'] }}</p>
+            @else
+                <ul class="-mx-2 mt-4 space-y-1">
+                    @foreach ($tugas as $baris)
+                        <li>
+                            <a href="{{ $baris['url'] }}"
+                                class="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ $chipTugas[$baris['warna']] }}">
+                                    <x-ui.icon :name="$baris['ikon']" class="size-[18px]" />
+                                </span>
+                                <span class="text-theme-sm flex-1 text-gray-700 dark:text-gray-300">{{ $baris['label'] }}</span>
+                                <span class="text-base font-semibold text-gray-800 dark:text-white/90">{{ $baris['jumlah'] }}</span>
+                                <x-ui.icon name="chevron-right" class="size-4 text-gray-400 transition group-hover:translate-x-0.5" />
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
 
-                @if ($ready)
-                    </a>
-                @else
+        {{-- Kondisi stok --}}
+        @if ($stok !== null)
+            <section class="{{ $kartu }} xl:col-span-3">
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 class="{{ $judulKartu }}">Kondisi Stok</h3>
+                    <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $stok['total'] }} barang aktif</span>
+                </div>
+
+                @if ($stok['total'] > 0)
+                    <div class="mt-5 flex h-3 w-full gap-0.5 overflow-hidden rounded-full" role="img"
+                        aria-label="{{ collect($stok['sebaran'])->map(fn ($s) => $s['status']->label().' '.$s['jumlah'])->join(', ') }}">
+                        @foreach ($stok['sebaran'] as $sebaran)
+                            @if ($sebaran['jumlah'] > 0)
+                                <div class="h-full min-w-1 {{ $warnaStok[$sebaran['status']->value]['isi'] }}" style="width: {{ $sebaran['persen'] }}%"></div>
+                            @endif
+                        @endforeach
                     </div>
                 @endif
-            @endforeach
-        </div>
+
+                <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    @foreach ($stok['sebaran'] as $sebaran)
+                        @php $tag = $sebaran['url'] ? 'a' : 'div'; @endphp
+                        <li>
+                            <{{ $tag }} @if ($sebaran['url']) href="{{ $sebaran['url'] }}" @endif
+                                @class(['block rounded-lg px-2 py-1.5', 'transition hover:bg-gray-50 dark:hover:bg-white/[0.03]' => $sebaran['url']])>
+                                <span class="text-theme-sm flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                    <span class="size-2.5 rounded-full {{ $warnaStok[$sebaran['status']->value]['isi'] }}"></span>
+                                    {{ $sebaran['status']->label() }}
+                                </span>
+                                <span class="mt-0.5 block text-xl font-semibold text-gray-800 dark:text-white/90">{{ $sebaran['jumlah'] }}</span>
+                            </{{ $tag }}>
+                        </li>
+                    @endforeach
+                </ul>
+
+                <div class="mt-5 border-t border-gray-100 pt-5 dark:border-gray-800">
+                    <h4 class="text-theme-sm font-medium text-gray-800 dark:text-white/90">Perlu diisi ulang</h4>
+
+                    @if ($stok['kritis']->isEmpty())
+                        <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">Semua stok di atas minimum.</p>
+                    @else
+                        <ul class="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+                            @foreach ($stok['kritis'] as $item)
+                                @php
+                                    $warna = $warnaStok[$item->stockStatus()->value];
+                                    $persen = $item->stock_min > 0 ? min(100, $item->stock_current / $item->stock_min * 100) : 0;
+                                    $tag = $stok['bertaut'] ? 'a' : 'div';
+                                @endphp
+                                <li>
+                                    <{{ $tag }} @if ($stok['bertaut']) href="{{ route('items.show', $item) }}" @endif
+                                        @class([
+                                            'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_6.5rem]',
+                                            '-mx-2 rounded-lg px-2 transition hover:bg-gray-50 dark:hover:bg-white/[0.03]' => $stok['bertaut'],
+                                        ])>
+                                        <span class="min-w-0">
+                                            <span class="text-theme-sm block truncate font-medium text-gray-800 dark:text-white/90">{{ $item->item_name }}</span>
+                                            <span class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $item->item_code }}</span>
+                                        </span>
+                                        <span class="order-last col-span-2 block h-1.5 overflow-hidden rounded-full sm:order-none sm:col-span-1 {{ $warna['lintasan'] }}">
+                                            <span class="block h-full rounded-full {{ $warna['isi'] }}" style="width: {{ $persen }}%"></span>
+                                        </span>
+                                        <span class="text-theme-sm text-right whitespace-nowrap text-gray-700 tabular-nums dark:text-gray-300">
+                                            {{ $item->stock_current }} / {{ $item->stock_min }}
+                                            <span class="text-gray-500 dark:text-gray-400">{{ $item->unit->label() }}</span>
+                                        </span>
+                                    </{{ $tag }}>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+            </section>
+        @endif
     </div>
 
-    <p class="mt-6 text-center text-theme-xs text-gray-400 dark:text-gray-500">
-        Seluruh angka pada halaman ini masih berupa data contoh dan akan digantikan data nyata
-        setelah modul persediaan tersedia.
-    </p>
+    {{-- Alur pengadaan --}}
+    @if ($alur !== null)
+        <section class="{{ $kartu }} mt-6">
+            <h3 class="{{ $judulKartu }}">Alur Pengadaan</h3>
+
+            <ol class="mt-5 grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 xl:grid-cols-6 xl:gap-x-0">
+                @foreach ($alur as $tahap)
+                    <li class="flex flex-col">
+                        <div class="flex items-center" aria-hidden="true">
+                            <span @class([
+                                'flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+                                'bg-brand-500 text-white' => $tahap['jumlah'] > 0,
+                                'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' => $tahap['jumlah'] === 0,
+                            ])>{{ $loop->iteration }}</span>
+                            @unless ($loop->last)
+                                <span class="mx-3 hidden h-px flex-1 bg-gray-200 xl:block dark:bg-gray-800"></span>
+                            @endunless
+                        </div>
+
+                        <a href="{{ $tahap['url'] }}" class="group mt-3 block pr-3">
+                            <span class="text-theme-sm block text-gray-500 group-hover:text-gray-700 dark:text-gray-400 dark:group-hover:text-gray-300">
+                                {{ $tahap['label'] }}
+                            </span>
+                            <span @class([
+                                'mt-1 block text-2xl font-semibold',
+                                'text-gray-800 dark:text-white/90' => $tahap['jumlah'] > 0,
+                                'text-gray-300 dark:text-gray-600' => $tahap['jumlah'] === 0,
+                            ])>{{ $tahap['jumlah'] }}</span>
+                        </a>
+
+                        @isset($tahap['ditolak'])
+                            <a href="{{ $tahap['ditolak']['url'] }}"
+                                class="text-theme-xs text-error-600 dark:text-error-500 mt-1 inline-flex items-center gap-1.5 font-medium hover:underline">
+                                <span class="bg-error-500 size-1.5 rounded-full"></span>
+                                {{ $tahap['ditolak']['jumlah'] }} ditolak
+                            </a>
+                        @endisset
+                    </li>
+                @endforeach
+            </ol>
+        </section>
+    @endif
+
+    {{-- Grafik --}}
+    @if ($grafikMutasi !== null || $grafikNilai !== null)
+        <div @class(['mt-6 grid grid-cols-1 gap-6', 'xl:grid-cols-2' => $grafikMutasi !== null && $grafikNilai !== null])>
+            @if ($grafikMutasi !== null)
+                <section class="{{ $kartu }}">
+                    <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                        <div>
+                            <h3 class="{{ $judulKartu }}">Mutasi Stok</h3>
+                            <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">{{ $grafikMutasi['total'] }} transaksi, 6 bulan terakhir</p>
+                        </div>
+                        <ul class="text-theme-sm flex items-center gap-4 text-gray-600 dark:text-gray-300">
+                            <li class="flex items-center gap-1.5"><span class="bg-brand-500 size-2.5 rounded-sm"></span>Masuk</li>
+                            <li class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-[#eb6834] dark:bg-[#d95926]"></span>Keluar</li>
+                        </ul>
+                    </div>
+
+                    @if ($grafikMutasi['total'] === 0)
+                        <p class="text-theme-sm py-20 text-center text-gray-500 dark:text-gray-400">Belum ada mutasi.</p>
+                    @else
+                        <div class="-ml-3 mt-2" data-grafik-dasbor="mutasi" data-grafik="{{ json_encode($grafikMutasi) }}"></div>
+                        <table class="sr-only">
+                            <caption>Jumlah transaksi mutasi stok per bulan</caption>
+                            <thead><tr><th scope="col">Bulan</th><th scope="col">Masuk</th><th scope="col">Keluar</th></tr></thead>
+                            <tbody>
+                                @foreach ($grafikMutasi['bulanPanjang'] as $i => $bulan)
+                                    <tr><th scope="row">{{ $bulan }}</th><td>{{ $grafikMutasi['masuk'][$i] }}</td><td>{{ $grafikMutasi['keluar'][$i] }}</td></tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    @endif
+                </section>
+            @endif
+
+            @if ($grafikNilai !== null)
+                <section class="{{ $kartu }}">
+                    <h3 class="{{ $judulKartu }}">Nilai Pengadaan Diterima</h3>
+                    <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">{{ $rupiah($grafikNilai['total']) }}, 6 bulan terakhir</p>
+
+                    @if ($grafikNilai['total'] === 0)
+                        <p class="text-theme-sm py-20 text-center text-gray-500 dark:text-gray-400">Belum ada barang diterima.</p>
+                    @else
+                        <div class="-ml-3 mt-2" data-grafik-dasbor="nilai" data-grafik="{{ json_encode($grafikNilai) }}"></div>
+                        <table class="sr-only">
+                            <caption>Nilai pengadaan diterima per bulan</caption>
+                            <thead><tr><th scope="col">Bulan</th><th scope="col">Nilai</th></tr></thead>
+                            <tbody>
+                                @foreach ($grafikNilai['bulanPanjang'] as $i => $bulan)
+                                    <tr><th scope="row">{{ $bulan }}</th><td>{{ $rupiah($grafikNilai['nilai'][$i]) }}</td></tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    @endif
+                </section>
+            @endif
+        </div>
+    @endif
 @endsection

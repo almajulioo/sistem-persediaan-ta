@@ -65,13 +65,16 @@ it('menampilkan grup menu Persetujuan hanya untuk pemberi persetujuan', function
         ->assertOk()
         ->assertSee('Persetujuan')
         // Tautannya membawa penyaring status, bukan daftar realisasi polos.
-        ->assertSee('/pengadaan?status=menunggu_persetujuan', false)
+        // Dicocokkan dengan `href="/…` relatif khas sidebar: dasbor juga
+        // menautkan penyaring yang sama (alur pengadaan), tetapi lewat route()
+        // yang absolut, dan Pengelola Gudang memang boleh melihatnya di sana.
+        ->assertSee('href="/pengadaan?status=menunggu_persetujuan"', false)
         ->assertDontSee('Manajemen Pengguna');
 
     $this->actingAs(User::factory()->role(UserRole::PengelolaGudang)->create())
         ->get('/dasbor')
         ->assertOk()
-        ->assertDontSee('/pengadaan?status=menunggu_persetujuan', false);
+        ->assertDontSee('href="/pengadaan?status=menunggu_persetujuan"', false);
 });
 
 it('menampilkan menu administrasi hanya untuk Admin', function () {

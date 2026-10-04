@@ -455,6 +455,9 @@
                     @endforelse
                 </div>
 
+                {{-- Kasubbag membaca berkasnya, tetapi tidak melampirkan bukti ke
+                     realisasi yang ia nilai sendiri (ADR 0041). --}}
+                @can('unggah-berkas-pengadaan')
                 <form method="POST" action="{{ route('procurement-documents.store', $procurement) }}"
                     enctype="multipart/form-data"
                     class="grid grid-cols-1 gap-4 border-t border-gray-100 p-5 sm:grid-cols-2 dark:border-gray-800 sm:p-6">
@@ -490,6 +493,7 @@
                         </button>
                     </div>
                 </form>
+                @endcan
             </div>
         </div>
 

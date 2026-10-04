@@ -21,7 +21,7 @@ Tidak ada rute pendaftaran mandiri — sistem tertutup, akun dibuat Admin.
 | Peran | Nilai | Keterangan |
 |---|---|---|
 | Admin | `admin` | Tertinggi; lolos seluruh gate lewat `Gate::before`. Di lapangan dipegang staf TI |
-| Kasubbag Umum dan TI | `kasubbag_umum_ti` | Menyetujui atau menolak realisasi pengadaan ([ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)) |
+| Kasubbag Umum dan TI | `kasubbag_umum_ti` | Menyetujui atau menolak realisasi pengadaan ([ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)); membaca dan mencetak seluruh data gudang dan pengadaan tanpa bisa mengubahnya ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)) |
 | Pengelola Gudang | `pengelola_gudang` | Stok, permintaan, opname |
 | Pejabat Pengadaan | `pejabat_pengadaan` | Usulan dan realisasi pengadaan |
 
@@ -39,10 +39,14 @@ keduanya sengaja tidak dipertukarkan dengan `kasubbag_umum_ti`.
 | `kelola-permintaan` | Pengelola Gudang (+ Admin) |
 | `setujui-pengadaan` | Kasubbag Umum dan TI (+ Admin) |
 | `akses-pengadaan` | Pejabat Pengadaan, Pengelola Gudang, Kasubbag Umum dan TI (+ Admin) |
+| `akses-gudang` | Pengelola Gudang, Kasubbag Umum dan TI (+ Admin) — baca barang, mutasi, opname |
+| `akses-penyedia` | Pejabat Pengadaan, Kasubbag Umum dan TI (+ Admin) — baca penyedia |
+| `unggah-berkas-pengadaan` | Pejabat Pengadaan, Pengelola Gudang (+ Admin) |
 
-`akses-pengadaan` ada karena middleware `can:` yang ditumpuk bersifat **DAN**,
-bukan ATAU — beberapa halaman pengadaan harus terbuka bagi beberapa peran
-sekaligus.
+Gate `akses-*` ada karena middleware `can:` yang ditumpuk bersifat **DAN**,
+bukan ATAU — beberapa halaman harus terbuka bagi beberapa peran sekaligus.
+Ketiganya hanya untuk membaca; setiap rute yang mengubah data tetap di gate
+`kelola-*` ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)).
 
 Admin lolos `setujui-pengadaan` juga. Pemisahan staf TI dari pemberi persetujuan
 karena itu bersifat organisasional, bukan ditegakkan sistem — keputusan sadar

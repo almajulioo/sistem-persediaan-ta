@@ -9,13 +9,15 @@
             </p>
         </div>
 
-        <a href="{{ route('opname.create') }}"
-            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-            <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
-            </svg>
-            Mulai Opname
-        </a>
+        @can('kelola-gudang')
+            <a href="{{ route('opname.create') }}"
+                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+                </svg>
+                Mulai Opname
+            </a>
+        @endcan
     </div>
 
     <x-ui.flash />
@@ -118,7 +120,9 @@
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
-                                    @if ($opname->isDraf())
+                                    {{-- Draf hanya bisa dilanjutkan pencacahnya; Kasubbag
+                                         melihatnya lewat "Lihat" (ADR 0041). --}}
+                                    @if ($opname->isDraf() && auth()->user()->can('kelola-gudang'))
                                         <a href="{{ route('opname.edit', $opname) }}"
                                             class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                                             Lanjut Cacah
@@ -128,10 +132,12 @@
                                             class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                                             Lihat
                                         </a>
-                                        <a href="{{ route('opname.pdf', $opname) }}" target="_blank" rel="noopener"
-                                            class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                                            Cetak
-                                        </a>
+                                        @unless ($opname->isDraf())
+                                            <a href="{{ route('opname.pdf', $opname) }}" target="_blank" rel="noopener"
+                                                class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                                Cetak
+                                            </a>
+                                        @endunless
                                     @endif
                                 </div>
                             </td>

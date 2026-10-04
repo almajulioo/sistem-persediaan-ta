@@ -9,8 +9,12 @@ Opname** di riwayat mutasi dan menunjuk balik ke dokumen opname-nya.
 
 ## Rute
 
-Seluruhnya di bawah `middleware('can:kelola-gudang')` — Pengelola Gudang dan
-Admin. Pejabat Pengadaan menerima 403 dan menunya tidak muncul.
+Rute yang mengubah data (mulai, cacah, posting, hapus draf) di bawah
+`middleware('can:kelola-gudang')` — Pengelola Gudang dan Admin. Daftar, rincian,
+dan cetak di bawah `can:akses-gudang`, yang juga meloloskan Kasubbag Umum dan TI
+baca-saja: draf tampil dengan "Lihat", bukan "Lanjut Cacah", dan tombol "Mulai
+Opname" tidak ada ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)).
+Pejabat Pengadaan menerima 403 dan menunya tidak muncul.
 
 | Metode | URL | Nama | Aksi |
 |---|---|---|---|

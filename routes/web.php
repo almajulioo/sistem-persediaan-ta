@@ -144,7 +144,12 @@ Route::middleware('auth')->group(function () {
 
         // Berkas pendukung. Tidak ada tautan langsung ke berkasnya: disknya
         // privat, dan seluruh unduhan wajib melewati rute terjaga ini.
+        // Mengunggah dipersempit ke pelaksana pengadaan: Kasubbag membaca
+        // berkasnya, tetapi tidak menambahkan bukti ke realisasi yang ia nilai
+        // (ADR 0041). Gate tambahan ini bagian dari `akses-pengadaan`, jadi
+        // sifat DAN `can:` bertumpuk memang yang dikehendaki.
         Route::post('pengadaan/{procurement}/dokumen', [ProcurementDocumentController::class, 'store'])
+            ->middleware('can:unggah-berkas-pengadaan')
             ->name('procurement-documents.store');
         Route::get('pengadaan/{procurement}/dokumen/{document}/unduh', [ProcurementDocumentController::class, 'download'])
             ->name('procurement-documents.download');
@@ -161,31 +166,31 @@ Route::middleware('auth')->group(function () {
     | Memakai gate `kelola-gudang`, bukan middleware `role:`, karena gate sudah
     | meloloskan Admin lewat Gate::before sedangkan `role:` memeriksa peran
     | secara harfiah dan akan menolak Admin.
+    |
+    | Grup ini hanya berisi rute yang mengubah data. Rute baca gudang ada di
+    | grup `akses-gudang` di bawah, yang juga meloloskan Kasubbag Umum dan TI
+    | (ADR 0041) — sengaja didaftarkan sesudah grup ini supaya "barang/create"
+    | dan "opname/create" tidak tertelan rute berparameter.
     */
     Route::middleware('can:kelola-gudang')->group(function () {
         Route::resource('barang', ItemController::class)
+            ->except(['index', 'show'])
             ->parameters(['barang' => 'item'])
             ->names('items');
 
         Route::patch('barang/{item}/status', [ItemController::class, 'toggleStatus'])
             ->name('items.toggle-status');
 
-        Route::get('barang/{item}/kartu-persediaan', [StockMutationController::class, 'kartuPersediaan'])
-            ->name('items.kartu-persediaan');
-
         // Riwayat mutasi bersifat immutable: tidak ada rute ubah maupun hapus.
-        // Rute cetak didaftarkan lebih dulu agar tidak tertangkap rute berparameter.
-        Route::get('mutasi/cetak/pdf', [StockMutationController::class, 'exportPdf'])->name('mutations.pdf');
-        Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');
         Route::get('mutasi/create', [StockMutationController::class, 'create'])->name('mutations.create');
-        Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
         Route::post('mutasi', [StockMutationController::class, 'store'])->name('mutations.store');
 
         // Stok opname. Opname yang sudah diposting bersifat final: rute ubah dan
         // hapus menolaknya di controller, bukan disembunyikan dari daftar rute.
-        Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
         Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
-        Route::resource('opname', StockOpnameController::class)->names('opname');
+        Route::resource('opname', StockOpnameController::class)
+            ->except(['index', 'show'])
+            ->names('opname');
 
         // Usulan pengadaan: mengusulkan adalah tugas Pengelola Gudang (ADR 0016).
         Route::get('usulan-pengadaan/create', [ProcurementRequestController::class, 'create'])
@@ -228,7 +233,10 @@ Route::middleware('auth')->group(function () {
     | Admin ikut lolos lewat Gate::before.
     */
     Route::middleware('can:kelola-pengadaan')->group(function () {
+        // Daftar dan rincian penyedia ada di grup `akses-penyedia` di bawah
+        // (ADR 0041), sesudah "penyedia/create" di sini.
         Route::resource('penyedia', SupplierController::class)
+            ->except(['index', 'show'])
             ->parameters(['penyedia' => 'supplier'])
             ->names('suppliers');
 
@@ -313,6 +321,42 @@ Route::middleware('auth')->group(function () {
 
         Route::get('pengadaan/{procurement}', [ProcurementController::class, 'show'])
             ->name('procurements.show');
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Baca gudang dan penyedia — pelaksana, dan Kasubbag Umum dan TI
+    |----------------------------------------------------------------------
+    | Kasubbag mengawasi seluruh data subbagiannya, tetapi hanya membaca dan
+    | mencetak; setiap rute yang mengubah data tetap di grup `kelola-*` di atas
+    | (ADR 0041). Grup ini wajib berada sesudah grup-grup tersebut: rute
+    | berparameter di sini akan menelan "barang/create", "opname/create", dan
+    | "penyedia/create" bila didaftarkan lebih dulu.
+    */
+    Route::middleware('can:akses-gudang')->group(function () {
+        Route::resource('barang', ItemController::class)
+            ->only(['index', 'show'])
+            ->parameters(['barang' => 'item'])
+            ->names('items');
+
+        Route::get('barang/{item}/kartu-persediaan', [StockMutationController::class, 'kartuPersediaan'])
+            ->name('items.kartu-persediaan');
+
+        Route::get('mutasi/cetak/pdf', [StockMutationController::class, 'exportPdf'])->name('mutations.pdf');
+        Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');
+        Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
+
+        Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
+        Route::resource('opname', StockOpnameController::class)
+            ->only(['index', 'show'])
+            ->names('opname');
+    });
+
+    Route::middleware('can:akses-penyedia')->group(function () {
+        Route::resource('penyedia', SupplierController::class)
+            ->only(['index', 'show'])
+            ->parameters(['penyedia' => 'supplier'])
+            ->names('suppliers');
     });
 
     /*

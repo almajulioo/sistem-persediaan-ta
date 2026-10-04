@@ -38,10 +38,12 @@
                     Cetak Laporan
                 </a>
             @else
-                <a href="{{ route('opname.edit', $opname) }}"
-                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-                    Lanjut Cacah
-                </a>
+                @can('kelola-gudang')
+                    <a href="{{ route('opname.edit', $opname) }}"
+                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                        Lanjut Cacah
+                    </a>
+                @endcan
             @endif
         </div>
     </div>

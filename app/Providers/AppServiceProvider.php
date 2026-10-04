@@ -113,5 +113,27 @@ class AppServiceProvider extends ServiceProvider
                 UserRole::KasubbagUmumTi,
             ),
         );
+
+        // Kasubbag Umum dan TI mengawasi gudang dan penyedia sebagai atasan
+        // langsung pelaksananya, tetapi hanya membaca: penyetuju yang bisa
+        // mengubah data yang ia nilai meruntuhkan pemisahan tugas ADR 0016.
+        // Rute tulis tetap di gate `kelola-*`. Lihat ADR 0041.
+        Gate::define(
+            'akses-gudang',
+            fn (User $user) => $user->hasRole(UserRole::PengelolaGudang, UserRole::KasubbagUmumTi),
+        );
+
+        Gate::define(
+            'akses-penyedia',
+            fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::KasubbagUmumTi),
+        );
+
+        // Melampirkan berkas adalah pekerjaan pelaksana pengadaan (ADR 0022).
+        // Bukan `akses-pengadaan`: gate itu juga meloloskan Kasubbag, yang
+        // tidak boleh menambahkan bukti ke realisasi yang ia nilai sendiri.
+        Gate::define(
+            'unggah-berkas-pengadaan',
+            fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::PengelolaGudang),
+        );
     }
 }

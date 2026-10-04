@@ -1,6 +1,9 @@
 @extends('layouts.app')
 
 @section('content')
+    {{-- Kasubbag Umum dan TI membuka halaman ini baca-saja (ADR 0041). --}}
+    @php $bisaKelola = auth()->user()->can('kelola-gudang'); @endphp
+
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Master Barang</h2>
@@ -9,13 +12,15 @@
             </p>
         </div>
 
-        <a href="{{ route('items.create') }}"
-            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-            <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
-            </svg>
-            Tambah Barang
-        </a>
+        @if ($bisaKelola)
+            <a href="{{ route('items.create') }}"
+                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+                </svg>
+                Tambah Barang
+            </a>
+        @endif
     </div>
 
     <x-ui.flash />
@@ -76,7 +81,7 @@
                 <table class="w-full min-w-[980px]">
                     <thead>
                         <tr class="border-b border-gray-100 dark:border-gray-800">
-                            @foreach (['Kode', 'Nama Barang', 'Satuan', 'Stok Saat Ini', 'Min / Maks', 'Status', 'Aksi'] as $heading)
+                            @foreach (array_filter(['Kode', 'Nama Barang', 'Satuan', 'Stok Saat Ini', 'Min / Maks', 'Status', $bisaKelola ? 'Aksi' : null]) as $heading)
                                 <th class="px-5 py-3 text-left sm:px-6">
                                     <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                                 </th>
@@ -125,6 +130,7 @@
                                         {{ $row->is_active ? 'Aktif' : 'Diarsipkan' }}
                                     </span>
                                 </td>
+                                @if ($bisaKelola)
                                 <td class="px-5 py-4 sm:px-6">
                                     <div class="flex items-center gap-2">
                                         <a href="{{ route('items.edit', $row) }}"
@@ -148,10 +154,11 @@
                                         </button>
                                     </div>
                                 </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-5 py-10 text-center sm:px-6">
+                                <td colspan="{{ $bisaKelola ? 7 : 6 }}" class="px-5 py-10 text-center sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                         Tidak ada barang yang cocok dengan penyaring saat ini.
                                     </p>
