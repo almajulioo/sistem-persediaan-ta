@@ -52,11 +52,10 @@
                 Realisasi usulan ini dibatalkan
             </h3>
             <p class="text-theme-sm text-error-600 dark:text-error-400/90 mt-1.5">
-                {{ $procurementRequest->procurement->judul() }} dibatalkan dengan alasan
-                {{ strtolower($procurementRequest->procurement->cancel_reason?->label() ?? 'yang tidak dicatat') }},
-                sehingga barangnya tidak jadi datang. Usulan ini sudah selesai riwayatnya dan tidak dapat
-                direalisasikan ulang &mdash; bila barangnya masih dibutuhkan, Pengelola Gudang mengajukan usulan
-                pengadaan yang baru.
+                {{ $procurementRequest->procurement->judul() }} dibatalkan
+                ({{ strtolower($procurementRequest->procurement->cancel_reason?->label() ?? 'alasan tidak dicatat') }}).
+                Usulan ini tidak dapat direalisasikan ulang; bila barangnya masih dibutuhkan, Pengelola Gudang
+                mengajukan usulan baru.
             </p>
         </div>
     @endif
@@ -77,10 +76,6 @@
                         </div>
                     @endforeach
                 </dl>
-
-                <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                    {{ $procurementRequest->source->description() }}
-                </p>
             </div>
         </div>
 

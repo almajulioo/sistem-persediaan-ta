@@ -20,8 +20,7 @@
             placeholder="mis. Budi Santoso" autocomplete="name" />
 
         <x-form.text-field name="username" label="Nama Pengguna" :value="$user->username" required
-            placeholder="mis. budi.santoso" autocomplete="off"
-            help="Huruf, angka, titik, tanda hubung, dan garis bawah. Dipakai untuk masuk." />
+            placeholder="mis. budi.santoso" autocomplete="off" />
 
         <x-form.text-field name="email" label="Email" type="email" :value="$user->email" required
             placeholder="nama@bpk.go.id" autocomplete="email" />
@@ -65,32 +64,29 @@
             @error('is_active')
                 <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
             @else
-                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                    {{ $isSelf ? 'Status akun sendiri tidak dapat diubah.' : 'Akun nonaktif tidak dapat masuk ke sistem.' }}
-                </p>
+                @if ($isSelf)
+                    <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">Status akun sendiri tidak dapat diubah.</p>
+                @endif
             @enderror
         </div>
     </div>
 
     <div class="mt-8 border-t border-gray-100 pt-6 dark:border-gray-800">
-        <h4 class="text-theme-sm mb-1 font-medium text-gray-800 dark:text-white/90">
+        <h4 class="text-theme-sm mb-5 font-medium text-gray-800 dark:text-white/90">
             {{ $isEdit ? 'Ubah Kata Sandi' : 'Kata Sandi' }}
         </h4>
-        <p class="text-theme-xs mb-5 text-gray-500 dark:text-gray-400">
-            @if ($isEdit)
-                Kosongkan kedua kolom bila kata sandi tidak ingin diubah.
-            @else
-                Minimal 12 karakter, memuat huruf besar, huruf kecil, angka, dan simbol.
-            @endif
-        </p>
 
-        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <x-form.password-field name="password" label="Kata Sandi" :required="!$isEdit"
-                :placeholder="$isEdit ? 'Biarkan kosong bila tidak diubah' : 'Masukkan kata sandi'" />
+        {{-- Syaratnya muncul begitu kata sandi diketik; pada halaman ubah,
+             placeholder sudah mengatakan kolom ini boleh dikosongkan. --}}
+        <x-form.syarat-sandi>
+            <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <x-form.password-field name="password" label="Kata Sandi" :required="!$isEdit"
+                    :placeholder="$isEdit ? 'Biarkan kosong bila tidak diubah' : 'Masukkan kata sandi'" />
 
-            <x-form.password-field name="password_confirmation" label="Konfirmasi Kata Sandi"
-                :required="!$isEdit" placeholder="Ulangi kata sandi" />
-        </div>
+                <x-form.password-field name="password_confirmation" label="Konfirmasi Kata Sandi"
+                    :required="!$isEdit" placeholder="Ulangi kata sandi" />
+            </div>
+        </x-form.syarat-sandi>
     </div>
 
     <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 pt-6 dark:border-gray-800">

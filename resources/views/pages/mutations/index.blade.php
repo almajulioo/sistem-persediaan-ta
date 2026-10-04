@@ -2,13 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Riwayat Mutasi</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Seluruh pergerakan stok barang persediaan beserta dokumen sumbernya,
-                diurutkan menurut waktu pencatatan.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Riwayat Mutasi</h2>
 
         <div class="flex flex-wrap items-center gap-2">
             <a href="{{ route('mutations.csv', request()->query()) }}"
@@ -89,22 +83,9 @@
             <table class="w-full min-w-[1220px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        @foreach ([
-                            ['label' => 'Kode Barang', 'hint' => null],
-                            ['label' => 'Nama Barang', 'hint' => null],
-                            ['label' => 'Jenis Mutasi', 'hint' => null],
-                            ['label' => 'Sumber', 'hint' => 'Otomatis dari dokumen, atau dicatat manual'],
-                            ['label' => 'Jumlah', 'hint' => null],
-                            ['label' => 'Stok Setelah', 'hint' => 'Sisa stok pada saat mutasi ini dicatat'],
-                            ['label' => 'Tanggal', 'hint' => 'Tanggal transaksi, dapat berbeda dari waktu pencatatan'],
-                            ['label' => 'Referensi', 'hint' => null],
-                            ['label' => 'Petugas', 'hint' => 'Orang yang mengeksekusi transaksi ini'],
-                        ] as $heading)
+                        @foreach (['Kode Barang', 'Nama Barang', 'Jenis Mutasi', 'Sumber', 'Jumlah', 'Stok Setelah', 'Tanggal', 'Referensi', 'Petugas'] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
-                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                                    @if ($heading['hint']) title="{{ $heading['hint'] }}" @endif>
-                                    {{ $heading['label'] }}
-                                </p>
+                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                             </th>
                         @endforeach
                     </tr>
@@ -167,7 +148,7 @@
                         <tr>
                             <td colspan="9" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Tidak ada mutasi yang cocok dengan penyaring saat ini.
+                                    Tidak ada mutasi yang cocok.
                                 </p>
                             </td>
                         </tr>

@@ -2,13 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Log Aktivitas</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Jejak audit seluruh aktivitas pengguna di dalam sistem, diurutkan dari
-                yang terbaru. Baris log tidak pernah diubah maupun dihapus.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Log Aktivitas</h2>
 
         <a href="{{ route('activity-logs.csv', request()->query()) }}"
             class="inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
@@ -23,17 +17,16 @@
 
     {{-- Rekap mengikuti penyaring yang sedang aktif, bukan seluruh tabel --}}
     <div class="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4 md:gap-6">
+        {{-- "Perubahan Data" tidak menghitung masuk, keluar, dan unduh —
+             ketiganya tidak mengubah data apa pun. --}}
         @foreach ([
-            ['label' => 'Total Aktivitas', 'value' => $summary['total'], 'hint' => 'Seluruh baris log yang cocok dengan penyaring saat ini'],
-            ['label' => 'Pengguna Terlibat', 'value' => $summary['pengguna'], 'hint' => 'Jumlah pengguna berbeda yang beraktivitas'],
-            ['label' => 'Aktivitas Hari Ini', 'value' => $summary['hari_ini'], 'hint' => null],
-            ['label' => 'Perubahan Data', 'value' => $summary['perubahan'], 'hint' => 'Tidak menghitung masuk, keluar, dan unduh — ketiganya tidak mengubah data apa pun'],
+            ['label' => 'Total Aktivitas', 'value' => $summary['total']],
+            ['label' => 'Pengguna Terlibat', 'value' => $summary['pengguna']],
+            ['label' => 'Aktivitas Hari Ini', 'value' => $summary['hari_ini']],
+            ['label' => 'Perubahan Data', 'value' => $summary['perubahan']],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-                <span class="text-theme-sm text-gray-500 dark:text-gray-400"
-                    @if ($card['hint']) title="{{ $card['hint'] }}" @endif>
-                    {{ $card['label'] }}
-                </span>
+                <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
                 <h4 class="text-title-sm mt-2 font-bold text-gray-800 dark:text-white/90">
                     {{ number_format($card['value'], 0, ',', '.') }}
                 </h4>
@@ -52,8 +45,7 @@
                 :selected="$filters['user']" placeholder="Semua pengguna" />
 
             <x-form.select-field name="role" label="Peran" :options="$roles"
-                :selected="$filters['role']" placeholder="Semua peran"
-                help="Peran yang dipakai saat aksi dilakukan" />
+                :selected="$filters['role']" placeholder="Semua peran" />
 
             <x-form.select-field name="module" label="Modul" :options="$modules"
                 :selected="$filters['module']" placeholder="Semua modul" />
@@ -84,20 +76,11 @@
             <table class="w-full min-w-[1220px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        @foreach ([
-                            ['label' => 'Waktu', 'hint' => 'Waktu pencatatan pada zona Asia/Jakarta'],
-                            ['label' => 'Pengguna', 'hint' => null],
-                            ['label' => 'Peran', 'hint' => 'Peran yang dipegang pelaku saat aksi ini dilakukan, bukan perannya sekarang'],
-                            ['label' => 'Modul', 'hint' => null],
-                            ['label' => 'Aksi', 'hint' => null],
-                            ['label' => 'Aktivitas', 'hint' => null],
-                            ['label' => 'Objek', 'hint' => 'Dokumen yang dikenai aksi, bila masih ada'],
-                        ] as $heading)
+                        {{-- Peran = peran pelaku saat aksi dilakukan, bukan perannya
+                             sekarang; Objek hanya tertaut bila dokumennya masih ada. --}}
+                        @foreach (['Waktu', 'Pengguna', 'Peran', 'Modul', 'Aksi', 'Aktivitas', 'Objek'] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
-                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                                    @if ($heading['hint']) title="{{ $heading['hint'] }}" @endif>
-                                    {{ $heading['label'] }}
-                                </p>
+                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                             </th>
                         @endforeach
                     </tr>
@@ -133,8 +116,7 @@
 
                             <td class="px-5 py-4 sm:px-6">
                                 @if ($log->module)
-                                    <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $log->module->badgeClass() }}"
-                                        title="{{ $log->module->description() }}">
+                                    <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $log->module->badgeClass() }}">
                                         {{ $log->module->label() }}
                                     </span>
                                 @else
@@ -173,7 +155,7 @@
                         <tr>
                             <td colspan="7" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Tidak ada aktivitas yang cocok dengan penyaring saat ini.
+                                    Tidak ada aktivitas yang cocok.
                                 </p>
                             </td>
                         </tr>

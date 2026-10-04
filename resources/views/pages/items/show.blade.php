@@ -113,9 +113,6 @@
             <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
                 <div class="px-5 py-5 sm:px-6">
                     <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Riwayat Mutasi Stok</h3>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Setiap perubahan stok tercatat di sini, dari saldo awal hingga transaksi terakhir.
-                    </p>
                 </div>
 
                 <div class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">

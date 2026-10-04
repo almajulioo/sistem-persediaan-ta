@@ -29,15 +29,11 @@
 
             @error('address')
                 <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-            @else
-                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                    Dicantumkan pada BAST, jadi tulis selengkap yang diketahui.
-                </p>
             @enderror
         </div>
 
         <x-form.text-field name="contact_person" label="Narahubung" :value="$supplier->contact_person"
-            placeholder="mis. Budi Santoso" help="Nama orang yang dihubungi saat pemesanan." />
+            placeholder="mis. Budi Santoso" />
 
         <x-form.text-field name="phone" label="Nomor Telepon" :value="$supplier->phone"
             placeholder="mis. 0721-123456" />
@@ -46,7 +42,7 @@
             placeholder="mis. penyedia@contoh.co.id" />
 
         <x-form.text-field name="npwp" label="NPWP" :value="$supplier->npwp"
-            placeholder="mis. 01.234.567.8-901.000" help="Boleh dikosongkan bila belum diketahui." />
+            placeholder="mis. 01.234.567.8-901.000" />
 
         <div class="md:col-span-2">
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
@@ -73,10 +69,6 @@
 
             @error('is_active')
                 <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-            @else
-                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                    Penyedia yang diarsipkan tidak muncul pada realisasi pengadaan baru.
-                </p>
             @enderror
         </div>
     </div>

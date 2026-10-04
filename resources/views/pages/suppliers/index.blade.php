@@ -5,12 +5,7 @@
     @php $bisaKelola = auth()->user()->can('kelola-pengadaan'); @endphp
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Penyedia Barang</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Data induk penyedia beserta identitas yang dicantumkan pada BAST pengadaan.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Penyedia Barang</h2>
 
         @if ($bisaKelola)
             <a href="{{ route('suppliers.create') }}"
@@ -156,7 +151,7 @@
                             <tr>
                                 <td colspan="{{ $bisaKelola ? 6 : 5 }}" class="px-5 py-10 text-center sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                        Belum ada penyedia yang cocok dengan penyaring saat ini.
+                                        Belum ada penyedia yang cocok.
                                     </p>
                                 </td>
                             </tr>
@@ -176,8 +171,7 @@
                     <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">Hapus penyedia?</h3>
                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         <span class="font-medium text-gray-700 dark:text-gray-300" x-text="confirmName"></span>
-                        akan dihapus permanen. Penyedia yang sudah pernah dipakai realisasi pengadaan tidak dapat
-                        dihapus &mdash; arsipkan saja.
+                        akan dihapus permanen.
                     </p>
 
                     <div class="mt-6 flex justify-end gap-3">

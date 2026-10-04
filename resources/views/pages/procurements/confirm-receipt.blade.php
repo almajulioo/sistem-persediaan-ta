@@ -4,8 +4,7 @@
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Konfirmasi Penerimaan</h2>
         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ $procurement->judul() }} dari {{ $procurement->supplier?->supplier_name }}. Isi jumlah yang
-            benar-benar diterima per barang — boleh berbeda dari yang dipesan bila penyedia mengirim kurang.
+            {{ $procurement->judul() }} &middot; {{ $procurement->supplier?->supplier_name }}
         </p>
     </div>
 
@@ -16,8 +15,7 @@
             @csrf
 
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <x-form.text-field name="bast_number" label="Nomor BAST" :value="$saranNomorBast" required
-                    help="Saran nomor berurut, boleh ditimpa sesuai penomoran resmi." />
+                <x-form.text-field name="bast_number" label="Nomor BAST" :value="$saranNomorBast" required />
 
                 <x-form.text-field name="received_at" label="Tanggal Diterima" type="date"
                     :value="now()->toDateString()" required />
@@ -71,7 +69,7 @@
 
             <div class="mt-6">
                 <label for="notes" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Catatan (opsional)
+                    Catatan
                 </label>
                 <textarea id="notes" name="notes" rows="3" placeholder="Mis. kondisi barang, alasan kekurangan kiriman"
                     class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('notes') }}</textarea>

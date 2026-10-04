@@ -3,10 +3,6 @@
 @section('content')
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Ajukan Usulan Pengadaan</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Pilih barang yang perlu diadakan beserta jumlah yang diminta. Usulan ini akan menunggu
-            persetujuan Pejabat Pengadaan.
-        </p>
     </div>
 
     <x-ui.flash />

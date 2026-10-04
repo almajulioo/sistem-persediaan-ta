@@ -2,12 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Pengadaan</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Permintaan pengadaan barang dari Pengelola Gudang kepada Pejabat Pengadaan.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Pengadaan</h2>
 
         @can('kelola-gudang')
             <a href="{{ route('procurement-requests.create') }}"
@@ -26,8 +21,8 @@
         @if ($draftBanner)
             <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/15">
                 <p class="text-theme-sm text-warning-700 dark:text-warning-400">
-                    Draf usulan otomatis menunggu ditinjau:
-                    <strong>{{ $draftBanner->details_count }} barang</strong> di bawah stok minimum sudah terkumpul dari pemantauan stok.
+                    Draf usulan otomatis:
+                    <strong>{{ $draftBanner->details_count }} barang</strong> di bawah stok minimum.
                 </p>
                 <a href="{{ route('procurement-requests.draft.edit') }}"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
@@ -134,7 +129,7 @@
                         <tr>
                             <td colspan="6" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Belum ada usulan pengadaan yang cocok dengan penyaring saat ini.
+                                    Belum ada usulan pengadaan yang cocok.
                                 </p>
                             </td>
                         </tr>

@@ -220,6 +220,27 @@ describe('membuat realisasi langsung', function () {
 
         expect(Procurement::count())->toBe(0);
     });
+
+    it('menawarkan usulan barang baru dari pencarian barang yang tidak ditemukan', function () {
+        // Pengganti kalimat penjelasan yang dulu selalu tampil di bawah daftar.
+        $this->actingAs(pejabatPengadaan())
+            ->get('/pengadaan/create')
+            ->assertOk()
+            ->assertSee('href="'.route('item-proposals.create').'"', false)
+            ->assertSee('Usulkan barang baru');
+    });
+
+    it('tidak menyebut usulan asal di dialog pembatalan realisasi langsung', function () {
+        // Realisasi langsung tidak punya usulan; kalimat lama menyebutnya juga.
+        $pejabat = pejabatPengadaan();
+        $procurement = buatRealisasiLangsung($pejabat, Supplier::factory()->create(), [barisLangsung(Item::factory()->create())]);
+
+        $this->actingAs($pejabat)
+            ->get("/pengadaan/{$procurement->procurement_id}")
+            ->assertOk()
+            ->assertSee('Pembatalan tidak dapat diurungkan.')
+            ->assertDontSee('Usulan asalnya');
+    });
 });
 
 describe('mengubah realisasi langsung', function () {

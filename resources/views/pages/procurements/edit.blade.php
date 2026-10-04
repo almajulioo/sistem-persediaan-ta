@@ -61,10 +61,6 @@
 
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Ubah {{ $procurement->judul() }}</h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Memperbaiki penyedia, tanggal, jumlah pesan, atau harga satuan yang keliru diketik. Barang belum
-            dikonfirmasi diterima, sehingga stok belum tersentuh dan dokumen ini masih boleh diperbaiki.
-        </p>
     </div>
 
     <x-ui.flash />
@@ -82,17 +78,7 @@
             <div class="bg-gray-50 dark:bg-white/[0.03] mb-5 rounded-lg p-4">
                 <p class="text-theme-xs text-gray-500 dark:text-gray-400">Usulan Sumber</p>
                 <p class="text-theme-sm mt-0.5 font-medium text-gray-800 dark:text-white/90">
-                    @if ($procurement->tanpaUsulan())
-                        Langsung, tanpa usulan
-                        <span class="text-theme-xs font-normal text-gray-500 dark:text-gray-400">
-                            &mdash; tidak dapat ditautkan ke usulan
-                        </span>
-                    @else
-                        {{ $procurement->procurementRequest?->judul() ?? '—' }}
-                        <span class="text-theme-xs font-normal text-gray-500 dark:text-gray-400">
-                            &mdash; tidak dapat dipindah ke usulan lain
-                        </span>
-                    @endif
+                    {{ $procurement->tanpaUsulan() ? 'Langsung, tanpa usulan' : ($procurement->procurementRequest?->judul() ?? '—') }}
                 </p>
             </div>
 
@@ -112,9 +98,6 @@
                      bisa ditukar diam-diam setelahnya (ADR 0030, ADR 0031). --}}
                 <div class="mt-6 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
                     <h4 class="text-theme-sm font-medium text-gray-800 dark:text-white/90">Dasar Pengadaan</h4>
-                    <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
-                        Wajib diisi. Realisasi tanpa usulan harus menyebutkan atas dasar apa belanja ini dilakukan.
-                    </p>
 
                     <div class="mt-4">
                         <x-form.select-field name="basis_reason" label="Alasan" required
@@ -193,11 +176,6 @@
                     </table>
                 </div>
 
-                <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
-                    Jumlah pesan boleh melebihi jumlah yang disetujui usulan. Barang dari usulan wajib ada dan
-                    tidak dapat dihapus di sini &mdash; tambahkan atau hapus barang di luar usulan lewat bagian
-                    di bawah.
-                </p>
             </div>
             @endunless
 
@@ -235,7 +213,13 @@
                                 </template>
 
                                 <template x-if="filteredItems.length === 0">
-                                    <li class="px-3 py-2 text-center text-sm text-gray-400">Barang tidak ditemukan.</li>
+                                    <li class="px-3 py-2 text-center text-sm text-gray-400">
+                                        Barang tidak ditemukan.
+                                        <a href="{{ route('item-proposals.create') }}" target="_blank" rel="noopener"
+                                            class="text-brand-500 hover:text-brand-600 dark:text-brand-400 mt-1 block">
+                                            Usulkan barang baru
+                                        </a>
+                                    </li>
                                 </template>
                             </ul>
                         </div>
@@ -294,13 +278,6 @@
                 @error('items')
                     <p class="text-theme-xs text-error-500 mt-3">{{ $message }}</p>
                 @enderror
-
-                @if ($procurement->tanpaUsulan())
-                    <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
-                        Seluruh barang pada realisasi langsung boleh ditambah maupun dihapus, selama tersisa
-                        minimal satu.
-                    </p>
-                @endif
             </div>
 
             <div class="mt-6 flex justify-end gap-3">

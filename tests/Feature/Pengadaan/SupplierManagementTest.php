@@ -267,7 +267,7 @@ describe('cacah pengadaan penyedia', function () {
             ->get("/penyedia/{$supplier->supplier_id}")
             ->assertOk()
             ->assertSee('1 pengadaan berjalan')
-            ->assertSee('lainnya dibatalkan')
+            ->assertSee('1 dibatalkan')
             // Barisnya tetap tampil lengkap dengan badge statusnya.
             ->assertSee('Dibatalkan')
             ->assertSee('Menunggu Penerimaan');

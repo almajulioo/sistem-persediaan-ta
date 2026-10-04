@@ -111,6 +111,18 @@ describe('membuat akun', function () {
 
         expect(User::where('username', 'budi.santoso')->first()->is_active)->toBeFalse();
     });
+
+    it('menampilkan syarat kata sandi dari kebijakan yang berlaku', function () {
+        // Teks lama ditulis tangan dan masih menyebut "simbol" setelah
+        // syarat itu dibuang dari Password::defaults().
+        $halaman = $this->actingAs(admin())->get('/pengguna/create')
+            ->assertOk()
+            ->assertSee('aria-label="Syarat kata sandi"', false)
+            ->assertSee('Minimal 12 karakter')
+            ->assertDontSee('simbol');
+
+        expect(substr_count($halaman->getContent(), 'window.syaratSandi ='))->toBe(1);
+    });
 });
 
 describe('mengubah akun', function () {

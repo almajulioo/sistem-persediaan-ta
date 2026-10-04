@@ -2,12 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Manajemen Pengguna</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Kelola akun, peran, dan status akses pengguna sistem.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Manajemen Pengguna</h2>
 
         <a href="{{ route('users.create') }}"
             class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
@@ -149,7 +144,7 @@
                             <tr>
                                 <td colspan="6" class="px-5 py-10 text-center sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                        Tidak ada akun yang cocok dengan penyaring saat ini.
+                                        Tidak ada akun yang cocok.
                                     </p>
                                 </td>
                             </tr>

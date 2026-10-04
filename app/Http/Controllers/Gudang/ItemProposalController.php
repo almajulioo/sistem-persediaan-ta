@@ -88,7 +88,7 @@ class ItemProposalController extends Controller
 
         return redirect()
             ->route('item-proposals.show', $proposal)
-            ->with('status', "Usulan barang \"{$proposal->item_name}\" berhasil diajukan dan menunggu keputusan Pengelola Gudang.");
+            ->with('status', "Usulan barang \"{$proposal->item_name}\" berhasil diajukan.");
     }
 
     public function show(ItemProposal $itemProposal): View

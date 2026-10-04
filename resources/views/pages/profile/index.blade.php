@@ -313,36 +313,5 @@
                 },
             };
         };
-
-        /**
-         * Daftar syarat kata sandi yang tercentang saat mengetik. Hanya
-         * petunjuk — penentunya tetap Password::defaults() di server. Pola
-         * regex-nya sama dengan yang dipakai aturan Password milik Laravel.
-         */
-        window.syaratSandi = function (min) {
-            return {
-                sandi: '',
-
-                get cukupPanjang() {
-                    return this.sandi.length >= min;
-                },
-
-                get hurufBesarKecil() {
-                    return /\p{Ll}/u.test(this.sandi) && /\p{Lu}/u.test(this.sandi);
-                },
-
-                get adaHuruf() {
-                    return /\p{L}/u.test(this.sandi);
-                },
-
-                get adaAngka() {
-                    return /\p{N}/u.test(this.sandi);
-                },
-
-                get adaSimbol() {
-                    return /[\p{Z}\p{S}\p{P}]/u.test(this.sandi);
-                },
-            };
-        };
     </script>
 @endpush

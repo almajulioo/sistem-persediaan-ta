@@ -793,8 +793,8 @@ belanjanya. Rincian keputusan:
 - Tanggal belanja tidak boleh melewati hari ini maupun mendahului tanggal
   realisasi.
 - Selama `ProsesBelanja`, gudang **tidak** dapat mengonfirmasi penerimaan.
-  Halaman detail menjelaskan sebabnya, dan pesan galatnya menunjuk Pejabat
-  Pengadaan.
+  Halaman detail menjelaskan sebabnya kepada yang tidak memegang tombol tandai
+  (gudang, Kasubbag), dan pesan galatnya menunjuk Pejabat Pengadaan.
 - **Mengubah realisasi setelah dibelanjakan** tetap mengembalikannya ke
   `MenungguPersetujuan` (ADR 0030), tetapi `purchased_*` tidak dikosongkan.
   Setelah disetujui ulang, ia **langsung** kembali ke `MenungguPenerimaan`.
@@ -803,7 +803,7 @@ belanjanya. Rincian keputusan:
   `Procurement::sudahDibelanjakan()`.
 - Kartu **Belanja** di halaman detail menampilkan tanggal, penanda, jumlah foto,
   dan catatan belanja. Kartu ini tetap tampil saat realisasi yang sudah
-  dibelanjakan menunggu persetujuan ulang, disertai penjelasannya.
+  dibelanjakan menunggu persetujuan ulang.
 - Berkas foto ditulis ke disk sebelum transaksi, dan dibuang lagi lewat
   `DocumentStorage::hapusBerkas()` bila transaksinya gagal.
 - Jejak audit: satu baris `Pengadaan / UbahStatus`, ditambah satu baris

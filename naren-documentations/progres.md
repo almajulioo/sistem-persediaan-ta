@@ -5,6 +5,92 @@ perubahan.
 
 ---
 
+## 5 Oktober 2026 (lanjutan) — Seluruh UI gudang, pengadaan, dan Admin dibersihkan
+
+Cicilan pedoman "UI copy: clean by default" (CLAUDE.md, 1 Oktober) dituntaskan
+sekaligus untuk semua kelompok halaman yang tersisa: pengguna, barang, mutasi,
+opname, log aktivitas, notifikasi (beserta lonceng), penyedia, usulan
+pengadaan, usulan barang baru, realisasi pengadaan, dan pesan flash
+controller. Tanpa ADR — ini pelaksanaan pedoman yang sudah dicatat, bukan
+keputusan baru. Halaman Alma (`pages/request/*`) dan halaman demo TailAdmin
+tidak disentuh.
+
+**Yang dibuang.** Subjudul di bawah judul halaman; `help=` yang berisi format,
+alasan, atau akibat samping; kalimat "Wajib diisi…" (tanda bintang sudah
+menandainya) dan label "(opsional)"; paragraf alasan di kartu dan formulir;
+ekor penjelasan di dialog konfirmasi. Tooltip `title` penjelas di kepala tabel
+dan kartu ringkasan (mutasi, opname, log aktivitas) ikut dibuang — pedomannya
+membuang penjelasan, bukan memindahkannya ke tooltip. Alasan yang masih
+berguna bagi pengembang dipindah ke komentar Blade.
+
+**Yang dipertahankan.** Teks terkunci beserta jalan keluarnya (peran/status
+akun sendiri, stok yang tak dapat diubah di formulir barang); dua teks wajib
+dari tabel gotcha — mengapa usulan Disetujui tak punya tombol Realisasikan
+(ADR 0024) dan bahwa menyimpan realisasi yang ditolak berarti mengajukannya
+ulang (ADR 0030), keduanya dipersingkat; peringatan tak terurungkan di dialog
+hapus/batal; "Isi 0 bila tidak dibatasi" pada stok maksimum (maknanya tidak
+tertebak); dua peringatan kehilangan data ("Simpan draf sebelum memposting"
+pada opname, "Menyimpan daftar kosong akan membuang draf ini" pada draf
+usulan); keadaan kosong; angka-angka sekunder.
+
+**Yang diubah bentuk, bukan sekadar dibuang.**
+
+- Ringkasan riwayat penyedia menjadi deret angka ("1 pengadaan berjalan ·
+  1 dibatalkan · 1 menunggu perbaikan") — yang dibatalkan dan ditolak tetap
+  tampil terpisah dan tidak ikut dihitung (ADR 0026, ADR 0030).
+- Kalimat "barang yang belum ada di master barang harus diusulkan lebih dulu"
+  di formulir realisasi diganti tautan **Usulkan barang baru** yang muncul
+  tepat saat pencarian barang tidak menemukan apa pun (formulir buat dan ubah).
+- Keterangan tahap Proses Belanja kini hanya tampil bagi yang tidak memegang
+  tombol tandai (gudang, Kasubbag). Pejabat Pengadaan cukup melihat tombolnya.
+- Dialog batal realisasi hanya menyebut akibat tak terurungkan. Kalimat
+  "usulan asalnya tidak dapat direalisasikan ulang" kini hanya muncul pada
+  realisasi berusulan — **sebelumnya ikut tampil pada realisasi langsung**,
+  yang tidak punya usulan sama sekali.
+- Pilihan penyaring Sifat di `/notifikasi` menjadi "Perlu tindakan" /
+  "Aktivitas", tanpa istilah teknis "(keadaan)" / "(peristiwa)".
+- Formulir pengguna milik Admin masih menampilkan teks syarat kata sandi yang
+  ditulis tangan dan **masih menyebut simbol** sejak syarat itu dibuang
+  1 Oktober. Kini memakai daftar centang yang sama dengan profil, lewat
+  komponen baru `x-form.syarat-sandi` yang membaca
+  `Password::defaults()->appliedRules()` sendiri; profil ikut memakainya,
+  sehingga `kebijakanSandi` dibuang dari `ProfileController`.
+
+**Pesan flash.** Ekor penjelasan dibuang dari sembilan pesan (usulan barang
+diajukan, opname dibuat/diposting, realisasi dibuat/disetujui/ditolak, draf
+dibuang, ditandai dibelanjakan, penerimaan dikonfirmasi). Pesan ubah realisasi
+tetap menyebut akibatnya — "perlu disetujui ulang" / "diajukan ke Kasubbag
+Umum dan TI" — karena menyimpan memang mengulang persetujuan (ADR 0030).
+Pesan galat beserta jalan keluarnya tidak diubah.
+
+**Ikut dirapikan.** Variabel `jumlahBarang` di `StockOpnameController::create()`
+tidak terpakai lagi dan dibuang. `description()` pada `ProcurementRequestSource`,
+`ItemProposalStatus`, dan `AuditModule` kini tidak tampil di layar mana pun,
+tetapi dibiarkan sesuai konvensi enum. `modul/autentikasi.md` dan
+`modul/profil.md` masih menyebut syarat simbol — diperbaiki;
+`modul/pengadaan.md` disesuaikan dua kalimat.
+
+**Kesalahan kecil di tengah jalan.** Heredoc panjang berisi skrip
+penggantian terpotong lagi (gotcha yang sudah tercatat); skripnya ditulis ke
+berkas di folder scratch. Saat *mutation-check*, cadangan view tersimpan ke
+`$TMP` (terdefinisi di Git Bash) alih-alih folder scratch, sehingga pemulihan
+pertama gagal; view dipulihkan dari `$TMP`, diperiksa dengan grep, dan ujinya
+dijalankan ulang.
+
+**Uji dan pemeriksaan.** Seluruh suite 566 lolos (562 + 4 baru): syarat kata
+sandi di formulir Admin mengikuti kebijakan dan skripnya termuat sekali,
+tautan usulan barang baru di formulir realisasi langsung, dialog batal
+realisasi langsung tanpa "usulan asal", dan dialog batal realisasi berusulan
+yang tetap memperingatkannya. Satu uji proses belanja kini juga memastikan
+keterangannya tidak tampil bagi Pejabat Pengadaan. Lima asersi teks lama
+disesuaikan dengan kalimat baru. Dua *mutation-check* (memaksa kalimat "usulan
+asal" selalu tampil, membuang `@cannot`) membuat uji baru gagal. Pint terbatas
+bersih (15 berkas PHP); `npm run build` berhasil. Tidak ada tangkapan layar
+peramban pada sesi ini — perubahan tata letaknya hanya membuang paragraf, dan
+setiap halaman tetap dirender oleh uji.
+
+---
+
 ## 5 Oktober 2026 (lanjutan) — Kasubbag Umum dan TI sebagai pengawas baca-saja
 
 Kasubbag kini membuka seluruh menu gudang dan pengadaan seperti Admin, tanpa

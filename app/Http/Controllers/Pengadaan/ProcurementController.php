@@ -192,7 +192,7 @@ class ProcurementController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} berhasil dibuat dan menunggu persetujuan Kasubbag Umum dan TI.");
+            ->with('status', "{$procurement->judul()} berhasil dibuat.");
     }
 
     public function show(Procurement $procurement): View
@@ -323,7 +323,7 @@ class ProcurementController extends Controller
         return redirect()
             ->route('procurements.show', $procurement)
             ->with('status', $sebelumnyaDisetujui
-                ? "{$procurement->judul()} berhasil diperbarui. Karena isinya berubah, persetujuan Kasubbag Umum dan TI harus diulang."
+                ? "{$procurement->judul()} berhasil diperbarui dan perlu disetujui ulang."
                 : "{$procurement->judul()} berhasil diperbarui dan diajukan ke Kasubbag Umum dan TI.");
     }
 

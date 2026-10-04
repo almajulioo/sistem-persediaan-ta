@@ -5,12 +5,7 @@
     @php $bisaKelola = auth()->user()->can('kelola-gudang'); @endphp
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Master Barang</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Data induk barang persediaan beserta batas stok minimum dan maksimum.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Master Barang</h2>
 
         @if ($bisaKelola)
             <a href="{{ route('items.create') }}"
@@ -160,7 +155,7 @@
                             <tr>
                                 <td colspan="{{ $bisaKelola ? 7 : 6 }}" class="px-5 py-10 text-center sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                        Tidak ada barang yang cocok dengan penyaring saat ini.
+                                        Tidak ada barang yang cocok.
                                     </p>
                                 </td>
                             </tr>
@@ -180,8 +175,7 @@
                     <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">Hapus barang?</h3>
                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         <span class="font-medium text-gray-700 dark:text-gray-300" x-text="confirmName"></span>
-                        akan dihapus permanen. Barang yang sudah punya riwayat transaksi tidak dapat dihapus &mdash;
-                        arsipkan saja.
+                        akan dihapus permanen.
                     </p>
 
                     <div class="mt-6 flex justify-end gap-3">

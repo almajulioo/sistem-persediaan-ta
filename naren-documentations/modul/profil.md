@@ -34,9 +34,10 @@ ada parameter yang menunjuk akun lain kecuali rute penyaji foto.
 
 - Mengganti email atau kata sandi **wajib** menyertakan kata sandi saat ini.
 - Kebijakan kata sandi sama dengan pembuatan akun (`Password::defaults()`:
-  minimal 12 karakter, huruf besar dan kecil, angka, simbol, ditambah
+  minimal 12 karakter, huruf besar dan kecil, angka, ditambah
   `uncompromised()` di produksi), dan kata sandi baru harus berbeda dari yang
-  lama.
+  lama. Daftar syaratnya di layar datang dari komponen `x-form.syarat-sandi`,
+  yang juga dipakai formulir pengguna milik Admin.
 - Setelah kata sandi diganti, sesi di perangkat lain keluar otomatis pada
   request berikutnya (`AuthenticateSession`); sesi yang dipakai tetap masuk.
 - Mengirim email yang sama tidak dianggap perubahan dan tidak dicatat.

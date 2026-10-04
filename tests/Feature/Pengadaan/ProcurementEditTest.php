@@ -68,7 +68,7 @@ describe('hak akses ubah realisasi', function () {
             ->get("{$this->url}/edit")
             ->assertOk()
             ->assertSee('Ubah '.$this->procurement->judul())
-            ->assertSee('tidak dapat dipindah ke usulan lain');
+            ->assertSee($this->procurement->procurementRequest->judul());
     });
 
     it('mengizinkan Admin', function () {

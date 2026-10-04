@@ -9,7 +9,6 @@ use App\Http\Requests\Profile\UpdateProfilePasswordRequest;
 use App\Support\AuditLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 /**
@@ -31,9 +30,6 @@ class ProfileController extends Controller
         return view('pages.profile.index', [
             'title' => 'Profil Saya',
             'user' => $request->user(),
-            // Dibaca dari aturan yang sama dengan validasinya, supaya daftar
-            // syarat di formulir tidak tertinggal bila kebijakannya diubah.
-            'kebijakanSandi' => Password::defaults()->appliedRules(),
         ]);
     }
 

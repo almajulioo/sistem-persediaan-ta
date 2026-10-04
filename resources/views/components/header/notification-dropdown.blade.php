@@ -70,7 +70,7 @@
                      bisa saja masih berlangsung, hanya tidak lagi ditampilkan di sini. --}}
                 <li class="px-4 py-10 text-center">
                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                        Tidak ada notifikasi baru. Yang sudah dibaca tetap dapat dilihat di halaman notifikasi.
+                        Tidak ada notifikasi baru.
                     </p>
                 </li>
             @endif

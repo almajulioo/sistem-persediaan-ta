@@ -162,6 +162,6 @@ class ProcurementDraftController extends Controller
 
         return redirect()
             ->route('procurement-requests.index')
-            ->with('status', "{$judul} dibuang. Pemindaian berikutnya akan membuatnya kembali bila masih diperlukan.");
+            ->with('status', "{$judul} dibuang.");
     }
 }

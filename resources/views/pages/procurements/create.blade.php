@@ -5,16 +5,9 @@
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">
             {{ $procurementRequest ? 'Realisasi Pengadaan' : 'Realisasi Pengadaan Langsung' }}
         </h2>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            @if ($procurementRequest)
-                Merealisasikan {{ $procurementRequest->judul() }} kepada penyedia. Pembelian barangnya sendiri
-                terjadi di luar sistem; realisasi ini akan menunggu konfirmasi penerimaan dari Pengelola Gudang.
-            @else
-                Pengadaan tanpa usulan dari Pengelola Gudang. Karena tidak ada dokumen usulan yang dapat
-                dinilai, dasar pengadaannya wajib dijelaskan di sini — itulah yang ditinjau Kasubbag Umum
-                dan TI sebelum barang dipesan.
-            @endif
-        </p>
+        @if ($procurementRequest)
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Dari {{ $procurementRequest->judul() }}</p>
+        @endif
     </div>
 
     <x-ui.flash />
@@ -71,9 +64,6 @@
                      tempatnya dokumen usulan itu sendiri (ADR 0031). --}}
                 <div class="mt-6 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
                     <h4 class="text-theme-sm font-medium text-gray-800 dark:text-white/90">Dasar Pengadaan</h4>
-                    <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
-                        Wajib diisi. Realisasi tanpa usulan harus menyebutkan atas dasar apa belanja ini dilakukan.
-                    </p>
 
                     <div class="mt-4">
                         <x-form.select-field name="basis_reason" label="Alasan" required
@@ -149,11 +139,6 @@
                         </tbody>
                     </table>
                 </div>
-
-                <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
-                    Jumlah pesan boleh melebihi jumlah yang disetujui usulan. Barang dari usulan wajib ada dan
-                    tidak dapat dihapus di sini.
-                </p>
             </div>
             @endif
 
@@ -191,7 +176,13 @@
                                 </template>
 
                                 <template x-if="filteredItems.length === 0">
-                                    <li class="px-3 py-2 text-center text-sm text-gray-400">Barang tidak ditemukan.</li>
+                                    <li class="px-3 py-2 text-center text-sm text-gray-400">
+                                        Barang tidak ditemukan.
+                                        <a href="{{ route('item-proposals.create') }}" target="_blank" rel="noopener"
+                                            class="text-brand-500 hover:text-brand-600 dark:text-brand-400 mt-1 block">
+                                            Usulkan barang baru
+                                        </a>
+                                    </li>
                                 </template>
                             </ul>
                         </div>
@@ -247,13 +238,6 @@
                 @error('items')
                     <p class="text-theme-xs text-error-500 mt-3">{{ $message }}</p>
                 @enderror
-
-                @unless ($procurementRequest)
-                    <p class="text-theme-xs mt-3 text-gray-500 dark:text-gray-400">
-                        Tambahkan minimal satu barang. Barang yang belum ada di master barang harus diusulkan
-                        lebih dulu lewat Usulan Barang Baru, lalu didaftarkan Pengelola Gudang.
-                    </p>
-                @endunless
             </div>
 
             <div class="mt-6 flex justify-end gap-3">

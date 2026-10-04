@@ -52,10 +52,7 @@
 
     @if ($adaYangBerubah)
         <div class="bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400 mb-6 rounded-lg px-4 py-3 text-sm">
-            Sebagian barang mengalami perubahan stok setelah dicacah, misalnya karena ada penyerahan
-            barang saat opname berlangsung. Yang dikoreksi opname hanyalah selisih yang ditemukan saat
-            mencacah, sehingga transaksi sah setelah pencacahan tidak ikut dibatalkan. Akibatnya stok
-            akhir barang tersebut berbeda dari hasil cacah. Baris terkait ditandai di bawah.
+            Stok sebagian barang berubah setelah dicacah. Baris terkait ditandai di bawah.
         </div>
     @endif
 
@@ -107,21 +104,9 @@
             <table class="w-full min-w-[1120px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        @foreach ([
-                            ['label' => 'Kode', 'hint' => null],
-                            ['label' => 'Nama Barang', 'hint' => null],
-                            ['label' => 'Stok Tercatat', 'hint' => 'Stok pada saat draf opname dibuat'],
-                            ['label' => 'Stok Fisik', 'hint' => 'Hasil cacah di gudang'],
-                            ['label' => 'Selisih', 'hint' => 'Stok fisik dikurangi stok tercatat'],
-                            ['label' => 'Penyesuaian', 'hint' => 'Mutasi yang benar-benar diterapkan saat posting'],
-                            ['label' => 'Alasan', 'hint' => null],
-                            ['label' => 'Keterangan', 'hint' => null],
-                        ] as $heading)
+                        @foreach (['Kode', 'Nama Barang', 'Stok Tercatat', 'Stok Fisik', 'Selisih', 'Penyesuaian', 'Alasan', 'Keterangan'] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
-                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400"
-                                    @if ($heading['hint']) title="{{ $heading['hint'] }}" @endif>
-                                    {{ $heading['label'] }}
-                                </p>
+                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                             </th>
                         @endforeach
                     </tr>
@@ -199,7 +184,7 @@
             <div class="border-t border-gray-100 px-5 py-4 sm:px-6 dark:border-gray-800">
                 <a href="{{ route('mutations.index', ['type' => \App\Enums\MutationType::Penyesuaian->value]) }}"
                     class="text-theme-sm text-brand-500 hover:text-brand-600 dark:text-brand-400">
-                    Lihat mutasi penyesuaian yang dihasilkan opname ini &rarr;
+                    Lihat mutasi penyesuaian &rarr;
                 </a>
             </div>
         @endif

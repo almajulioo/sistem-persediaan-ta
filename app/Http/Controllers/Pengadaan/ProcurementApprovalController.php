@@ -62,9 +62,7 @@ class ProcurementApprovalController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', $sudahDibelanjakan
-                ? "{$procurement->judul()} disetujui. Barangnya sudah dibelanjakan, jadi langsung menunggu penerimaan."
-                : "{$procurement->judul()} disetujui. Pejabat Pengadaan dapat membelanjakan barangnya.");
+            ->with('status', "{$procurement->judul()} disetujui.");
     }
 
     public function reject(RejectProcurementRealizationRequest $request, Procurement $procurement): RedirectResponse
@@ -94,6 +92,6 @@ class ProcurementApprovalController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} ditolak. Pejabat Pengadaan dapat memperbaiki lalu mengajukannya ulang.");
+            ->with('status', "{$procurement->judul()} ditolak.");
     }
 }

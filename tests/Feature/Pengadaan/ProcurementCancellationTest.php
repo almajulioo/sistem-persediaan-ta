@@ -195,6 +195,13 @@ describe('usulan setelah realisasinya dibatalkan', function () {
         expect(Procurement::where('procurement_request_id', $usulan->procurement_request_id)->count())->toBe(1);
     });
 
+    it('memperingatkan di dialog bahwa usulan asalnya ikut berakhir', function () {
+        $this->actingAs($this->pejabat)
+            ->get("/pengadaan/{$this->procurement->procurement_id}")
+            ->assertOk()
+            ->assertSee('Usulan asalnya tidak dapat direalisasikan ulang.');
+    });
+
     it('menjelaskan di layar mengapa tombol Realisasikan tidak ada', function () {
         $usulan = $this->procurement->procurementRequest;
 

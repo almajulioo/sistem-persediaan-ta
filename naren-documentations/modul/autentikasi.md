@@ -61,9 +61,9 @@ yang dicatat di ADR 0030.
   fixation*); saat keluar sesi dihancurkan dan token CSRF diperbarui.
 - Akun nonaktif ditolak saat masuk **dan** ditendang keluar pada permintaan
   berikutnya bila dinonaktifkan di tengah sesi aktif.
-- Kata sandi minimal 12 karakter memuat huruf besar, huruf kecil, angka, dan
-  simbol. Pemeriksaan kebocoran ke layanan luar hanya aktif di produksi, supaya
-  pengujian tidak memanggil jaringan.
+- Kata sandi minimal 12 karakter memuat huruf besar, huruf kecil, dan angka
+  (syarat simbol dibuang 1 Oktober 2026). Pemeriksaan kebocoran ke layanan luar
+  hanya aktif di produksi, supaya pengujian tidak memanggil jaringan.
 - Masuk dan keluar tercatat ke `audit_logs`; `last_login_at` dan `last_login_ip`
   diperbarui setiap kali masuk.
 

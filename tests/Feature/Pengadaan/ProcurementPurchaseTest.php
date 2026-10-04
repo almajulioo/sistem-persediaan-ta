@@ -123,12 +123,13 @@ describe('hak akses tandai dibelanjakan', function () {
 });
 
 describe('proses belanja sebelum ditandai', function () {
-    it('menampilkan tombol tandai kepada Pejabat Pengadaan beserta keterangannya', function () {
+    it('menampilkan tombol tandai kepada Pejabat Pengadaan tanpa keterangan bagi gudang', function () {
         $this->actingAs($this->pejabat)
             ->get($this->url)
             ->assertOk()
             ->assertSee('Proses Belanja')
-            ->assertSee('Tandai Sudah Dibelanjakan');
+            ->assertSee('Tandai Sudah Dibelanjakan')
+            ->assertDontSee('Konfirmasi penerimaan terbuka');
     });
 
     it('menjelaskan kepada gudang mengapa belum ada tombol konfirmasi penerimaan', function () {
@@ -394,7 +395,7 @@ describe('perubahan setelah dibelanjakan', function () {
             ->and($segar->sudahDibelanjakan())->toBeTrue()
             ->and(notifikasiAktifBelanja(NotificationType::RealisasiMenungguPenerimaan, $segar))->toBe(0);
 
-        $this->actingAs($this->pejabat)->get($this->url)->assertSee('tanpa perlu ditandai dibelanjakan lagi');
+        $this->actingAs($this->pejabat)->get($this->url)->assertSee('Tanggal Belanja');
     });
 
     it('langsung kembali menunggu penerimaan begitu disetujui ulang', function () use ($ubah) {
@@ -403,7 +404,7 @@ describe('perubahan setelah dibelanjakan', function () {
 
         $this->actingAs($this->kasubbag)
             ->patch("{$this->url}/setujui")
-            ->assertSessionHas('status', fn (string $pesan) => str_contains($pesan, 'langsung menunggu penerimaan'));
+            ->assertSessionHas('status');
 
         $segar = $this->procurement->fresh();
 

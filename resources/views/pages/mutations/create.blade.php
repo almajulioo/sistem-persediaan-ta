@@ -49,12 +49,6 @@
     @endif
 
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-        <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Gunakan formulir ini hanya untuk pergerakan stok yang tidak berasal dari dokumen pengadaan,
-            permintaan barang, maupun stock opname. Setiap pencatatan bersifat permanen &mdash; kesalahan
-            dikoreksi dengan mutasi Koreksi Pencatatan, bukan dengan menghapus.
-        </p>
-
         <form method="POST" action="{{ route('mutations.store') }}" novalidate
             x-data="{
                 itemId: @js(old('item_id', $selectedItem?->item_id ?? '')),
@@ -84,8 +78,7 @@
 
                 <x-form.select-field name="mutation_type" label="Jenis Mutasi"
                     :options="\App\Enums\MutationType::manualOptions()" :selected="old('mutation_type')"
-                    required placeholder="Pilih jenis mutasi" x-model="type"
-                    help="Hanya jenis manual. Mutasi dari pengadaan, permintaan, dan opname dibuat otomatis oleh sistem." />
+                    required placeholder="Pilih jenis mutasi" x-model="type" />
 
                 <x-form.text-field name="amount" label="Jumlah" type="number" :value="old('amount')"
                     required min="1" placeholder="0" />
@@ -98,8 +91,7 @@
                 <div x-show="needsArah" x-cloak>
                     <x-form.select-field name="arah" label="Arah Koreksi"
                         :options="['tambah' => 'Menambah stok', 'kurang' => 'Mengurangi stok']"
-                        :selected="old('arah')" placeholder="Pilih arah"
-                        help="Koreksi pencatatan dapat menambah maupun mengurangi stok." />
+                        :selected="old('arah')" placeholder="Pilih arah" />
                 </div>
             </div>
 
@@ -112,10 +104,6 @@
                     class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 {{ $errors->has('notes') ? 'border-error-500' : 'border-gray-300 dark:border-gray-700' }}">{{ old('notes') }}</textarea>
                 @error('notes')
                     <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-                @else
-                    <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                        Wajib diisi. Keterangan ini menjadi bukti pertanggungjawaban saat pemeriksaan.
-                    </p>
                 @enderror
             </div>
 

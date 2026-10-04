@@ -90,12 +90,7 @@
 
         <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
             <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-6">
-                <div>
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Hasil Pencacahan Fisik</h3>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Isi jumlah fisik di gudang. Barang yang berselisih wajib diberi alasan dan keterangan.
-                    </p>
-                </div>
+                <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Hasil Pencacahan Fisik</h3>
 
                 <div class="flex flex-wrap items-center gap-2">
                     <button type="submit"
@@ -196,7 +191,9 @@
         @csrf
     </form>
 
+    {{-- Dipertahankan: posting memakai data yang tersimpan, bukan isian di
+         layar, jadi isian yang belum disimpan akan hilang. --}}
     <p class="text-theme-xs mt-4 text-center text-gray-400 dark:text-gray-500">
-        Simpan draf lebih dulu sebelum memposting &mdash; posting memakai data yang sudah tersimpan.
+        Simpan draf sebelum memposting.
     </p>
 @endsection

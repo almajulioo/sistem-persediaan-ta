@@ -2,13 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Draf Usulan Pengadaan</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Terkumpul otomatis dari barang yang stoknya di bawah minimum. Sesuaikan barang dan
-                jumlahnya sebelum diajukan ke Pejabat Pengadaan.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Draf Usulan Pengadaan</h2>
 
         <a href="{{ route('procurement-requests.index') }}"
             class="text-theme-sm rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
@@ -21,7 +15,7 @@
     @if (! $draft)
         <div class="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-gray-800 dark:bg-white/[0.03]">
             <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                Tidak ada draf saat ini — seluruh stok barang berada di atas ambang minimum.
+                Tidak ada draf saat ini.
             </p>
         </div>
     @else
@@ -99,7 +93,7 @@
                     <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
                         <template x-if="requestedList.length === 0">
                             <div class="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                Belum ada barang. Mengosongkan dan menyimpan akan membuang draf ini.
+                                Belum ada barang. Menyimpan daftar kosong akan membuang draf ini.
                             </div>
                         </template>
 
@@ -142,7 +136,7 @@
 
             <div class="mt-4 flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
                 <form method="POST" action="{{ route('procurement-requests.draft.discard') }}"
-                    onsubmit="return confirm('Buang draf ini? Pemindaian berikutnya akan membuatnya kembali bila masih ada barang di bawah stok minimum.')">
+                    onsubmit="return confirm('Buang draf ini?')">
                     @csrf
                     @method('DELETE')
                     <button type="submit"

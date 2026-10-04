@@ -171,7 +171,7 @@ describe('menolak realisasi', function () {
             ->assertOk()
             ->assertSee('Penyedia belum punya NPWP aktif.')
             ->assertSee('Perbaiki &amp; Ajukan Ulang', false)
-            ->assertSee('penyimpanan itulah yang mengajukannya ulang');
+            ->assertSee('Perbaiki lalu simpan untuk mengajukannya ulang');
     });
 });
 

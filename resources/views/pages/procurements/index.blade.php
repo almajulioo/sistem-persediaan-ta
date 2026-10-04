@@ -2,14 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Realisasi Pengadaan</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Pengadaan yang direalisasikan Pejabat Pengadaan, dari usulan yang sudah disetujui maupun
-                langsung tanpa usulan, menunggu persetujuan Kasubbag Umum dan TI lalu konfirmasi penerimaan
-                Pengelola Gudang.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Realisasi Pengadaan</h2>
 
         {{-- Kedua tautan cetak membawa penyaring yang sedang aktif, supaya isi
              laporan selalu sama persis dengan yang terlihat di layar. --}}
@@ -190,7 +183,7 @@
                         <tr>
                             <td colspan="6" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Belum ada realisasi pengadaan yang cocok dengan penyaring saat ini.
+                                    Belum ada realisasi pengadaan yang cocok.
                                 </p>
                             </td>
                         </tr>

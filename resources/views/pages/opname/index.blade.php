@@ -2,12 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Stok Opname</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Pencacahan fisik persediaan per periode beserta penyesuaian stoknya.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Stok Opname</h2>
 
         @can('kelola-gudang')
             <a href="{{ route('opname.create') }}"
@@ -146,7 +141,7 @@
                         <tr>
                             <td colspan="7" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Belum ada stok opname yang cocok dengan penyaring saat ini.
+                                    Belum ada stok opname yang cocok.
                                 </p>
                             </td>
                         </tr>

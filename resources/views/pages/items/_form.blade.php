@@ -23,9 +23,8 @@
             <p class="text-theme-sm text-brand-700 dark:text-brand-400">
                 Mendaftarkan barang dari usulan
                 <strong>"{{ $itemProposal->item_name }}"</strong>
-                yang diajukan {{ $itemProposal->proposedBy?->fullname ?? 'pengguna lain' }}.
-                Nama dan satuannya sudah terisi dan masih boleh diperbaiki; menyimpan formulir ini sekaligus
-                menyetujui usulannya.
+                oleh {{ $itemProposal->proposedBy?->fullname ?? 'pengguna lain' }}.
+                Menyimpan barang ini sekaligus menyetujui usulannya.
             </p>
             @error('item_proposal_id')
                 <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
@@ -35,8 +34,7 @@
 
     <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
         <x-form.text-field name="item_code" label="Kode Barang" :value="$item->item_code" required
-            placeholder="mis. ATK-001" autocomplete="off"
-            help="Huruf besar, angka, titik, tanda hubung, dan garis miring." />
+            placeholder="mis. ATK-001" autocomplete="off" />
 
         <x-form.text-field name="item_name" label="Nama Barang" :value="$item->item_name" required
             placeholder="mis. Kertas HVS A4 70 gram" />
@@ -68,13 +66,11 @@
             </div>
         @else
             <x-form.text-field name="stock_awal" label="Stok Awal" type="number" :value="$item->stock_current ?? 0"
-                required min="0" placeholder="0"
-                help="Dicatat sebagai mutasi Saldo Awal. Isi 0 bila stok belum ada." />
+                required min="0" placeholder="0" />
         @endif
 
         <x-form.text-field name="stock_min" label="Stok Minimum" type="number" :value="$item->stock_min ?? 0"
-            required min="0" placeholder="0"
-            help="Stok di bawah atau sama dengan angka ini ditandai menipis." />
+            required min="0" placeholder="0" />
 
         <x-form.text-field name="stock_max" label="Stok Maksimum" type="number" :value="$item->stock_max ?? 0"
             required min="0" placeholder="0" help="Isi 0 bila tidak dibatasi." />
@@ -104,10 +100,6 @@
 
             @error('is_active')
                 <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-            @else
-                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                    Barang yang diarsipkan tidak muncul pada transaksi baru.
-                </p>
             @enderror
         </div>
     </div>

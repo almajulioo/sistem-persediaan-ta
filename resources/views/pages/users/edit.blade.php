@@ -48,7 +48,7 @@
                 @if ($user->punyaFoto())
                     <x-profile.hapus-foto
                         :action="route('users.avatar.destroy', $user)"
-                        :pesan="'Foto profil '.$user->fullname.' akan dihapus dan diganti avatar inisial. Pemilik akun dapat mengunggah foto baru kapan saja.'" />
+                        :pesan="'Foto profil '.$user->fullname.' akan dihapus.'" />
                 @endif
 
                 <span class="text-theme-xs inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">

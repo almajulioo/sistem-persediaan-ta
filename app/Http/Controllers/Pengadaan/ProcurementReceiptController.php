@@ -72,7 +72,7 @@ class ProcurementReceiptController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "Penerimaan {$procurement->judul()} berhasil dikonfirmasi. Stok sudah bertambah.");
+            ->with('status', "Penerimaan {$procurement->judul()} berhasil dikonfirmasi.");
     }
 
     /**

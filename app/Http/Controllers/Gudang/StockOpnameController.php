@@ -63,7 +63,6 @@ class StockOpnameController extends Controller
     {
         return view('pages.opname.create', [
             'title' => 'Mulai Stok Opname',
-            'jumlahBarang' => Item::aktif()->count(),
         ]);
     }
 
@@ -104,7 +103,7 @@ class StockOpnameController extends Controller
 
         return redirect()
             ->route('opname.edit', $opname)
-            ->with('status', "{$opname->judul()} dibuat dengan {$barang->count()} barang untuk dicacah.");
+            ->with('status', "{$opname->judul()} dibuat dengan {$barang->count()} barang.");
     }
 
     public function show(StockOpname $opname): View
@@ -203,7 +202,7 @@ class StockOpnameController extends Controller
 
         return redirect()
             ->route('opname.show', $opname)
-            ->with('status', "{$opname->judul()} berhasil diposting. Stok dan riwayat mutasi sudah diperbarui.");
+            ->with('status', "{$opname->judul()} berhasil diposting.");
     }
 
     public function destroy(Request $request, StockOpname $opname): RedirectResponse

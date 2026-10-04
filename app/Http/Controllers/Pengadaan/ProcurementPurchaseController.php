@@ -117,6 +117,6 @@ class ProcurementPurchaseController extends Controller
 
         return redirect()
             ->route('procurements.show', $procurement)
-            ->with('status', "{$procurement->judul()} ditandai sudah dibelanjakan. Pengelola Gudang kini menunggu barangnya untuk dikonfirmasi diterima.");
+            ->with('status', "{$procurement->judul()} ditandai sudah dibelanjakan.");
     }
 }

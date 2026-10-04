@@ -2,13 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Barang Baru</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Pintu depan master barang: barang yang dibutuhkan tetapi belum terdaftar diusulkan di sini,
-                lalu Pengelola Gudang memeriksa apakah barangnya benar-benar baru sebelum mendaftarkannya.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Barang Baru</h2>
 
         @can('kelola-pengadaan')
             <a href="{{ route('item-proposals.create') }}"
@@ -117,7 +111,7 @@
                         <tr>
                             <td colspan="5" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    Belum ada usulan barang baru yang cocok dengan penyaring saat ini.
+                                    Belum ada usulan barang baru yang cocok.
                                 </p>
                             </td>
                         </tr>

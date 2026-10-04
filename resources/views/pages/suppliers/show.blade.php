@@ -58,25 +58,21 @@
                     </div>
                 @endforeach
             </dl>
-
-            <p class="text-theme-xs mt-6 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                Alamat dan narahubung dicantumkan pada BAST pengadaan, sehingga tidak perlu diketik ulang tiap dokumen.
-            </p>
         </div>
 
         {{-- Riwayat pengadaan --}}
         <div class="rounded-2xl border border-gray-200 bg-white lg:col-span-2 dark:border-gray-800 dark:bg-white/[0.03]">
             <div class="border-b border-gray-100 p-5 dark:border-gray-800 sm:p-6">
                 <h3 class="text-theme-lg font-semibold text-gray-800 dark:text-white/90">Riwayat Pengadaan</h3>
+                {{-- Yang dibatalkan dan yang ditolak tetap tampil di tabel, tetapi
+                     dicacah terpisah dari pengadaan berjalan (ADR 0026, ADR 0030). --}}
                 <p class="text-theme-sm mt-1 text-gray-500 dark:text-gray-400">
-                    {{ $supplier->procurements_count }} pengadaan berjalan kepada penyedia ini.
+                    {{ $supplier->procurements_count }} pengadaan berjalan
                     @if ($supplier->procurements_cancelled_count > 0)
-                        {{ $supplier->procurements_cancelled_count }} lainnya dibatalkan sebelum barang diterima,
-                        dan tetap ditampilkan di bawah tanpa ikut dihitung.
+                        &middot; {{ $supplier->procurements_cancelled_count }} dibatalkan
                     @endif
                     @if ($supplier->procurements_rejected_count > 0)
-                        {{ $supplier->procurements_rejected_count }} ditolak Kasubbag Umum dan TI dan belum
-                        diperbaiki, jadi belum ikut dihitung juga.
+                        &middot; {{ $supplier->procurements_rejected_count }} menunggu perbaikan
                     @endif
                 </p>
             </div>

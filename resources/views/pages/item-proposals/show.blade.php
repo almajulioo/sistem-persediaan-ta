@@ -69,10 +69,6 @@
                         </div>
                     @endforeach
                 </dl>
-
-                <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                    {{ $proposal->status->description() }}
-                </p>
             </div>
 
             {{-- Hasil keputusan Pengelola Gudang. --}}
@@ -104,15 +100,6 @@
                             {{ $proposal->decision_note }}
                         </p>
                     @endif
-
-                    {{-- Tanpa kalimat ini, barang berstok nol yang baru
-                         terdaftar mudah disalahpahami sebagai kegagalan. --}}
-                    @if ($proposal->isDisetujui())
-                        <p class="text-theme-xs bg-gray-50 mt-4 rounded-lg p-3 text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
-                            Barangnya lahir berstok nol karena belum ada barang yang masuk gudang. Stok baru
-                            bertambah saat penerimaan pengadaan dikonfirmasi.
-                        </p>
-                    @endif
                 </div>
             @endif
         </div>
@@ -124,12 +111,11 @@
                 <p class="text-theme-sm mt-3 whitespace-pre-line text-gray-600 dark:text-gray-300">{{ $proposal->purpose_note }}</p>
 
                 @if ($proposal->isDiajukan())
+                    {{-- Satu barang fisik dengan dua baris di master barang merusak
+                         batas minimum, opname, dan kartu persediaannya (ADR 0032). --}}
                     <div class="bg-warning-50 dark:bg-warning-500/15 mt-5 rounded-lg p-4">
                         <p class="text-theme-xs text-warning-700 dark:text-warning-400">
-                            <strong>Sebelum menyetujui:</strong> pastikan barangnya benar-benar belum terdaftar.
-                            Satu barang fisik dengan dua baris di master barang membuat batas minimum,
-                            stok opname, dan kartu persediaannya tidak lagi bisa dipercaya. Bila barangnya sudah
-                            ada dengan nama lain, tolak usulan ini dan sebutkan kode barangnya.
+                            Pastikan barangnya belum terdaftar dengan nama lain sebelum menyetujui.
                         </p>
                     </div>
                 @endif
@@ -163,10 +149,6 @@
                                 @error('decision_note')
                                     <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
                                 @enderror
-                                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                                    Wajib diisi. Bila barangnya sudah ada, sebutkan kode barangnya — tanpa itu
-                                    pengusul akan mengusulkan hal yang sama lagi.
-                                </p>
                             </div>
 
                             <div class="mt-6 flex justify-end gap-3">

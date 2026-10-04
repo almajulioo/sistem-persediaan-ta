@@ -78,14 +78,15 @@
 
                 {{-- Tahap belanja (ADR 0035): Pejabat Pengadaan menandai sudah
                      dibelanjakan beserta fotonya, dan baru setelah itu gudang
-                     menunggu barangnya. Keterangannya tampil bagi siapa pun,
-                     supaya gudang yang tidak melihat tombol konfirmasi tahu
-                     sebabnya. --}}
+                     menunggu barangnya. Keterangannya hanya bagi yang tidak
+                     memegang tombolnya, supaya gudang yang tidak melihat tombol
+                     konfirmasi tahu sebabnya. --}}
                 @if ($procurement->isProsesBelanja())
-                    <p class="text-theme-xs bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-400 mt-4 rounded-lg p-3">
-                        Realisasi sudah disetujui dan barangnya sedang dibelanjakan. Konfirmasi penerimaan
-                        terbuka setelah Pejabat Pengadaan menandainya sudah dibelanjakan beserta foto belanjanya.
-                    </p>
+                    @cannot('kelola-pengadaan')
+                        <p class="text-theme-xs bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-400 mt-4 rounded-lg p-3">
+                            Konfirmasi penerimaan terbuka setelah Pejabat Pengadaan menandai sudah dibelanjakan.
+                        </p>
+                    @endcannot
 
                     @can('kelola-pengadaan')
                         <button type="button" @click="belanjaTerbuka = true"
@@ -151,15 +152,6 @@
                             {{ $procurement->basis_note }}
                         </p>
                     @endif
-
-                    {{-- Realisasi langsung memotong usulan Pengelola Gudang,
-                         jadi halaman ini harus mengatakannya terang-terangan
-                         alih-alih membiarkannya terbaca sebagai pengadaan biasa
-                         yang kehilangan usulannya. --}}
-                    <p class="text-theme-xs mt-4 rounded-lg bg-gray-50 p-3 text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
-                        Realisasi ini dibuat tanpa usulan dari Pengelola Gudang. Dasar di atas menggantikan
-                        dokumen usulan sebagai bahan penilaian Kasubbag Umum dan TI.
-                    </p>
                 </div>
             @endif
 
@@ -198,9 +190,8 @@
                          tombol "ajukan ulang" terbaca seperti bug. --}}
                     @if ($procurement->isDitolak())
                         <p class="text-theme-xs bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400 mt-4 rounded-lg p-3">
-                            Penolakan ini tidak mengakhiri realisasi. Pejabat Pengadaan dapat memperbaiki penyedia,
-                            barang, atau harganya lalu menyimpannya — penyimpanan itulah yang mengajukannya ulang ke
-                            Kasubbag Umum dan TI. Bila pengadaannya memang tidak jadi, batalkan realisasi ini.
+                            Perbaiki lalu simpan untuk mengajukannya ulang ke Kasubbag Umum dan TI,
+                            atau batalkan bila pengadaannya tidak jadi.
                         </p>
                     @endif
                 </div>
@@ -233,13 +224,6 @@
                             {{ $procurement->purchase_note }}
                         </p>
                     @endif
-
-                    @if ($procurement->isMenungguPersetujuan())
-                        <p class="text-theme-xs mt-4 rounded-lg bg-gray-50 p-3 text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
-                            Realisasi ini diubah setelah barangnya dibelanjakan. Begitu disetujui ulang, ia langsung
-                            menunggu penerimaan tanpa perlu ditandai dibelanjakan lagi.
-                        </p>
-                    @endif
                 </div>
             @endif
 
@@ -265,11 +249,6 @@
                             {{ $procurement->cancel_note }}
                         </p>
                     @endif
-
-                    <p class="text-theme-xs bg-error-50 text-error-700 dark:bg-error-500/15 dark:text-error-400 mt-4 rounded-lg p-3">
-                        Barang tidak jadi datang dan stok tidak bertambah. Usulan asalnya sudah selesai riwayatnya —
-                        bila barangnya masih dibutuhkan, ajukan usulan pengadaan yang baru.
-                    </p>
                 </div>
             @endif
 
@@ -298,7 +277,7 @@
 
                     @if ($procurement->diterimaSebagian())
                         <p class="text-theme-xs bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400 mt-4 rounded-lg p-3">
-                            Sebagian barang datang kurang dari yang dipesan. Lihat rincian di sebelah.
+                            Sebagian barang diterima kurang dari pesanan.
                         </p>
                     @endif
 
@@ -382,13 +361,7 @@
                  disknya privat, unduhan lewat rute terjaga (ADR 0018). --}}
             <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
                 <div class="flex flex-wrap items-start justify-between gap-3 px-5 py-5 sm:px-6">
-                    <div>
-                        <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Berkas Pendukung</h3>
-                        <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
-                            BAST bertanda tangan hasil pindai, SPK/kontrak, dan foto belanja. Berkas disimpan di
-                            penyimpanan privat dan hanya dapat dibuka lewat halaman ini.
-                        </p>
-                    </div>
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Berkas Pendukung</h3>
 
                     @if ($procurement->isDiterima() && ! $procurement->bastSudahDiunggah())
                         <span class="text-theme-xs bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400 rounded-full px-2.5 py-1 font-medium">
@@ -474,15 +447,11 @@
                             class="focus:border-brand-300 focus:ring-brand-500/10 file:bg-brand-50 file:text-brand-600 dark:file:bg-brand-500/15 dark:file:text-brand-400 h-11 w-full rounded-lg border border-gray-300 bg-transparent text-sm text-gray-800 file:mr-4 file:h-full file:cursor-pointer file:rounded-l-lg file:border-0 file:px-4 file:text-sm file:font-medium focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90" />
                         @error('file')
                             <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-                        @else
-                            <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                                PDF, JPG, PNG, WEBP, atau HEIC. Maksimal 10 MB.
-                            </p>
                         @enderror
                     </div>
 
                     <div class="sm:col-span-2">
-                        <x-form.text-field name="notes" label="Keterangan (opsional)"
+                        <x-form.text-field name="notes" label="Keterangan"
                             placeholder="Mis. hasil pindai BAST bertanda tangan lengkap" />
                     </div>
 
@@ -510,12 +479,6 @@
                         <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
                             Tolak {{ $procurement->judul() }}?
                         </h3>
-                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                            Barang tidak akan dipesan sampai realisasi ini disetujui. Penolakan
-                            <strong class="font-medium text-gray-700 dark:text-gray-300">tidak mengakhiri</strong>
-                            realisasinya &mdash; Pejabat Pengadaan dapat memperbaiki lalu mengajukannya ulang kepada Anda.
-                        </p>
-
                         <form method="POST" action="{{ route('procurements.reject', $procurement) }}" class="mt-5">
                             @csrf
                             @method('PATCH')
@@ -530,10 +493,6 @@
                                 @error('review_note')
                                     <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
                                 @enderror
-                                <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                                    Wajib diisi. Inilah satu-satunya petunjuk yang diterima Pejabat Pengadaan tentang
-                                    apa yang harus diperbaiki.
-                                </p>
                             </div>
 
                             <div class="mt-6 flex justify-end gap-3">
@@ -568,11 +527,6 @@
                         <h3 class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
                             Tandai {{ $procurement->judul() }} sudah dibelanjakan?
                         </h3>
-                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                            Pengelola Gudang akan diberi tahu untuk menunggu barangnya, lalu mengonfirmasi penerimaan
-                            supaya stok bertambah. Lampirkan foto barang yang dibeli atau foto kegiatan belanjanya.
-                        </p>
-
                         <form method="POST" action="{{ route('procurements.purchase', $procurement) }}"
                             enctype="multipart/form-data" class="mt-5 space-y-4">
                             @csrf
@@ -595,21 +549,16 @@
                                     <p class="text-theme-xs text-error-500 mt-1.5">
                                         {{ $errors->first('photos') ?: $errors->first('photos.*') }}
                                     </p>
-                                @else
+                                @elseif ($fotoAda > 0)
                                     <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
-                                        JPG, PNG, WEBP, atau HEIC; paling banyak
-                                        {{ \App\Http\Requests\Pengadaan\MarkProcurementPurchasedRequest::MAKS_FOTO }} foto,
-                                        masing-masing maksimal 10 MB.
-                                        @if ($fotoAda > 0)
-                                            Sudah ada {{ $fotoAda }} foto belanja, jadi foto baru boleh dikosongkan.
-                                        @endif
+                                        Sudah ada {{ $fotoAda }} foto belanja.
                                     </p>
                                 @endif
                             </div>
 
                             <div>
                                 <label for="purchase_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Catatan (opsional)
+                                    Catatan
                                 </label>
                                 <textarea id="purchase_note" name="purchase_note" rows="3"
                                     placeholder="Mis. dibeli di Toko Sinar Jaya, dua rim kertas dibawa langsung, sisanya dikirim besok"
@@ -648,10 +597,10 @@
                             Batalkan {{ $procurement->judul() }}?
                         </h3>
                         <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                            Realisasi ini tidak akan dilanjutkan ke penerimaan barang dan stok tidak akan bertambah.
-                            Dokumennya tetap tersimpan sebagai bukti bahwa pengadaan ini pernah berjalan, dan
-                            <strong class="font-medium text-gray-700 dark:text-gray-300">usulan asalnya tidak dapat
-                            direalisasikan ulang</strong> &mdash; barang yang masih dibutuhkan diajukan lewat usulan baru.
+                            Pembatalan tidak dapat diurungkan.
+                            @unless ($procurement->tanpaUsulan())
+                                <strong class="font-medium text-gray-700 dark:text-gray-300">Usulan asalnya tidak dapat direalisasikan ulang.</strong>
+                            @endunless
                         </p>
 
                         <form method="POST" action="{{ route('procurements.cancel', $procurement) }}" class="mt-5">

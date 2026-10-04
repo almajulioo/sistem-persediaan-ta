@@ -29,20 +29,13 @@
     @endif
 
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-        <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-            Sistem akan membuat draf berisi <span class="font-medium text-gray-700 dark:text-gray-300">{{ $jumlahBarang }} barang aktif</span>
-            beserta stok tercatatnya saat ini. Anda dapat mengisi hasil cacah bertahap dan menyimpannya
-            kapan saja. Penyesuaian stok baru diterapkan setelah seluruh barang dicacah dan opname diposting.
-        </p>
-
         <form method="POST" action="{{ route('opname.store') }}" novalidate>
             @csrf
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <x-form.select-field name="period_type" label="Jenis Periode"
                     :options="\App\Enums\PeriodeOpname::options()" :selected="old('period_type')"
-                    required placeholder="Pilih periode"
-                    help="Gunakan Insidental untuk pencacahan di luar jadwal rutin." />
+                    required placeholder="Pilih periode" />
 
                 <x-form.text-field name="period_year" label="Tahun" type="number"
                     :value="old('period_year', now()->year)" required min="2000" max="2100" />
@@ -61,8 +54,6 @@
                     class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 {{ $errors->has('notes') ? 'border-error-500' : 'border-gray-300 dark:border-gray-700' }}">{{ old('notes') }}</textarea>
                 @error('notes')
                     <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
-                @else
-                    <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">Opsional.</p>
                 @enderror
             </div>
 

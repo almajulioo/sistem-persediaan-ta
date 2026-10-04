@@ -2,14 +2,7 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Notifikasi</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Keadaan yang perlu ditindak dan peristiwa yang perlu diketahui.
-                Keadaan hilang sendiri begitu pulih — stok yang terisi kembali tidak lagi
-                muncul di sini — dan peristiwa dihapus setelah berumur 7 hari.
-            </p>
-        </div>
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Notifikasi</h2>
 
         @if ($summary['belum_dibaca'] > 0)
             <form method="POST" action="{{ route('notifications.read-all') }}">
@@ -55,11 +48,11 @@
                 'sudah_dibaca' => 'Sudah dibaca',
             ]" :selected="$filters['status']" placeholder="Semua status" />
 
-            {{-- Sejajar dua bagian lonceng, supaya tautan "Lihat N lainnya" di
-                 sana mendarat pada daftar yang sama. --}}
+            {{-- Sejajar dua bagian lonceng — keadaan dan peristiwa — supaya
+                 tautan "Lihat N lainnya" di sana mendarat pada daftar yang sama. --}}
             <x-form.select-field name="sifat" label="Sifat" :options="[
-                'keadaan' => 'Perlu tindakan (keadaan)',
-                'peristiwa' => 'Aktivitas (peristiwa)',
+                'keadaan' => 'Perlu tindakan',
+                'peristiwa' => 'Aktivitas',
             ]" :selected="$filters['sifat']" placeholder="Semua sifat" />
 
             <div class="flex items-end gap-3">
@@ -119,7 +112,7 @@
             @empty
                 <li class="px-5 py-10 text-center sm:px-6">
                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                        Tidak ada notifikasi yang cocok dengan penyaring saat ini.
+                        Tidak ada notifikasi yang cocok.
                     </p>
                 </li>
             @endforelse
