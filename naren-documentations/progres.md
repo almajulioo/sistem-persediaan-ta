@@ -5,6 +5,31 @@ perubahan.
 
 ---
 
+## 24 Oktober 2026 — Master barang dan saldo awal dari data kantor
+
+`ItemSeeder` kini membaca `database/seeders/data/barang.csv` (2.742 barang) dan
+`saldo_awal_2026_10_01.csv` (324 barang, total 10.560). Data contoh ATK-xxx
+dibuang. Barang bersaldo dicatat lewat `StockLedger` sebagai mutasi
+`SaldoAwal` bertanggal 1 Oktober 2026 atas nama Pengelola Gudang; 2.418 barang
+tanpa saldo didaftarkan dengan stok nol dan langsung diarsipkan. Semua barang
+memakai batas default stok minimum 1, maksimum 1.000. Seeder tetap idempoten
+(`firstOrCreate`, saldo hanya untuk barang yang baru dibuat).
+
+`SatuanBarang` mendapat 30 case baru sesuai kolom `unit` CSV, termasuk `Dummy`
+(satuan placeholder dari sumber data, 150 barang, 32 di antaranya bersaldo).
+Dua test "menolak satuan di luar daftar" memakai `karung` sebagai contoh tak
+sah — kini sah, diganti `ember`.
+
+**Catatan.** `StockMutationSeeder`, `StockOpnameSeeder`, dan seeder pengadaan
+masih membuat data contoh di atas barang yang kini nyata — saldo awal
+tertimpa mutasi rekaan.
+
+**Verifikasi.** `migrate:fresh --seed` berhasil: 2.742 barang, 324 aktif,
+324 mutasi saldo awal berjumlah 10.560. 566 test lulus; Pint bersih untuk
+berkas yang diubah.
+
+---
+
 ## 5 Oktober 2026 (lanjutan) — Seluruh UI gudang, pengadaan, dan Admin dibersihkan
 
 Cicilan pedoman "UI copy: clean by default" (CLAUDE.md, 1 Oktober) dituntaskan
