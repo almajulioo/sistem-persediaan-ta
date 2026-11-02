@@ -5,14 +5,18 @@ namespace App\Support;
 use App\Enums\MutationType;
 use App\Enums\NotificationType;
 use App\Enums\PeriodeOpname;
+use App\Enums\RequestHistoryAction;
 use App\Enums\StockStatus;
+use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Models\Item;
+use App\Models\ItemApplication;
 use App\Models\ItemProposal;
 use App\Models\OpnameDetail;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\Request as ModelsRequest;
+use App\Models\RequestHistory;
 use App\Models\StockMutation;
 use App\Models\StockOpname;
 use App\Models\User;
@@ -100,6 +104,7 @@ class NotificationScanner
         self::periksaSeluruhUsulan();
         self::periksaSeluruhRealisasi();
         self::periksaSeluruhUsulanBarang();
+        self::periksaSeluruhPermohonan();
     }
 
     /**
@@ -946,96 +951,184 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan permintaan barang sesuai tahap pekerjaan yang sedang terbuka.
+     * Keadaan permintaan barang: tagihan bagi pihak yang gilirannya bertindak.
      *
-     * Semua keadaan lama ditutup lebih dulu karena penerimanya berganti sesuai
-     * pemilik pekerjaan pada tahap tersebut: Kepala Unit, Pengelola Gudang,
-     * lalu Admin.
+     * Setiap keadaan menyala hanya pada tahapnya dan padam begitu permintaan
+     * berpindah tahap. Kabar untuk pemohon tidak lewat sini, melainkan lewat
+     * catatRiwayatPermintaan() pada setiap langkah riwayat.
      */
     public static function periksaPermintaan(ModelsRequest $request): void
     {
         $request->loadMissing('user');
 
-        $kepalaUnit = $request->user?->unit
-            ? User::query()
-                ->where('is_active', true)
-                ->where('role', UserRole::KepalaUnit->value)
-                ->where('unit', $request->user->unit)
-                ->get()
-            : new EloquentCollection;
-
-        $peminta = $request->user?->is_active
-            ? new EloquentCollection([$request->user])
-            : new EloquentCollection;
-
-        $pengawas = self::pengawasGudang();
         $admin = Notifier::penerimaBerperan(UserRole::Admin);
+        $pengawas = self::pengawasGudang();
+        $catatan = self::catatanTerakhirPermintaan($request);
+        $tautan = route('request.show', $request, absolute: false);
+
+        if ($request->type === 'umum') {
+            Notifier::terapkanKeadaan(
+                berlaku: $request->status === 'submitted',
+                penerima: $pengawas,
+                type: NotificationType::PermintaanUmumMenunggu,
+                dedupKey: NotificationType::PermintaanUmumMenunggu->dedupKey($request->request_id),
+                title: "Permintaan umum {$request->request_number} menunggu ditinjau",
+                body: sprintf(
+                    'Permintaan umum dari %s perlu ditinjau, lalu diubah, ditolak, atau digabung.',
+                    $request->user?->fullname ?? 'Subbagian Umum dan TI',
+                ),
+                actionUrl: route('request.umum.index', absolute: false),
+                subject: $request,
+            );
+
+            return;
+        }
+
+        // Penyetuju unit: Kepala Unit, kecuali Subbagian Umum dan TI yang
+        // disetujui Kasubbag Umum dan TI (sama dengan Request::kepalaUnit()).
+        $unit = $request->user?->unit;
+        $penyetuju = $unit === null
+            ? new EloquentCollection
+            : User::query()
+                ->where('is_active', true)
+                ->where('role', ($unit === UnitKerja::SubbagianUmumTi ? UserRole::KasubbagUmumTi : UserRole::KepalaUnit)->value)
+                ->where('unit', $unit)
+                ->get();
 
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'submitted',
-            penerima: $kepalaUnit,
+            penerima: $penyetuju->merge($admin),
             type: NotificationType::PermintaanDiajukan,
             dedupKey: NotificationType::PermintaanDiajukan->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number} menunggu persetujuan",
-            body: "Permintaan barang dari unit {$request->user?->unit?->label()} perlu diperiksa dan disetujui.",
-            actionUrl: route('request.show', $request, absolute: false),
+            body: sprintf(
+                'Permintaan barang dari unit %s perlu diperiksa dan disetujui. Batal otomatis bila belum diputuskan sampai %s.%s',
+                $unit?->label(),
+                ($request->created_at ?? now())->copy()->addDays(ModelsRequest::BATAS_HARI_PERSETUJUAN)->translatedFormat('d F Y'),
+                $catatan,
+            ),
+            actionUrl: $tautan,
             subject: $request,
         );
 
-        Notifier::terapkanKeadaan(
-            berlaku: $request->status === 'submitted',
-            penerima: $admin,
-            type: NotificationType::PermintaanDiajukan,
-            dedupKey: NotificationType::PermintaanDiajukan->dedupKey($request->request_id),
-            title: "Permintaan {$request->request_number} menunggu persetujuan",
-            body: "Permintaan barang dari unit {$request->user?->unit?->label()} perlu diperiksa dan disetujui.",
-            actionUrl: route('request.show', $request, absolute: false),
-            subject: $request,
-        );
-
+        // Permintaan darurat yang sudah disetujui Kepala Unit boleh
+        // diselesaikan Kasubbag juga, jadi ia ikut ditagih.
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'approved_by_head',
-            penerima: $pengawas,
+            penerima: $request->type === 'emergency' ? $pengawas->merge(self::pemberiPersetujuan()) : $pengawas,
             type: NotificationType::PermintaanDisetujuiKepalaUnit,
             dedupKey: NotificationType::PermintaanDisetujuiKepalaUnit->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiKepalaUnit->label(),
-            body: NotificationType::PermintaanDisetujuiKepalaUnit->description(),
-            actionUrl: route('request.show', $request, absolute: false),
+            body: NotificationType::PermintaanDisetujuiKepalaUnit->description().$catatan,
+            actionUrl: $tautan,
             subject: $request,
         );
 
+        // Langkah berikutnya, memulai pengeluaran, adalah giliran Kasubbag.
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'processed_by_staff',
-            penerima: $admin,
+            penerima: self::pemberiPersetujuan(),
             type: NotificationType::PermintaanDisetujuiPengelolaGudang,
             dedupKey: NotificationType::PermintaanDisetujuiPengelolaGudang->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiPengelolaGudang->label(),
-            body: NotificationType::PermintaanDisetujuiPengelolaGudang->description(),
-            actionUrl: route('request.show', $request, absolute: false),
+            body: NotificationType::PermintaanDisetujuiPengelolaGudang->description().$catatan,
+            actionUrl: $tautan,
             subject: $request,
         );
 
         Notifier::terapkanKeadaan(
-            berlaku: $request->status === 'completed',
-            penerima: $peminta,
-            type: NotificationType::PermintaanSelesai,
-            dedupKey: NotificationType::PermintaanSelesai->dedupKey($request->request_id),
-            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanSelesai->label(),
-            body: NotificationType::PermintaanSelesai->description(),
-            actionUrl: route('request.show', $request, absolute: false),
+            berlaku: $request->status === 'in_issuance',
+            penerima: $pengawas,
+            type: NotificationType::PermintaanDalamPengeluaran,
+            dedupKey: NotificationType::PermintaanDalamPengeluaran->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDalamPengeluaran->label(),
+            body: NotificationType::PermintaanDalamPengeluaran->description().$catatan,
+            actionUrl: $tautan,
             subject: $request,
         );
-        
+
+        // Setelah diserahkan, giliran pemohon: mengonfirmasi penerimaan atau
+        // melaporkan masalah. Pemohon yang akunnya diarsipkan tidak ditagih.
+        $pemohon = $request->user?->is_active
+            ? new EloquentCollection([$request->user])
+            : new EloquentCollection;
+        $masalahTerbuka = $request->status === 'delivered' && $request->hasOpenReceiptProblem();
+
         Notifier::terapkanKeadaan(
-            berlaku: $request->status === 'rejected',
-            penerima: $peminta,
-            type: NotificationType::PermintaanDitolak,
-            dedupKey: NotificationType::PermintaanDitolak->dedupKey($request->request_id),
-            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDitolak->label(),
-            body: NotificationType::PermintaanDitolak->description(),
+            berlaku: $request->status === 'delivered',
+            penerima: $pemohon,
+            type: NotificationType::PermintaanMenungguKonfirmasi,
+            dedupKey: NotificationType::PermintaanMenungguKonfirmasi->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: barang sudah diserahkan",
+            body: NotificationType::PermintaanMenungguKonfirmasi->description().$catatan,
+            actionUrl: $tautan,
+            subject: $request,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $masalahTerbuka,
+            penerima: $pengawas,
+            type: NotificationType::PermintaanMasalahPenerimaan,
+            dedupKey: NotificationType::PermintaanMasalahPenerimaan->dedupKey($request->request_id),
+            title: "Permintaan {$request->request_number}: masalah penerimaan dilaporkan",
+            body: sprintf(
+                '%s melaporkan masalah pada barang yang diserahkan.%s',
+                $request->user?->fullname ?? 'Pemohon',
+                $catatan,
+            ),
+            actionUrl: $tautan,
+            subject: $request,
+        );
+    }
+
+    /**
+     * Peristiwa untuk pemohon pada setiap langkah riwayat: siapa yang
+     * bertindak, apa yang berubah, dan alasannya. Inilah jalur balik dari
+     * petugas ke pemohon.
+     *
+     * Langkah yang dilakukan pemohon sendiri tidak perlu dikabarkan, dan
+     * pemohon yang akunnya diarsipkan tidak ditagih apa pun.
+     */
+    public static function catatRiwayatPermintaan(RequestHistory $history): void
+    {
+        $history->loadMissing(['request.user', 'user']);
+        $request = $history->request;
+        $pemohon = $request?->user;
+
+        if ($pemohon === null || ! $pemohon->is_active || $pemohon->user_id === $history->user_id) {
+            return;
+        }
+
+        if ($history->to_status === 'delivered' && $history->action === RequestHistoryAction::Disetujui) {
+            return;
+        }
+
+        $type = match (true) {
+            in_array($history->action, [RequestHistoryAction::Ditolak, RequestHistoryAction::Kedaluwarsa], true) => NotificationType::PermintaanDitolak,
+            $history->to_status === 'completed' => NotificationType::PermintaanSelesai,
+            default => NotificationType::PermintaanDiperbarui,
+        };
+
+        Notifier::catatPeristiwa(
+            penerima: new EloquentCollection([$pemohon]),
+            type: $type,
+            dedupKey: $type->dedupKey((string) $history->request_history_id),
+            title: "Permintaan {$request->request_number}: {$history->judul()}",
+            body: $history->uraian(),
             actionUrl: route('request.show', $request, absolute: false),
             subject: $request,
         );
+    }
+
+    /**
+     * Catatan petugas pada langkah terakhir, ditempelkan ke tagihan pihak
+     * berikutnya supaya pesan dari tahap sebelumnya ikut terbaca.
+     */
+    private static function catatanTerakhirPermintaan(ModelsRequest $request): string
+    {
+        $note = $request->histories()->reorder()->latest('request_history_id')->value('note');
+
+        return $note === null ? '' : " Catatan terakhir: {$note}";
     }
 
     /**
@@ -1044,6 +1137,83 @@ class NotificationScanner
     public static function catatPermintaanDiajukan(ModelsRequest $request): void
     {
         self::periksaPermintaan($request);
+    }
+
+    /**
+     * Keadaan satu permohonan: menunggu ditinjau selama masih Diajukan.
+     *
+     * Penerimanya pengawas gudang, karena keputusan permohonan wewenang
+     * `kelola-permintaan` (Pengelola Gudang, dan Admin).
+     *
+     * @param  EloquentCollection<int, User>|null  $penerima
+     */
+    public static function periksaPermohonan(ItemApplication $application, ?EloquentCollection $penerima = null): void
+    {
+        $application->loadMissing(['user', 'details']);
+
+        Notifier::terapkanKeadaan(
+            berlaku: $application->isDiajukan(),
+            penerima: $penerima ?? self::pengawasGudang(),
+            type: NotificationType::PermohonanMenungguTinjauan,
+            dedupKey: NotificationType::PermohonanMenungguTinjauan->dedupKey($application->item_application_id),
+            title: "Permohonan {$application->application_number} menunggu tinjauan",
+            body: sprintf(
+                '%s (%s) mengajukan permohonan %s. Tinjau lalu setujui atau tolak dengan alasan.',
+                $application->user?->fullname ?? 'Seseorang',
+                $application->user?->unit?->label() ?? 'tanpa unit',
+                $application->ringkasan(),
+            ),
+            actionUrl: route('item-applications.show', $application, absolute: false),
+            subject: $application,
+        );
+    }
+
+    /**
+     * Keadaan seluruh permohonan, termasuk yang sudah diputuskan supaya
+     * tagihan yang pemeriksaan reaktifnya sempat gagal tetap ikut ditutup.
+     */
+    public static function periksaSeluruhPermohonan(): void
+    {
+        $penerima = self::pengawasGudang();
+
+        ItemApplication::query()
+            ->with(['user', 'details'])
+            ->chunk(100, function ($applications) use ($penerima) {
+                foreach ($applications as $application) {
+                    self::periksaPermohonan($application, $penerima);
+                }
+            });
+    }
+
+    /**
+     * Peristiwa: permohonan disetujui atau ditolak. Penerimanya pemohon;
+     * pelakunya sendiri dan pemohon yang akunnya diarsipkan tidak diberi tahu.
+     */
+    public static function catatPermohonanDiputuskan(ItemApplication $application, User $pelaku): void
+    {
+        self::periksaPermohonan($application);
+
+        $pemohon = $application->user;
+
+        if ($pemohon === null || ! $pemohon->is_active || $pemohon->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        $type = $application->isDisetujui()
+            ? NotificationType::PermohonanDisetujui
+            : NotificationType::PermohonanDitolak;
+
+        Notifier::catatPeristiwa(
+            penerima: new EloquentCollection([$pemohon]),
+            type: $type,
+            dedupKey: $type->dedupKey($application->item_application_id),
+            title: "Permohonan {$application->application_number}: ".$type->label(),
+            body: $application->isDisetujui()
+                ? sprintf('%s menyetujui permohonan Anda. Barang tambah stok masuk ke draf usulan pengadaan, dan barang baru menunggu didaftarkan di master barang.', $pelaku->fullname)
+                : sprintf('%s menolak permohonan Anda dengan alasan: %s', $pelaku->fullname, $application->decision_note ?? 'tidak dicatat'),
+            actionUrl: route('item-applications.show', $application, absolute: false),
+            subject: $application,
+        );
     }
 
     /**

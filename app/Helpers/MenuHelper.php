@@ -37,17 +37,28 @@ class MenuHelper
                         'unit' => UnitKerja::SubbagianUmumTi,
                         'unitBypassRoles' => [UserRole::Admin, UserRole::PengelolaGudang],
                     ],
+                    // Pemohon dari Subbagian Umum dan TI melihat miliknya sendiri.
                     [
                         'name' => 'Daftar Permintaan Umum',
                         'path' => '/permintaan-umum',
-                        'roles' => [UserRole::Admin, UserRole::PengelolaGudang],
+                        'unit' => UnitKerja::SubbagianUmumTi,
+                        'unitBypassRoles' => [UserRole::Admin, UserRole::PengelolaGudang],
                     ],
                     [
-                        'name' => 'Daftar Permintaan', 
+                        'name' => 'Daftar Permintaan',
                         'path' => '/permintaan'
                         ],
-                    // ['name' => 'Usulkan Barang Baru', 'path' => '/permintaan/usulan-barang/create'],
-                    // ['name' => 'Usulan Tambah Barang', 'path' => '/permintaan/usulan-barang'],
+                ],
+            ],
+            // Barang yang belum terdaftar dan stok yang kurang dimohonkan di
+            // sini, bukan lewat formulir permintaan.
+            [
+                'icon' => 'ecommerce',
+                'name' => 'Permohonan',
+                'path' => '#',
+                'subItems' => [
+                    ['name' => 'Ajukan Permohonan', 'path' => '/permohonan/create'],
+                    ['name' => 'Daftar Permohonan', 'path' => '/permohonan'],
                 ],
             ],
             // Kasubbag Umum dan TI melihat kedua grup ini baca-saja sebagai

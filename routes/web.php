@@ -19,7 +19,7 @@ use App\Http\Controllers\Pengadaan\ProcurementRequestController;
 use App\Http\Controllers\Pengadaan\SupplierController;
 use App\Http\Controllers\ProfileAvatarController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Request\ItemProposalController as RequestItemProposalController;
+use App\Http\Controllers\Request\ItemApplicationController;
 use App\Http\Controllers\Request\RequestController;
 use Illuminate\Support\Facades\Route;
 
@@ -68,29 +68,45 @@ Route::middleware('auth')->group(function () {
     Route::get('/permintaan-umum/create', [RequestController::class, 'createUmum'])->name('request.umum.create');
     Route::post('/permintaan-umum', [RequestController::class, 'storeUmum'])->name('request.umum.store');
 
+    // Daftar permintaan umum juga dibuka bagi pemohonnya (Subbagian Umum dan
+    // TI), tetapi hanya miliknya dan baca-saja; penyaringannya di controller.
+    Route::get('/permintaan-umum', [RequestController::class, 'umumIndex'])->name('request.umum.index');
+
     Route::middleware('role:pengelola_gudang,admin')->group(function () {
-        Route::get('/permintaan-umum', [RequestController::class, 'umumIndex'])->name('request.umum.index');
         Route::get('/permintaan-umum/{request}/edit', [RequestController::class, 'editUmum'])->name('request.umum.edit');
         Route::put('/permintaan-umum/{request}', [RequestController::class, 'updateUmum'])->name('request.umum.update');
         Route::post('/permintaan-umum/{request}/reject', [RequestController::class, 'rejectUmum'])->name('request.umum.reject');
         Route::post('/permintaan-umum/merge', [RequestController::class, 'mergeUmum'])->name('request.umum.merge');
     });
 
-    // Usulan barang baru dari sub sistem permintaan: pintu depan kedua ke
-    // tabel `item_proposals` yang sama dengan milik Pengadaan (ADR 0032).
-    // Siapa pun yang login boleh mengusulkan lewat sini — otorisasinya ada
-    // di StoreItemProposalRequest, bukan di rute. Tidak ada rute keputusan
-    // di sini: menolak memakai rute bersama `item-proposals.reject` (gate
-    // `kelola-gudang`), menyetujui memakai `items.create` — sama seperti
-    // pintu depan Pengadaan, supaya hanya ada satu jalur keputusan.
-    Route::get('/permintaan/usulan-barang', [RequestItemProposalController::class, 'index'])->name('request.item-proposals.index');
-    Route::get('/permintaan/usulan-barang/create', [RequestItemProposalController::class, 'create'])->name('request.item-proposals.create');
-    Route::post('/permintaan/usulan-barang', [RequestItemProposalController::class, 'store'])->name('request.item-proposals.store');
+    // Permohonan barang baru dan tambah stok. Siapa pun yang login boleh
+    // mengajukan dan melihat permohonan yang terlihat olehnya (dijaga di
+    // controller); memutuskan wewenang `kelola-permintaan`. Barang baru yang
+    // disetujui menjadi usulan barang dan tetap diputuskan lewat satu jalur
+    // `items.create` / `item-proposals.reject` (ADR 0032/0033).
+    Route::get('/permohonan', [ItemApplicationController::class, 'index'])->name('item-applications.index');
+    Route::get('/permohonan/create', [ItemApplicationController::class, 'create'])->name('item-applications.create');
+    Route::post('/permohonan', [ItemApplicationController::class, 'store'])->name('item-applications.store');
+    Route::get('/permohonan/{itemApplication}', [ItemApplicationController::class, 'show'])
+        ->whereUuid('itemApplication')
+        ->name('item-applications.show');
+
+    Route::middleware('can:kelola-permintaan')->group(function () {
+        Route::patch('/permohonan/{itemApplication}/setujui', [ItemApplicationController::class, 'approve'])
+            ->name('item-applications.approve');
+        Route::patch('/permohonan/{itemApplication}/tolak', [ItemApplicationController::class, 'reject'])
+            ->name('item-applications.reject');
+    });
+
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');
     Route::get('/permintaan/{request}/nota-dinas', [RequestController::class, 'notaDinas'])->name('request.nota-dinas');
     Route::get('/permintaan/{request}/bast', [RequestController::class, 'bast'])->name('request.bast');
     Route::get('/permintaan/{request}', [RequestController::class, 'show'])->name('request.show');
+    // Akhir alur: pemohon mengonfirmasi atau melaporkan masalah penerimaan,
+    // Gudang menanggapi atau menutup atas namanya. Tanpa gate peran karena
+    // pemohon bisa berperan apa saja; otorisasinya di RequestWorkflowService.
+    Route::post('/permintaan/{request}/penerimaan', [RequestController::class, 'receipt'])->name('request.receipt');
 
     Route::middleware('role:kepala_unit,pengelola_gudang,admin,kasubbag_umum_ti')->group(function () {
         Route::get('/permintaan/{request}/edit', [RequestController::class, 'edit'])->name('request.edit');

@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ItemApplicationStatus;
 use App\Enums\ItemProposalStatus;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
+use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
+use App\Models\ItemApplication;
 use App\Models\ItemProposal;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
@@ -20,6 +23,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -39,7 +43,7 @@ class DashboardController extends Controller
      * Status permintaan barang yang masih berjalan, sama dengan ringkasan
      * "pending" di RequestController::index() milik sub sistem Permintaan.
      */
-    private const PERMINTAAN_BERJALAN = ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'];
+    private const PERMINTAAN_BERJALAN = ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance', 'delivered'];
 
     public function index(Request $request): View
     {
@@ -56,6 +60,8 @@ class DashboardController extends Controller
             'user' => $user,
             'salam' => $this->salam(),
             'aksesCepat' => $this->aksesCepat($user),
+            'pintuPengguna' => $user->hasRole(UserRole::Pengguna) ? $this->pintuPengguna($user) : null,
+            'dasborUnit' => $user->hasRole(UserRole::KepalaUnit) && $user->unit !== null ? $this->dasborUnit($user) : null,
             'tugas' => $this->perluTindakan($user),
             'stok' => $bisaGudang || $bisaPengadaan ? $this->kondisiStok(bertaut: $bisaGudang) : null,
             'alurPermintaan' => $this->alurPermintaan($user),
@@ -89,6 +95,7 @@ class DashboardController extends Controller
     {
         $ubin = [
             ['Permintaan Barang', 'request.index', null, 'inbox', 'sky'],
+            ['Permohonan', 'item-applications.index', null, 'clipboard-list', 'indigo'],
             ['Master Barang', 'items.index', 'akses-gudang', 'package', 'brand'],
             ['Mutasi Stok', 'mutations.index', 'akses-gudang', 'arrows', 'success'],
             ['Stok Opname', 'opname.index', 'akses-gudang', 'clipboard-check', 'orange'],
@@ -110,6 +117,177 @@ class DashboardController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Dua pintu utama Pengguna: permintaan (mengambil barang yang ada di
+     * gudang) dan permohonan (barang baru atau tambah stok), masing-masing
+     * dengan angka miliknya sendiri, beserta aktivitas terbarunya.
+     *
+     * Permintaan umum dikecualikan, sama dengan daftar permintaan.
+     *
+     * @return array{permintaan: array<string, mixed>, permohonan: array<string, mixed>, aktivitas: list<array<string, mixed>>}
+     */
+    private function pintuPengguna(User $user): array
+    {
+        $milikPermintaan = fn (): Builder => ModelsRequest::query()
+            ->where('type', '!=', 'umum')
+            ->where('user_id', $user->user_id);
+        $milikPermohonan = fn (): Builder => ItemApplication::query()->where('user_id', $user->user_id);
+
+        $permintaan = $milikPermintaan()->selectRaw('status, count(*) as jumlah')->groupBy('status')->pluck('jumlah', 'status');
+        $permohonan = $milikPermohonan()->selectRaw('status, count(*) as jumlah')->groupBy('status')->pluck('jumlah', 'status');
+        $diserahkan = (int) ($permintaan['delivered'] ?? 0);
+
+        $aktivitas = $milikPermintaan()
+            ->with('item')
+            ->latest('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn (ModelsRequest $request) => [
+                'jenis' => 'Permintaan',
+                'ikon' => 'inbox',
+                'nomor' => $request->request_number,
+                'barang' => $request->ringkasanBarang(),
+                'waktu' => $request->created_at,
+                'status' => $request->statusLabel(),
+                'badge' => ModelsRequest::statusBadgeClass($request->status),
+                'url' => route('request.show', $request),
+            ])
+            ->concat($milikPermohonan()
+                ->with('details.item')
+                ->latest('created_at')
+                ->limit(5)
+                ->get()
+                ->map(fn (ItemApplication $application) => [
+                    'jenis' => 'Permohonan',
+                    'ikon' => 'clipboard-list',
+                    'nomor' => $application->application_number,
+                    'barang' => $application->ringkasanBarang(),
+                    'waktu' => $application->created_at,
+                    'status' => $application->status->label(),
+                    'badge' => $application->status->badgeClass(),
+                    'url' => route('item-applications.show', $application),
+                ]))
+            ->sortByDesc('waktu')
+            ->take(5)
+            ->values()
+            ->all();
+
+        return [
+            'permintaan' => [
+                'statistik' => [
+                    [
+                        'label' => 'Berjalan',
+                        'jumlah' => (int) $permintaan->only(['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'])->sum(),
+                        'url' => route('request.index', ['tahap' => 'berjalan']),
+                    ],
+                    ['label' => 'Diserahkan', 'jumlah' => $diserahkan, 'url' => route('request.index', ['tahap' => 'diserahkan'])],
+                    ['label' => 'Selesai', 'jumlah' => (int) ($permintaan['completed'] ?? 0), 'url' => route('request.index', ['tahap' => 'selesai'])],
+                ],
+                'perhatian' => $diserahkan > 0
+                    ? "{$diserahkan} permintaan sudah diserahkan dan menunggu konfirmasi penerimaan Anda."
+                    : null,
+            ],
+            'permohonan' => [
+                'statistik' => array_map(fn (ItemApplicationStatus $status) => [
+                    'label' => $status->label(),
+                    'jumlah' => (int) ($permohonan[$status->value] ?? 0),
+                    'url' => route('item-applications.index', ['status' => $status->value]),
+                ], ItemApplicationStatus::cases()),
+            ],
+            'aktivitas' => $aktivitas,
+        ];
+    }
+
+    /**
+     * Dasbor Kepala Unit: penyetuju permintaan unitnya. Seluruh angka dibatasi
+     * pada permintaan dari unitnya sendiri, sama dengan daftar permintaan
+     * yang ia lihat (Request::scopeTerlihatOleh()).
+     *
+     * @return array<string, mixed>
+     */
+    private function dasborUnit(User $user): array
+    {
+        $unit = fn (): Builder => ModelsRequest::query()
+            ->where('type', '!=', 'umum')
+            ->whereHas('user', fn (Builder $query) => $query->where('unit', $user->unit));
+        $bulanIni = [now()->startOfMonth(), now()->endOfMonth()];
+
+        $antrean = $unit()
+            ->with(['user', 'item'])
+            ->where('status', 'submitted')
+            ->oldest('date')
+            ->oldest('created_at');
+
+        // Barang yang paling banyak diminta unit ini, untuk membaca pola
+        // kebutuhannya. Penolakan dan gabungan tidak dihitung.
+        $barangTeratas = DB::table('request_details')
+            ->join('requests', 'requests.request_id', '=', 'request_details.request_id')
+            ->join('users', 'users.user_id', '=', 'requests.user_id')
+            ->join('items', 'items.item_id', '=', 'request_details.item_id')
+            ->where('users.unit', $user->unit->value)
+            ->where('requests.type', '!=', 'umum')
+            ->whereNotIn('requests.status', ['rejected', 'merged'])
+            ->where('requests.date', '>=', now()->subMonths(3)->startOfDay())
+            ->groupBy('items.item_id', 'items.item_name', 'items.unit')
+            ->selectRaw('items.item_name, items.unit, sum(request_details.quantity_requested) as total')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+        $tertinggi = max(1, (int) ($barangTeratas->max('total') ?? 1));
+
+        $permohonan = ItemApplication::query()
+            ->terlihatOleh($user)
+            ->selectRaw('status, count(*) as jumlah')
+            ->groupBy('status')
+            ->pluck('jumlah', 'status');
+
+        return [
+            'unit' => $user->unit->label(),
+            'statistik' => [
+                [
+                    'label' => 'Menunggu persetujuan Anda',
+                    'jumlah' => (clone $antrean)->count(),
+                    'url' => route('request.index', ['status' => 'submitted']),
+                    'ikon' => 'inbox',
+                    'warna' => 'amber',
+                ],
+                [
+                    'label' => 'Diproses gudang',
+                    'jumlah' => $unit()->whereIn('status', ['approved_by_head', 'processed_by_staff', 'in_issuance', 'delivered'])->count(),
+                    'url' => route('request.index', ['tahap' => 'berjalan']),
+                    'ikon' => 'truck',
+                    'warna' => 'sky',
+                ],
+                [
+                    'label' => 'Selesai bulan ini',
+                    'jumlah' => $unit()->where('status', 'completed')->whereBetween('date', $bulanIni)->count(),
+                    'url' => route('request.index', ['tahap' => 'selesai']),
+                    'ikon' => 'check-circle',
+                    'warna' => 'success',
+                ],
+                [
+                    'label' => 'Ditolak bulan ini',
+                    'jumlah' => $unit()->where('status', 'rejected')->whereBetween('date', $bulanIni)->count(),
+                    'url' => route('request.index', ['tahap' => 'ditolak']),
+                    'ikon' => 'file-x',
+                    'warna' => 'error',
+                ],
+            ],
+            'antrean' => $antrean->limit(5)->get(),
+            'barangTeratas' => $barangTeratas->map(fn ($row) => [
+                'nama' => $row->item_name,
+                'total' => (int) $row->total,
+                'satuan' => SatuanBarang::tryFrom((string) $row->unit)?->label() ?? '',
+                'persen' => round((int) $row->total / $tertinggi * 100),
+            ])->all(),
+            'permohonan' => array_map(fn (ItemApplicationStatus $status) => [
+                'label' => $status->label(),
+                'jumlah' => (int) ($permohonan[$status->value] ?? 0),
+                'url' => route('item-applications.index', ['status' => $status->value]),
+            ], ItemApplicationStatus::cases()),
+        ];
     }
 
     /**
@@ -248,6 +426,17 @@ class DashboardController extends Controller
                     ->count(),
                 null,
             );
+
+            // Akhir alur ada di tangan pemohon: barang yang sudah diserahkan
+            // menunggu konfirmasi penerimaannya.
+            $tugas[] = $baris(
+                'Barang menunggu konfirmasi Anda',
+                $permintaan()
+                    ->where('user_id', $user->user_id)
+                    ->where('status', 'delivered')
+                    ->count(),
+                'delivered',
+            );
         }
 
         return $tugas;
@@ -326,6 +515,7 @@ class DashboardController extends Controller
             $tahap('approved_by_head'),
             $tahap('processed_by_staff'),
             $tahap('in_issuance'),
+            $tahap('delivered'),
             $selesai,
         ];
     }

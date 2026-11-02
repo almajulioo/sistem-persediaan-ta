@@ -1,6 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
+    @php
+        // Permohonan pengguna yang menyumbang tiap barang usulan ini.
+        $permohonanPerBarang = $procurementRequest->permohonanPerBarang();
+    @endphp
+
     <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
             <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">{{ $procurementRequest->judul() }}</h2>
@@ -110,6 +115,12 @@
                                                     {{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}
                                                 </p>
                                                 <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code }}</p>
+                                                @foreach ($permohonanPerBarang->get($detail->item_id, collect()) as $asal)
+                                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
+                                                        Permohonan <a href="{{ route('item-applications.show', $asal->application) }}" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">{{ $asal->application->application_number }}</a>
+                                                        · {{ $asal->application->user?->fullname ?? '-' }} · {{ $asal->quantity }}
+                                                    </p>
+                                                @endforeach
                                             </td>
                                             <td class="px-5 py-4 sm:px-6">
                                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
@@ -171,6 +182,12 @@
                                                 {{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}
                                             </p>
                                             <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code }}</p>
+                                            @foreach ($permohonanPerBarang->get($detail->item_id, collect()) as $asal)
+                                                <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
+                                                    Permohonan <a href="{{ route('item-applications.show', $asal->application) }}" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">{{ $asal->application->application_number }}</a>
+                                                    · {{ $asal->application->user?->fullname ?? '-' }} · {{ $asal->quantity }}
+                                                </p>
+                                            @endforeach
                                         </td>
                                         <td class="px-5 py-4 sm:px-6">
                                             <p class="text-theme-sm text-gray-500 dark:text-gray-400">

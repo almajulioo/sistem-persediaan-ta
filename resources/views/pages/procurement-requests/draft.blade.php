@@ -28,6 +28,9 @@
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">
                     Dibuat otomatis {{ $draft->created_at->translatedFormat('d M Y, H:i') }}
                 </span>
+                <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $draft->source->badgeClass() }}">
+                    {{ $draft->source->label() }}
+                </span>
             </div>
 
             <form action="{{ route('procurement-requests.draft.update') }}" method="POST">
@@ -86,9 +89,18 @@
 
                 {{-- Daftar barang pada draf --}}
                 <div class="mt-6">
-                    <label class="mb-3 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Barang pada Draf
-                    </label>
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Barang pada Draf
+                        </label>
+                        {{-- Asal tiap baris: pemindaian stok minimum, permohonan
+                             pengguna yang disetujui, atau tambahan Pengelola Gudang. --}}
+                        <ul class="text-theme-xs flex flex-wrap items-center gap-3 text-gray-500 dark:text-gray-400">
+                            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-gray-400"></span>Otomatis: stok di bawah minimum</li>
+                            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-indigo-500"></span>Permohonan: dari pengguna</li>
+                            <li class="flex items-center gap-1.5"><span class="bg-brand-500 size-2 rounded-full"></span>Manual: ditambahkan Gudang</li>
+                        </ul>
+                    </div>
 
                     <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
                         <template x-if="requestedList.length === 0">
@@ -100,12 +112,25 @@
                         <template x-if="requestedList.length > 0">
                             <div class="divide-y divide-gray-200 dark:divide-gray-800">
                                 <template x-for="(row, index) in requestedList" :key="row.item_id">
-                                    <div class="flex items-center justify-between bg-white px-4 py-3 dark:bg-gray-900">
-                                        <div class="flex items-center gap-2">
-                                            <span class="font-medium text-gray-800 dark:text-white/90" x-text="row.item_name"></span>
-                                            <span class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium"
-                                                :class="row.is_auto ? 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400' : 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'"
-                                                x-text="row.is_auto ? 'Otomatis' : 'Manual'"></span>
+                                    <div class="flex items-center justify-between gap-4 bg-white px-4 py-3 dark:bg-gray-900">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="font-medium text-gray-800 dark:text-white/90" x-text="row.item_name"></span>
+                                                <span class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium"
+                                                    :class="sourceClass(row)" x-text="sourceLabel(row)"></span>
+                                            </div>
+                                            {{-- Permohonan yang menyumbang baris ini, supaya Gudang tahu
+                                                 siapa yang membutuhkannya sebelum mengajukan usulan. --}}
+                                            <template x-if="row.permohonan.length > 0">
+                                                <ul class="text-theme-xs mt-1 space-y-0.5 text-gray-500 dark:text-gray-400">
+                                                    <template x-for="permohonan in row.permohonan" :key="permohonan.nomor">
+                                                        <li>
+                                                            <a :href="permohonan.url" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400" x-text="permohonan.nomor"></a>
+                                                            <span x-text="` · ${permohonan.pemohon} · ${permohonan.jumlah}`"></span>
+                                                        </li>
+                                                    </template>
+                                                </ul>
+                                            </template>
                                             <input type="hidden" :name="`items[${index}][item_id]`" :value="row.item_id">
                                         </div>
                                         <div class="flex items-center gap-4">
@@ -160,11 +185,21 @@
             // karena direktif itu memecah argumennya dengan explode(',', ...)
             // tanpa memperhatikan kurung/array bersarang — ekspresi dengan
             // banyak koma di dalamnya akan terpotong diam-diam.
+            $permohonanPerBarang = $draft->permohonanPerBarang();
             $draftInitial = $draft->details->map(fn ($detail) => [
                 'item_id' => $detail->item_id,
                 'item_name' => "{$detail->item->item_code} — {$detail->item->item_name}",
                 'amount_request' => $detail->amount_request,
                 'is_auto' => $detail->is_auto,
+                'permohonan' => $permohonanPerBarang->get($detail->item_id, collect())
+                    ->map(fn ($asal) => [
+                        'nomor' => $asal->application->application_number,
+                        'pemohon' => $asal->application->user?->fullname ?? '-',
+                        'jumlah' => $asal->quantity,
+                        'url' => route('item-applications.show', $asal->application),
+                    ])
+                    ->values()
+                    ->all(),
             ])->values();
         @endphp
 
@@ -191,6 +226,21 @@
                         return this.items.filter(item =>
                             item.item_name.toLowerCase().includes(q) || item.item_code.toLowerCase().includes(q)
                         );
+                    },
+
+                    // Permohonan lebih dulu: barisnya ditandai bukan otomatis
+                    // begitu permohonan masuk, tetapi asal itulah yang perlu
+                    // terbaca Gudang.
+                    sourceLabel(row) {
+                        if (row.permohonan.length > 0) return 'Permohonan';
+                        return row.is_auto ? 'Otomatis' : 'Manual';
+                    },
+
+                    sourceClass(row) {
+                        if (row.permohonan.length > 0) return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400';
+                        return row.is_auto
+                            ? 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400'
+                            : 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400';
                     },
 
                     selectItem(item) {
@@ -220,6 +270,7 @@
                                 item_name: `${selected.item_code} — ${selected.item_name}`,
                                 amount_request: parseInt(this.inputAmount),
                                 is_auto: false,
+                                permohonan: [],
                             });
                         }
 

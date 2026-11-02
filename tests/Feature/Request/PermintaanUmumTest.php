@@ -27,7 +27,7 @@ function permintaanUmum(User $peminta, Item $item, int $qty): ModelsRequest
         'request_id' => $request->request_id,
         'item_id' => $item->item_id,
         'quantity_requested' => $qty,
-        'quantity_approved' => 0,
+        'quantity_approved' => null,
         'created_at' => now(),
         'updated_at' => now(),
     ]);

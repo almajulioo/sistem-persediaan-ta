@@ -77,6 +77,15 @@ enum NotificationType: string
     case PermintaanDalamPengeluaran = 'permintaan_dalam_pengeluaran';
     case PermintaanDitolak = 'permintaan_ditolak';
     case PermintaanSelesai = 'permintaan_selesai';
+    case PermintaanDiperbarui = 'permintaan_diperbarui';
+    case PermintaanUmumMenunggu = 'permintaan_umum_menunggu';
+    case PermintaanMenungguKonfirmasi = 'permintaan_menunggu_konfirmasi';
+    case PermintaanMasalahPenerimaan = 'permintaan_masalah_penerimaan';
+
+    // --- Keadaan dan peristiwa permohonan ---
+    case PermohonanMenungguTinjauan = 'permohonan_menunggu_tinjauan';
+    case PermohonanDisetujui = 'permohonan_disetujui';
+    case PermohonanDitolak = 'permohonan_ditolak';
 
     public function label(): string
     {
@@ -114,6 +123,13 @@ enum NotificationType: string
             self::PermintaanDalamPengeluaran => 'Permintaan Dalam Proses Pengeluaran',
             self::PermintaanDitolak => 'Permintaan Ditolak',
             self::PermintaanSelesai => 'Permintaan Selesai',
+            self::PermintaanDiperbarui => 'Permintaan Diperbarui',
+            self::PermintaanUmumMenunggu => 'Permintaan Umum Menunggu',
+            self::PermintaanMenungguKonfirmasi => 'Konfirmasi Penerimaan Barang',
+            self::PermintaanMasalahPenerimaan => 'Masalah Penerimaan Barang',
+            self::PermohonanMenungguTinjauan => 'Permohonan Menunggu Tinjauan',
+            self::PermohonanDisetujui => 'Permohonan Disetujui',
+            self::PermohonanDitolak => 'Permohonan Ditolak',
         };
     }
 
@@ -150,9 +166,16 @@ enum NotificationType: string
             self::PermintaanDiajukan => 'Permintaan barang dari unit kerja telah diajukan ke gudang.',
             self::PermintaanDisetujuiKepalaUnit => 'Permintaan barang dari unit kerja telah disetujui oleh Kepala Unit.',
             self::PermintaanDisetujuiPengelolaGudang => 'Permintaan barang dari unit kerja telah disetujui oleh Pengelola Gudang dan siap diambil/dikirim.',
-            self::PermintaanDalamPengeluaran => 'Permintaan barang dari unit kerja sedang dalam proses pengeluaran dari gudang.',
+            self::PermintaanDalamPengeluaran => 'Permintaan sedang dalam proses pengeluaran; barangnya menunggu diserahkan dan permintaannya diselesaikan.',
             self::PermintaanDitolak => 'Permintaan barang dari unit kerja tidak disetujui.',
             self::PermintaanSelesai => 'Permintaan barang dari unit kerja telah selesai diproses dan ditutup.',
+            self::PermintaanDiperbarui => 'Permintaan Anda maju ke tahap berikutnya, diubah jumlahnya, atau dikembalikan statusnya, beserta catatan petugas.',
+            self::PermintaanUmumMenunggu => 'Permintaan umum baru menunggu ditinjau Pengelola Gudang untuk diubah, ditolak, atau digabung.',
+            self::PermintaanMenungguKonfirmasi => 'Barang permintaan Anda sudah diserahkan gudang; konfirmasi penerimaannya atau laporkan bila ada masalah.',
+            self::PermintaanMasalahPenerimaan => 'Pemohon melaporkan masalah pada barang yang diserahkan dan menunggu tanggapan Pengelola Gudang.',
+            self::PermohonanMenungguTinjauan => 'Permohonan barang baru atau tambah stok menunggu ditinjau Pengelola Gudang.',
+            self::PermohonanDisetujui => 'Permohonan disetujui dan diteruskan ke draf usulan pengadaan atau usulan barang baru.',
+            self::PermohonanDitolak => 'Permohonan tidak diteruskan; alasannya tercatat pada keputusan.',
         };
     }
 
@@ -173,12 +196,21 @@ enum NotificationType: string
             self::RealisasiDibatalkan,
             self::UsulanBarangDisetujui,
             self::UsulanBarangDitolak => false,
-            self::PermintaanDalamPengeluaran,
+            // Ditolak, Selesai, dan Diperbarui dikirim ke pemohon satu per
+            // langkah riwayat; sisanya tagihan bagi yang gilirannya bertindak.
             self::PermintaanDitolak,
-            self::PermintaanSelesai => false,
+            self::PermintaanSelesai,
+            self::PermintaanDiperbarui => false,
             self::PermintaanDiajukan,
             self::PermintaanDisetujuiKepalaUnit,
-            self::PermintaanDisetujuiPengelolaGudang => true,
+            self::PermintaanDisetujuiPengelolaGudang,
+            self::PermintaanDalamPengeluaran,
+            self::PermintaanUmumMenunggu,
+            self::PermintaanMenungguKonfirmasi,
+            self::PermintaanMasalahPenerimaan => true,
+            self::PermohonanDisetujui,
+            self::PermohonanDitolak => false,
+            self::PermohonanMenungguTinjauan => true,
             default => true,
         };
     }
@@ -238,8 +270,15 @@ enum NotificationType: string
             self::PermintaanDisetujuiKepalaUnit => NotificationLevel::Perhatian,
             self::PermintaanDisetujuiPengelolaGudang => NotificationLevel::Perhatian,
             self::PermintaanDalamPengeluaran => NotificationLevel::Perhatian,
-            self::PermintaanDitolak => NotificationLevel::Info,
+            self::PermintaanUmumMenunggu => NotificationLevel::Perhatian,
+            self::PermintaanMenungguKonfirmasi => NotificationLevel::Perhatian,
+            self::PermintaanMasalahPenerimaan => NotificationLevel::Perhatian,
+            self::PermintaanDitolak => NotificationLevel::Perhatian,
             self::PermintaanSelesai => NotificationLevel::Info,
+            self::PermintaanDiperbarui => NotificationLevel::Info,
+            self::PermohonanMenungguTinjauan,
+            self::PermohonanDitolak => NotificationLevel::Perhatian,
+            self::PermohonanDisetujui => NotificationLevel::Info,
             self::StokBerlebih,
             self::BarangTidakBergerak,
             self::OpnameDiposting,

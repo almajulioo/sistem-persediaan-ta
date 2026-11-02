@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\UserRole;
 use App\Models\Item;
+use App\Models\ItemApplication;
 use App\Models\ItemProposal;
 use App\Models\Procurement;
 use App\Models\ProcurementDocument;
@@ -75,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
             'usulan_barang' => ItemProposal::class,
             'usulan_pengadaan' => ProcurementRequest::class,
             'dokumen_pengadaan' => ProcurementDocument::class,
+            'permohonan' => ItemApplication::class,
         ]);
     }
 

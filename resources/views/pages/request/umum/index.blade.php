@@ -1,210 +1,294 @@
 @extends('layouts.app')
 
+@php
+    // Hanya permintaan yang menunggu yang bisa dipilih untuk digabung.
+    $bisaGabung = $canManage && $view === '';
+    $selectableIds = $bisaGabung ? $requests->getCollection()->pluck('request_id')->values()->all() : [];
+    $statusBadge = [
+        'submitted' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+        'rejected' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
+        'merged' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
+    ];
+    $tombolGaris = 'text-theme-xs rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition';
+@endphp
+
 @section('content')
     <div x-data="umumRequestsPage()">
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Daftar Permintaan Umum</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Daftar barang umum beserta peminta dari unit kerja.</p>
-        </div>
-        <a href="{{ route('request.umum.create') }}" class="rounded-lg bg-brand-500 px-4 py-3 text-sm font-medium text-white hover:bg-brand-600">
-            Buat Permintaan Umum
-        </a>
-    </div>
-
-    <x-ui.flash />
-
-    @unless ($isHistory)
-    <div class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Menunggu diproses</p>
-            <p class="mt-2 text-2xl font-semibold text-gray-800 dark:text-white/90">{{ $requests->where('status', 'submitted')->count() }}</p>
-        </div>
-        <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-            <p class="text-sm text-gray-500 dark:text-gray-400">Dipilih untuk digabung</p>
-            <p class="mt-2 text-2xl font-semibold text-brand-600" x-text="selectedRequests.length">0</p>
-        </div>
-        <div class="rounded-2xl border border-brand-100 bg-brand-50 p-5 dark:border-brand-500/20 dark:bg-brand-500/10">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <p class="text-sm font-medium text-brand-700 dark:text-brand-300">Aksi penerimaan</p>
-                    <p class="mt-1 text-xs text-brand-600/80 dark:text-brand-300/80">Gabungkan permintaan terpilih menjadi satu.</p>
-                </div>
-                <button type="button" @click="openMergeModal" :disabled="selectedRequests.length === 0"
-                    class="shrink-0 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50">
-                    Gabungkan
-                </button>
-            </div>
-        </div>
-    </div>
-    @endunless
-
-    <form id="merge-form" method="POST" action="{{ route('request.umum.merge') }}" class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-xs dark:border-gray-800 dark:bg-white/[0.03]">
-        @csrf
-        <template x-for="requestId in selectedRequests" :key="requestId">
-            <input type="hidden" name="request_ids[]" :value="requestId">
-        </template>
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h3 class="text-base font-semibold text-gray-800 dark:text-white/90">{{ $isHistory ? 'Histori Permintaan Umum' : 'Antrean Permintaan Umum' }}</h3>
-                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {{ $isHistory ? 'Permintaan umum yang sudah digabung menjadi permintaan darurat.' : 'Permintaan ditolak tetap tersimpan sebagai riwayat.' }}
+                <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Permintaan Umum</h2>
+                <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+                    {{ $canManage
+                        ? 'Kebutuhan umum dari Subbagian Umum dan TI. Tinjau, ubah, atau tolak, lalu gabungkan beberapa permintaan menjadi satu permintaan darurat.'
+                        : 'Pantau permintaan umum yang Anda ajukan beserta catatan dari Pengelola Gudang.' }}
                 </p>
             </div>
-            @if ($isHistory)
-                <a href="{{ route('request.umum.index') }}"
-                    class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                    Kembali ke Antrean
-                </a>
-            @else
-                <a href="{{ route('request.umum.index', ['view' => 'histori']) }}"
-                    class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-brand-600 ring-1 ring-brand-200 ring-inset transition hover:bg-brand-50 dark:text-brand-400 dark:ring-brand-500/30 dark:hover:bg-brand-500/10">
-                    Histori
-                </a>
+            <a href="{{ route('request.umum.create') }}"
+                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                <x-ui.icon name="plus" class="size-5" />
+                Buat Permintaan Umum
+            </a>
+        </div>
+
+        <x-ui.flash />
+
+        <form id="merge-form" method="POST" action="{{ route('request.umum.merge') }}"
+            class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+            @csrf
+            <template x-for="requestId in selectedRequests" :key="requestId">
+                <input type="hidden" name="request_ids[]" :value="requestId">
+            </template>
+
+            {{-- Tab --}}
+            <nav class="custom-scrollbar flex gap-1 overflow-x-auto border-b border-gray-100 px-3 dark:border-gray-800 sm:px-4" aria-label="Status permintaan umum">
+                @foreach ($tabs as $key => $tab)
+                    @php $aktif = $view === (string) $key; @endphp
+                    <a href="{{ route('request.umum.index', $key === '' ? [] : ['view' => $key]) }}" @if ($aktif) aria-current="page" @endif
+                        @class([
+                            'text-theme-sm -mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3.5 font-medium transition',
+                            'border-brand-500 text-brand-600 dark:text-brand-400' => $aktif,
+                            'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300' => ! $aktif,
+                        ])>
+                        {{ $tab['label'] }}
+                        <span @class([
+                            'text-theme-xs rounded-full px-2 py-0.5',
+                            'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400' => $aktif,
+                            'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400' => ! $aktif,
+                        ])>{{ $tab['jumlah'] }}</span>
+                    </a>
+                @endforeach
+            </nav>
+
+            @if ($view === 'histori')
+                <div class="border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-white/90">Histori Permintaan Umum</h3>
+                    <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">Permintaan umum yang sudah digabung menjadi permintaan darurat.</p>
+                </div>
+            @elseif ($bisaGabung && $requests->isNotEmpty())
+                {{-- Bilah gabung: aktif begitu ada permintaan yang dipilih. --}}
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 dark:border-gray-800"
+                    :class="selectedRequests.length > 0 ? 'bg-brand-50 dark:bg-brand-500/10' : ''">
+                    <p class="text-theme-sm text-gray-600 dark:text-gray-300">
+                        <span x-show="selectedRequests.length === 0">Pilih permintaan yang akan digabung. Barang yang sama dijumlahkan menjadi satu permintaan darurat.</span>
+                        <span x-show="selectedRequests.length > 0" style="display: none;">
+                            <span class="font-semibold" x-text="selectedRequests.length"></span> permintaan dipilih.
+                        </span>
+                    </p>
+                    <button type="button" @click="openMergeModal" :disabled="selectedRequests.length === 0"
+                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                        Gabungkan
+                        <span x-show="selectedRequests.length > 0" class="rounded-full bg-white/20 px-1.5 text-xs" x-text="selectedRequests.length"></span>
+                    </button>
+                </div>
             @endif
-        </div>
-        <div class="custom-scrollbar max-w-full overflow-x-auto">
-            <table class="w-full min-w-[1100px]">
-                <thead>
-                    <tr class="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-white/[0.02]">
-                        @unless ($isHistory)
-                            <th class="w-16 px-5 py-3 text-left sm:px-6">
-                                <input type="checkbox" :checked="allSelected" @change="toggleAll($event.target.checked)" aria-label="Pilih semua permintaan submitted"
-                                    class="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                            </th>
-                        @endunless
-                        @foreach (['Nomor Permintaan', 'Peminta', 'Unit', 'Barang yang Diminta', 'Tanggal', 'Status', $isHistory ? 'Digabung ke' : 'Aksi'] as $heading)
-                            <th class="px-5 py-3 text-left sm:px-6">
-                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ $heading }}</p>
-                            </th>
-                        @endforeach
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($requests as $request)
-                        <tr class="border-b border-gray-100 align-top transition-colors last:border-0 hover:bg-gray-50/60 dark:border-gray-800 dark:hover:bg-white/[0.02]">
-                            @unless ($isHistory)
-                                <td class="px-5 py-4 sm:px-6">
-                                    @if ($request->status === 'submitted')
-                                        <input type="checkbox" value="{{ $request->request_id }}" x-model="selectedRequests" class="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500">
-                                    @endif
-                                </td>
-                            @endunless
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-sm font-semibold text-gray-800 dark:text-white/90">{{ $request->request_number }}</p>
-                                <p class="mt-1 text-xs text-gray-400">{{ $request->item->count() }} jenis barang</p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ $request->user?->fullname ?? '-' }}</p>
-                                <p class="mt-1 text-xs text-gray-400">{{ $request->user?->username ? '@'.$request->user->username : 'Pengguna' }}</p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <span class="inline-flex max-w-[190px] rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-white/[0.06] dark:text-gray-300">
-                                    {{ $request->user?->unit?->label() ?? '-' }}
-                                </span>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <ul class="max-w-[260px] space-y-2 text-sm text-gray-700 dark:text-gray-300">
-                                    @foreach ($request->item as $detail)
-                                        <li class="flex items-center justify-between gap-3">
-                                            <span class="truncate">{{ $detail->item?->item_name ?? '-' }}</span>
-                                            <span class="shrink-0 rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">{{ $detail->quantity_requested }}</span>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-sm text-gray-600 dark:text-gray-300">{{ $request->date?->translatedFormat('d M Y') ?? '-' }}</p>
-                                <p class="mt-1 text-xs text-gray-400">{{ $request->created_at?->format('H:i') }}</p>
-                            </td>
-                            <td class="px-5 py-4 text-sm sm:px-6">
-                                @php
-                                    [$badgeClass, $dotClass] = match ($request->status) {
-                                        'rejected' => ['bg-error-50 text-error-600 dark:bg-error-500/10 dark:text-error-400', 'bg-error-500'],
-                                        'merged' => ['bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300', 'bg-brand-500'],
-                                        default => ['bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-400', 'bg-success-500'],
-                                    };
-                                @endphp
-                                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold {{ $badgeClass }}">
-                                    <span class="size-1.5 rounded-full {{ $dotClass }}"></span>
-                                    {{ $request->statusLabel() }}
-                                </span>
-                            </td>
-                            <td class="px-5 py-4 text-sm sm:px-6">
-                                @if ($isHistory)
-                                    @if ($request->mergedInto)
-                                        <a href="{{ route('request.show', $request->mergedInto) }}" class="font-medium text-brand-600 hover:underline dark:text-brand-400">
-                                            {{ $request->mergedInto->request_number }}
-                                        </a>
-                                        <p class="mt-1 text-xs text-gray-400">{{ $request->updated_at?->translatedFormat('d M Y H:i') }}</p>
-                                    @else
-                                        <span class="text-gray-400">Permintaan hasil gabungan sudah dihapus</span>
-                                    @endif
-                                @elseif ($request->status === 'submitted')
-                                    <div class="flex flex-wrap gap-3">
-                                        <a href="{{ route('request.umum.edit', $request) }}"
-                                            class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-warning-600 ring-1 ring-warning-200 ring-inset transition hover:bg-warning-50 dark:text-warning-500 dark:ring-warning-500/30 dark:hover:bg-warning-500/10">
-                                            Ubah permintaan
-                                        </a>
-                                        <button type="button" @click="openRejectModal('{{ $request->request_id }}', @js($request->request_number))"
-                                            class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-error-600 ring-1 ring-error-200 ring-inset transition hover:bg-error-50 dark:text-error-500 dark:ring-error-500/30 dark:hover:bg-error-500/10">
-                                            Tolak permintaan
-                                        </button>
-                                    </div>
-                                @else
-                                    <span class="text-gray-400">-</span>
+
+            @if ($requests->isEmpty())
+                <div class="flex flex-col items-center px-5 py-14 text-center">
+                    <span class="flex size-14 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-white/5">
+                        <x-ui.icon name="inbox" class="size-7" />
+                    </span>
+                    <p class="mt-4 text-sm font-medium text-gray-800 dark:text-white/90">
+                        {{ match ($view) {
+                            'histori' => 'Belum ada permintaan umum yang digabung.',
+                            'ditolak' => 'Tidak ada permintaan umum yang ditolak.',
+                            default => 'Tidak ada permintaan umum yang menunggu.',
+                        } }}
+                    </p>
+                </div>
+            @else
+                {{-- Layar lebar: tabel. --}}
+                <div class="custom-scrollbar hidden max-w-full overflow-x-auto lg:block">
+                    <table class="w-full min-w-[960px]">
+                        <thead>
+                            <tr class="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-white/[0.02]">
+                                @if ($bisaGabung)
+                                    <th class="w-12 px-5 py-3 text-left">
+                                        <input type="checkbox" :checked="allSelected" @change="toggleAll($event.target.checked)" aria-label="Pilih semua permintaan"
+                                            class="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500">
+                                    </th>
                                 @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="{{ $isHistory ? 7 : 8 }}" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-6">
-                                {{ $isHistory ? 'Belum ada permintaan umum yang digabungkan.' : 'Belum ada permintaan umum.' }}
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-        @if ($requests->hasPages())
-            <div class="border-t border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
-                {{ $requests->links() }}
+                                @foreach (['Permintaan', 'Peminta', 'Barang yang Diminta', 'Tanggal', 'Status', $view === 'histori' ? 'Digabung ke' : 'Aksi'] as $heading)
+                                    <th class="px-5 py-3 text-left">
+                                        <p class="text-theme-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">{{ $heading }}</p>
+                                    </th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                            @foreach ($requests as $request)
+                                <tr class="align-top transition hover:bg-gray-50/60 dark:hover:bg-white/[0.02]"
+                                    @if ($bisaGabung) :class="selectedRequests.includes('{{ $request->request_id }}') ? 'bg-brand-50/60 dark:bg-brand-500/5' : ''" @endif>
+                                    @if ($bisaGabung)
+                                        <td class="px-5 py-4">
+                                            <input type="checkbox" value="{{ $request->request_id }}" x-model="selectedRequests" aria-label="Pilih {{ $request->request_number }}"
+                                                class="size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500">
+                                        </td>
+                                    @endif
+                                    <td class="px-5 py-4">
+                                        <a href="{{ route('request.show', $request) }}" class="text-theme-sm font-semibold text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-400">
+                                            {{ $request->request_number }}
+                                        </a>
+                                        <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">{{ $request->item->count() }} jenis barang</p>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <div class="flex items-center gap-3">
+                                            @if ($request->user)
+                                                <x-ui.user-avatar :user="$request->user" class="size-9 text-xs" />
+                                            @endif
+                                            <div class="min-w-0">
+                                                <p class="text-theme-sm truncate font-medium text-gray-800 dark:text-white/90">{{ $request->user?->fullname ?? '-' }}</p>
+                                                <p class="text-theme-xs truncate text-gray-500 dark:text-gray-400">{{ $request->user?->unit?->label() ?? '-' }}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <ul class="flex max-w-[22rem] flex-wrap gap-1.5">
+                                            @foreach ($request->item->take(3) as $detail)
+                                                <li class="text-theme-xs inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2 py-1 text-gray-700 dark:bg-white/5 dark:text-gray-300">
+                                                    <span class="max-w-[10rem] truncate">{{ $detail->item?->item_name ?? '-' }}</span>
+                                                    <span class="font-semibold text-brand-600 dark:text-brand-400">{{ $detail->quantity_requested }}</span>
+                                                </li>
+                                            @endforeach
+                                            @if ($request->item->count() > 3)
+                                                <li class="text-theme-xs px-1 py-1 text-gray-500 dark:text-gray-400">+{{ $request->item->count() - 3 }} lainnya</li>
+                                            @endif
+                                        </ul>
+                                    </td>
+                                    <td class="px-5 py-4 whitespace-nowrap">
+                                        <p class="text-theme-sm text-gray-600 dark:text-gray-300">{{ $request->date?->translatedFormat('d M Y') ?? '-' }}</p>
+                                        <p class="text-theme-xs text-gray-400">{{ $request->created_at?->format('H:i') }}</p>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        <span class="text-theme-xs inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium whitespace-nowrap {{ $statusBadge[$request->status] ?? $statusBadge['submitted'] }}">
+                                            <span class="size-1.5 rounded-full bg-current"></span>
+                                            {{ $request->statusLabel() }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-4">
+                                        @if ($view === 'histori')
+                                            @if ($request->mergedInto)
+                                                <a href="{{ route('request.show', $request->mergedInto) }}" class="text-theme-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+                                                    {{ $request->mergedInto->request_number }}
+                                                </a>
+                                                <p class="text-theme-xs mt-0.5 text-gray-400">{{ $request->updated_at?->translatedFormat('d M Y H:i') }}</p>
+                                            @else
+                                                <span class="text-theme-sm text-gray-400">Permintaan hasil gabungan sudah dihapus</span>
+                                            @endif
+                                        @elseif ($canManage && $request->status === 'submitted')
+                                            <div class="flex flex-wrap gap-2">
+                                                <a href="{{ route('request.umum.edit', $request) }}"
+                                                    class="{{ $tombolGaris }} text-warning-600 ring-warning-200 hover:bg-warning-50 dark:text-warning-500 dark:ring-warning-500/30 dark:hover:bg-warning-500/10">
+                                                    Ubah
+                                                </a>
+                                                <button type="button" @click="openRejectModal('{{ $request->request_id }}', @js($request->request_number))"
+                                                    class="{{ $tombolGaris }} text-error-600 ring-error-200 hover:bg-error-50 dark:text-error-500 dark:ring-error-500/30 dark:hover:bg-error-500/10">
+                                                    Tolak
+                                                </button>
+                                            </div>
+                                        @else
+                                            <a href="{{ route('request.show', $request) }}"
+                                                class="{{ $tombolGaris }} text-gray-700 ring-gray-300 hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                                Detail
+                                            </a>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                {{-- Layar sempit: kartu ringkas. --}}
+                <ul class="divide-y divide-gray-100 lg:hidden dark:divide-gray-800">
+                    @foreach ($requests as $request)
+                        <li class="flex items-start gap-3 px-5 py-4">
+                            @if ($bisaGabung)
+                                <input type="checkbox" value="{{ $request->request_id }}" x-model="selectedRequests" aria-label="Pilih {{ $request->request_number }}"
+                                    class="mt-1 size-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500">
+                            @endif
+                            <a href="{{ route('request.show', $request) }}" class="min-w-0 flex-1">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="text-theme-sm font-semibold text-gray-800 dark:text-white/90">{{ $request->request_number }}</p>
+                                        <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                                            {{ $request->user?->fullname ?? '-' }} · {{ $request->date?->translatedFormat('d M Y') ?? '-' }}
+                                        </p>
+                                    </div>
+                                    <span class="text-theme-xs inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-medium {{ $statusBadge[$request->status] ?? $statusBadge['submitted'] }}">
+                                        <span class="size-1.5 rounded-full bg-current"></span>
+                                        {{ $request->statusLabel() }}
+                                    </span>
+                                </div>
+                                <p class="text-theme-sm mt-2 truncate text-gray-700 dark:text-gray-300">{{ $request->ringkasanBarang() }}</p>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+
+                {{ $requests->links('vendor.pagination.tailadmin') }}
+            @endif
+        </form>
+
+        <x-ui.modal @open-merge-modal.window="open = true" :isOpen="false" class="max-w-[520px]">
+            <div class="p-6 sm:p-8">
+                <p class="text-sm font-medium text-brand-600">Gabungkan permintaan umum</p>
+                <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">
+                    Gabungkan <span x-text="selectedRequests.length"></span> permintaan terpilih?
+                </h3>
+                <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                    Barang yang sama akan dijumlahkan menjadi satu permintaan darurat. Permintaan asal pindah ke tab Digabung, dan pemohonnya diberi tahu.
+                </p>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>
+                    <button type="submit" form="merge-form" @click="open = false" class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600">Ya, Gabungkan</button>
+                </div>
             </div>
+        </x-ui.modal>
+
+        @if ($canManage)
+            <x-ui.modal @open-reject-modal.window="open = true" :isOpen="$errors->has('note')" class="max-w-[520px]">
+                <div class="p-6 sm:p-8">
+                    <p class="text-sm font-medium text-error-500">Tolak permintaan umum</p>
+                    <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Tolak permintaan ini?</h3>
+                    <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                        Permintaan <span class="font-medium text-gray-700 dark:text-gray-200" x-text="rejectRequestNumber"></span> pindah ke tab Ditolak, dan alasannya dikirim ke pemohon.
+                    </p>
+                    <form method="POST" :action="`/permintaan-umum/${rejectRequestId}/reject`" class="mt-5">
+                        @csrf
+                        <input type="hidden" name="reject_request_id" :value="rejectRequestId">
+                        <input type="hidden" name="reject_request_number" :value="rejectRequestNumber">
+                        <label for="reject_note" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Alasan penolakan<span class="text-error-500">*</span>
+                        </label>
+                        <textarea id="reject_note" name="note" rows="3" required maxlength="500" placeholder="mis. barang serupa sudah diserahkan minggu lalu"
+                            class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('note') }}</textarea>
+                        @error('note')
+                            <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                        @enderror
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>
+                            <button type="submit" class="rounded-lg bg-error-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-error-600">Ya, Tolak</button>
+                        </div>
+                    </form>
+                </div>
+            </x-ui.modal>
         @endif
-    </form>
-
-    <x-ui.modal x-data="{ open: false }" @open-merge-modal.window="open = true" :isOpen="false" class="max-w-[520px]">
-        <div class="p-6 sm:p-8">
-            <p class="text-sm font-medium text-brand-600">Konfirmasi penerimaan</p>
-            <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Gabungkan permintaan terpilih?</h3>
-            <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">Barang yang sama akan dijumlahkan. Permintaan umum asal akan dipindahkan ke Histori dan sistem membuat satu permintaan emergency berstatus submitted.</p>
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>
-                <button type="submit" form="merge-form" @click="open = false" class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600">Ya, Gabungkan</button>
-            </div>
-        </div>
-    </x-ui.modal>
-
-    <x-ui.modal x-data="{ open: false }" @open-reject-modal.window="open = true" :isOpen="false" class="max-w-[520px]">
-        <div class="p-6 sm:p-8">
-            <p class="text-sm font-medium text-error-500">Konfirmasi penolakan</p>
-            <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Tolak permintaan ini?</h3>
-            <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">Permintaan <span class="font-medium text-gray-700 dark:text-gray-200" x-text="rejectRequestNumber"></span> akan tetap tampil sebagai riwayat dengan status Ditolak.</p>
-            <form method="POST" :action="`/permintaan-umum/${rejectRequestId}/reject`" class="mt-6 flex justify-end gap-3">
-                @csrf
-                <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>
-                <button type="submit" class="rounded-lg bg-error-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-error-600">Ya, Tolak</button>
-            </form>
-        </div>
-    </x-ui.modal>
     </div>
 
     <script>
         function umumRequestsPage() {
+            const selectable = @json($selectableIds);
+
             return {
                 selectedRequests: [],
-                rejectRequestId: '',
-                rejectRequestNumber: '',
+                rejectRequestId: @js((string) old('reject_request_id', '')),
+                rejectRequestNumber: @js((string) old('reject_request_number', '')),
+                get allSelected() {
+                    return selectable.length > 0 && selectable.every(id => this.selectedRequests.includes(id));
+                },
+                toggleAll(checked) {
+                    this.selectedRequests = checked ? [...selectable] : [];
+                },
                 openMergeModal() {
                     if (this.selectedRequests.length > 0) {
                         this.$dispatch('open-merge-modal');

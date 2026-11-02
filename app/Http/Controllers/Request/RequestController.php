@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Request;
 
 use App\Http\Controllers\Controller;
 use App\Enums\UserRole;
-use App\Enums\SatuanBarang;
 use App\Enums\UnitKerja;
 use App\Enums\ItemProposalStatus;
+use App\Enums\RequestHistoryAction;
 use App\Http\Requests\Request\StorePermintaanBarangRequest;
 use App\Http\Requests\Request\StorePermintaanUmumRequest;
 use App\Http\Requests\Request\UpdatePermintaanBarangRequest;
@@ -17,12 +17,11 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Models\Item;
-use App\Models\ItemProposal;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
+use App\Models\RequestHistory;
 use App\Models\RequestDocument;
 use App\Models\User;
-use App\Services\RequestProcurementService;
 use App\Services\RequestWorkflowService;
 use App\Support\AuditLogger;
 use App\Enums\AuditEvent;
@@ -30,17 +29,31 @@ use App\Enums\AuditModule;
 use App\Exceptions\InsufficientStockException;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
+use App\Support\StockReservation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class RequestController extends Controller
 {
+    /**
+     * Tab pada daftar permintaan: kelompok status sebagaimana dibaca pemohon.
+     * Filter `status` tunggal tetap ada untuk tautan dari dasbor.
+     */
+    private const TAHAP_DAFTAR = [
+        'berjalan' => ['label' => 'Berjalan', 'status' => ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance']],
+        'diserahkan' => ['label' => 'Diserahkan', 'status' => ['delivered']],
+        'selesai' => ['label' => 'Selesai', 'status' => ['completed']],
+        'ditolak' => ['label' => 'Ditolak', 'status' => ['rejected']],
+    ];
+
     public function index(Request $request)
     {
         $keyword = trim((string) $request->query('q', ''));
         $type = (string) $request->query('type', '');
         $status = (string) $request->query('status', '');
+        $tahap = (string) $request->query('tahap', '');
+        $tahap = array_key_exists($tahap, self::TAHAP_DAFTAR) ? $tahap : '';
         $dateFrom = (string) $request->query('date_from', '');
         $dateTo = (string) $request->query('date_to', '');
 
@@ -50,41 +63,56 @@ class RequestController extends Controller
         $isKasubbag = $request->user()->hasRole(UserRole::KasubbagUmumTi);
         $isUser = $request->user()->hasRole(UserRole::Pengguna);
 
-        $requests = ModelsRequest::with(['user', 'item.itemProposal'])
+        // Seluruh penyaring kecuali tab dan status, supaya angka di tiap tab
+        // menghitung isi tab itu dengan penyaring yang sedang aktif.
+        $filtered = fn () => ModelsRequest::query()
+            ->where('type', '!=', 'umum')
+            ->terlihatOleh($request->user())
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($query) use ($keyword) {
                     $query->where('request_number', 'like', "%{$keyword}%")
+                        ->orWhere('nd_number', 'like', "%{$keyword}%")
                         ->orWhereHas('user', fn ($userQuery) => $userQuery->where('fullname', 'like', "%{$keyword}%"));
                 });
             })
             ->when($type !== '', fn ($query) => $query->where('type', $type))
-            ->where('type', '!=', 'umum')
-            ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->when($dateFrom !== '', fn ($query) => $query->whereDate('date', '>=', $dateFrom))
-            ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo))
-            ->terlihatOleh($request->user())
+            ->when($dateTo !== '', fn ($query) => $query->whereDate('date', '<=', $dateTo));
+
+        $jumlahStatus = $filtered()
+            ->selectRaw('status, count(*) as jumlah')
+            ->groupBy('status')
+            ->pluck('jumlah', 'status');
+        $tabs = ['' => ['label' => 'Semua', 'jumlah' => (int) $jumlahStatus->sum()]]
+            + array_map(fn (array $tab) => [
+                'label' => $tab['label'],
+                'jumlah' => (int) $jumlahStatus->only($tab['status'])->sum(),
+            ], self::TAHAP_DAFTAR);
+
+        $requests = $filtered()
+            ->with(['user', 'item'])
+            ->when($tahap !== '', fn ($query) => $query->whereIn('status', self::TAHAP_DAFTAR[$tahap]['status']))
+            ->when($status !== '', fn ($query) => $query->where('status', $status))
             ->latest('date')
             ->latest('created_at')
             ->paginate(15)
             ->withQueryString();
 
+        $visible = fn () => ModelsRequest::where('type', '!=', 'umum')->terlihatOleh($request->user());
         $summary = [
-            'pending' => ModelsRequest::where('type', '!=', 'umum')->terlihatOleh($request->user())->whereIn('status', [
-                'submitted',
-                'approved_by_head',
-                'processed_by_staff',
-                'in_issuance'
-            ])->count(),
-            'bulan_ini' => ModelsRequest::where('type', '!=', 'umum')->terlihatOleh($request->user())->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])->count(),
-            'selesai_bulan_ini' => ModelsRequest::where('type', '!=', 'umum')->terlihatOleh($request->user())->whereIn('status', ['completed'])
+            'pending' => $visible()->whereIn('status', [...self::TAHAP_DAFTAR['berjalan']['status'], 'delivered'])->count(),
+            'bulan_ini' => $visible()->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])->count(),
+            'selesai_bulan_ini' => $visible()->where('status', 'completed')
                 ->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()])
                 ->count(),
         ];
 
         return view('pages.request.index', [
-            'title' => 'Request',
+            'title' => 'Permintaan Barang',
             'requests' => $requests,
             'summary' => $summary,
+            'tabs' => $tabs,
+            'tahap' => $tahap,
             'keyword' => $keyword,
             'type' => $type,
             'status' => $status,
@@ -97,23 +125,53 @@ class RequestController extends Controller
             'isUser' => $isUser,
         ]);
     }
+
     public function create(Request $request)
     {
-        $items = Item::where('is_active', true)->get();
+        // Formulir menampilkan dan membatasi jumlah dengan stok tersedia,
+        // yaitu stok fisik dikurangi yang ditahan permintaan lain.
+        $items = Item::where('is_active', true)->orderBy('item_name')->get();
+        $reserved = StockReservation::reservedFor($items->pluck('item_id')->all());
+        $items = $items->map(fn (Item $item) => [
+            'item_id' => $item->item_id,
+            'item_code' => $item->item_code,
+            'item_name' => $item->item_name,
+            'unit' => $item->unit?->value,
+            'stock_current' => (int) $item->stock_current,
+            'reserved' => $reserved->get($item->item_id, 0),
+            'available' => max(0, (int) $item->stock_current - $reserved->get($item->item_id, 0)),
+        ]);
         $canCreateEmergency = $request->user()->hasRole(UserRole::Admin, UserRole::KasubbagUmumTi, UserRole::PengelolaGudang);
         $users = $canCreateEmergency
             ? User::query()->where('is_active', true)->orderBy('fullname')->get(['user_id', 'fullname', 'username', 'unit'])
-                // Formulir menampilkan dan mencari unit lewat labelnya.
-                ->map(fn (User $user) => [...$user->only(['user_id', 'fullname', 'username']), 'unit' => $user->unit?->label()])
+                // Formulir menampilkan dan mencari unit lewat labelnya. Nomor
+                // Nota Dinas permintaan darurat mengikuti unit peminta.
+                ->map(fn (User $user) => [
+                    ...$user->only(['user_id', 'fullname', 'username']),
+                    'unit' => $user->unit?->label(),
+                    'nd_template' => $this->notaDinasTemplate($user),
+                ])
             : collect();
 
         return view('pages.request.create', [
             'title' => 'Request',
             'items' => $items,
-            'satuan' => SatuanBarang::options(),
             'users' => $users,
             'canCreateEmergency' => $canCreateEmergency,
+            'ndTemplate' => $this->notaDinasTemplate($request->user()),
         ]);
+    }
+
+    /**
+     * Pola nomor Nota Dinas untuk pratinjau di formulir; `__SEQ__` diganti
+     * nomor urut yang diketik. Formatnya tetap satu sumber di
+     * ModelsRequest::documentNumber().
+     */
+    private function notaDinasTemplate(User $user): string
+    {
+        return (new ModelsRequest(['date' => now()]))
+            ->setRelation('user', $user)
+            ->documentNumber('ND', '__SEQ__');
     }
 
     public function createUmum(Request $request)
@@ -129,11 +187,11 @@ class RequestController extends Controller
     public function storeUmum(StorePermintaanUmumRequest $request)
     {
         $validatedData = $request->validated();
-        $userId = $request->user()->user_id;
+        $actor = $request->user();
 
-        DB::transaction(function () use ($validatedData, $userId) {
+        $itemRequest = DB::transaction(function () use ($validatedData, $actor) {
             $itemRequest = ModelsRequest::create([
-                'user_id' => $userId,
+                'user_id' => $actor->user_id,
                 'date' => now(),
                 'type' => 'umum',
                 'status' => 'submitted',
@@ -146,26 +204,52 @@ class RequestController extends Controller
                     'request_id' => $itemRequest->request_id,
                     'item_id' => $item['item_id'],
                     'quantity_requested' => $item['qty'],
-                    'quantity_approved' => 0,
+                    'quantity_approved' => null,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ],
                 $validatedData['items'],
             ));
+
+            RequestHistory::catat($itemRequest, $actor, RequestHistoryAction::Diajukan, null, 'submitted');
+
+            return $itemRequest;
         });
 
-        return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil dibuat.');
+        NotificationScanner::periksaPermintaan($itemRequest->fresh('user'));
+
+        return redirect()->route('request.umum.index')->with('status', 'Permintaan umum berhasil dibuat.');
     }
 
+    /**
+     * Gudang dan Admin melihat seluruh permintaan umum beserta aksinya;
+     * pemohon dari Subbagian Umum dan TI hanya melihat miliknya, baca-saja.
+     */
     public function umumIndex(Request $request)
     {
-        abort_unless($request->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang), 403);
+        $user = $request->user();
+        $canManage = $user->hasRole(UserRole::Admin, UserRole::PengelolaGudang);
+        abort_unless($canManage || $user->unit === UnitKerja::SubbagianUmumTi, 403);
 
-        $isHistory = $request->query('view') === 'histori';
+        // Tab: antrean yang menunggu, yang ditolak, dan histori yang digabung.
+        $tabStatus = ['' => 'submitted', 'ditolak' => 'rejected', 'histori' => 'merged'];
+        $view = (string) $request->query('view', '');
+        $view = array_key_exists($view, $tabStatus) ? $view : '';
 
-        $requests = ModelsRequest::with(['user', 'item.item', 'mergedInto'])
+        $visible = fn () => ModelsRequest::query()
             ->where('type', 'umum')
-            ->where('status', $isHistory ? '=' : '!=', 'merged')
+            ->when(! $canManage, fn ($query) => $query->where('user_id', $user->user_id));
+
+        $jumlahStatus = $visible()->selectRaw('status, count(*) as jumlah')->groupBy('status')->pluck('jumlah', 'status');
+        $tabs = [
+            '' => ['label' => 'Menunggu', 'jumlah' => (int) ($jumlahStatus['submitted'] ?? 0)],
+            'ditolak' => ['label' => 'Ditolak', 'jumlah' => (int) ($jumlahStatus['rejected'] ?? 0)],
+            'histori' => ['label' => 'Digabung', 'jumlah' => (int) ($jumlahStatus['merged'] ?? 0)],
+        ];
+
+        $requests = $visible()
+            ->with(['user', 'item.item', 'mergedInto'])
+            ->where('status', $tabStatus[$view])
             ->latest('date')
             ->latest('created_at')
             ->paginate(15)
@@ -174,7 +258,10 @@ class RequestController extends Controller
         return view('pages.request.umum.index', [
             'title' => 'Permintaan Umum',
             'requests' => $requests,
-            'isHistory' => $isHistory,
+            'view' => $view,
+            'tabs' => $tabs,
+            'isHistory' => $view === 'histori',
+            'canManage' => $canManage,
         ]);
     }
 
@@ -199,8 +286,10 @@ class RequestController extends Controller
     {
         $validatedData = $httpRequest->validated();
 
-        DB::transaction(function () use ($validatedData, $request): void {
+        DB::transaction(function () use ($validatedData, $request, $httpRequest): void {
             abort_unless($request->fresh()->status === 'submitted', 409);
+
+            $changes = $httpRequest->changes();
 
             $details = collect($validatedData['items'])
                 ->filter(fn (array $item): bool => (int) $item['qty'] > 0)
@@ -208,7 +297,7 @@ class RequestController extends Controller
                     'request_id' => $request->request_id,
                     'item_id' => $item['item_id'],
                     'quantity_requested' => $item['qty'],
-                    'quantity_approved' => 0,
+                    'quantity_approved' => null,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ])
@@ -219,17 +308,39 @@ class RequestController extends Controller
             if ($details !== []) {
                 RequestDetail::insert($details);
             }
+
+            if ($changes !== []) {
+                RequestHistory::catat(
+                    $request,
+                    $httpRequest->user(),
+                    RequestHistoryAction::KuantitasDiubah,
+                    'submitted',
+                    'submitted',
+                    $validatedData['adjustment_note'] ?? null,
+                    $changes,
+                );
+            }
         });
 
         return redirect()->route('request.umum.index')->with('status', 'Permintaan umum berhasil diperbarui.');
     }
 
-    public function rejectUmum(ModelsRequest $request)
+    public function rejectUmum(Request $httpRequest, ModelsRequest $request)
     {
-        abort_unless(auth()->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang), 403);
+        abort_unless($httpRequest->user()->hasRole(UserRole::Admin, UserRole::PengelolaGudang), 403);
         abort_unless($request->type === 'umum' && $request->status === 'submitted', 409);
 
-        $request->update(['status' => 'rejected']);
+        $note = trim((string) $httpRequest->validate(
+            ['note' => ['required', 'string', 'max:500'], 'reject_request_id' => ['nullable']],
+            ['note.required' => 'Alasan penolakan wajib diisi supaya pemohon tahu mengapa permintaannya ditolak.'],
+        )['note']);
+
+        DB::transaction(function () use ($request, $httpRequest, $note): void {
+            $request->update(['status' => 'rejected']);
+            RequestHistory::catat($request, $httpRequest->user(), RequestHistoryAction::Ditolak, 'submitted', 'rejected', $note);
+        });
+
+        NotificationScanner::periksaPermintaan($request->fresh('user'));
 
         return redirect()->route('request.umum.index')->with('status', 'Permintaan umum ditolak.');
     }
@@ -241,7 +352,9 @@ class RequestController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
-        $mergedRequest = DB::transaction(function () use ($requestIds, $kasubbag): ModelsRequest {
+        $actor = $httpRequest->user();
+
+        $mergedRequest = DB::transaction(function () use ($requestIds, $kasubbag, $actor): ModelsRequest {
             $requests = ModelsRequest::whereIn('request_id', $requestIds)
                 ->where('type', 'umum')
                 ->where('status', 'submitted')
@@ -271,7 +384,7 @@ class RequestController extends Controller
                 'request_id' => $mergedRequest->request_id,
                 'item_id' => $itemId,
                 'quantity_requested' => $quantity,
-                'quantity_approved' => 0,
+                'quantity_approved' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->values()->all());
@@ -281,10 +394,36 @@ class RequestController extends Controller
                 'merged_into_request_id' => $mergedRequest->request_id,
             ]);
 
+            RequestHistory::catat(
+                $mergedRequest,
+                $actor,
+                RequestHistoryAction::Diajukan,
+                null,
+                'submitted',
+                'Gabungan dari permintaan umum: '.$requests->pluck('request_number')->implode(', ').'.',
+            );
+
+            foreach ($requests as $original) {
+                RequestHistory::catat(
+                    $original,
+                    $actor,
+                    RequestHistoryAction::Digabung,
+                    'submitted',
+                    'merged',
+                    "Digabung ke permintaan darurat {$mergedRequest->request_number}.",
+                );
+            }
+
             return $mergedRequest;
         });
 
         app(RequestDocumentGenerator::class)->generateNotaDinas($mergedRequest->fresh(['user', 'item.itemProposal']));
+
+        ModelsRequest::with('user')
+            ->where('merged_into_request_id', $mergedRequest->request_id)
+            ->get()
+            ->push($mergedRequest->fresh('user'))
+            ->each(fn (ModelsRequest $request) => NotificationScanner::periksaPermintaan($request));
 
         return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil digabung menjadi permintaan darurat.');
     }
@@ -319,7 +458,7 @@ class RequestController extends Controller
     public function show(ModelsRequest $request, Request $httpRequest)
     {
         $viewer = $httpRequest->user();
-        $request->load(['user', 'item']);
+        $request->load(['user', 'item', 'histories.user']);
         $notaDinas = $request->requestDocuments()
             ->where('document_type', 'nota_dinas')
             ->latest('created_at')
@@ -421,11 +560,20 @@ class RequestController extends Controller
         ]);
     }
 
-    public function store(StorePermintaanBarangRequest $request, RequestProcurementService $requestProcurementService)
+    /**
+     * Permintaan hanya untuk barang terdaftar yang stoknya cukup (dijaga di
+     * StorePermintaanBarangRequest). Kekurangan stok dan barang yang belum
+     * terdaftar dimohonkan lewat menu Permohonan, tidak lagi dihitung otomatis
+     * dari permintaan.
+     *
+     * Nomor Nota Dinas dan BAST ditetapkan di sini dari nomor urut yang diisi
+     * pemohon, sehingga Nota Dinas sudah bernomor sejak pertama dicetak.
+     */
+    public function store(StorePermintaanBarangRequest $request, RequestWorkflowService $workflow)
     {
         $validatedData = $request->validated();
-        
-        $itemRequest = DB::transaction(function () use ($request, $validatedData, $requestProcurementService) {
+
+        $itemRequest = DB::transaction(function () use ($request, $validatedData, $workflow) {
             $isEmergency = (bool) ($validatedData['emergency'] ?? false);
 
             $itemRequest = ModelsRequest::create([
@@ -438,37 +586,27 @@ class RequestController extends Controller
                 'request_number' => 'REQ-' . time(),
             ]);
 
-            // dd($validatedData['items']);
+            // Nomor yang sudah dipakai menggagalkan seluruh transaksi dengan
+            // galat validasi pada kolom nomor urut.
+            $workflow->assignNotaDinasNumber($itemRequest, $validatedData['nd_sequence']);
 
-            foreach ($validatedData['items'] as $item) {
-                $proposal = ($item['source'] ?? 'item') === 'proposal'
-                    ? ItemProposal::create([
-                        'item_name' => $item['item_name'],
-                        'unit' => $item['unit'],
-                        'purpose_note' => $item['purpose_note'],
-                        'proposed_by' => $request->user()->user_id,
-                        'status' => 'diajukan',
-                    ])
-                    : null;
-
-
-                RequestDetail::query()->insert([
+            $now = now();
+            RequestDetail::insert(array_map(
+                fn (array $item) => [
                     'request_id' => $itemRequest->request_id,
-                    'item_id' => $proposal === null ? $item['item_id'] : null,
-                    'item_proposal_id' => $proposal?->item_proposal_id,
+                    'item_id' => $item['item_id'],
                     'quantity_requested' => $item['qty'],
-                    'quantity_approved' => 0,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+                    'quantity_approved' => null,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+                $validatedData['items'],
+            ));
 
-            $procurementRequest = $requestProcurementService->createForShortage($itemRequest);
+            RequestHistory::catat($itemRequest, $request->user(), RequestHistoryAction::Diajukan, null, 'submitted');
 
-            return [$itemRequest, $procurementRequest];
+            return $itemRequest;
         });
-
-        [$itemRequest, $procurementDraft] = $itemRequest;
 
         if ($itemRequest->type !== 'umum') {
             app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
@@ -482,12 +620,6 @@ class RequestController extends Controller
             subject: $itemRequest,
         );
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
-        $itemRequest->item()
-            ->with('itemProposal')
-            ->get()
-            ->pluck('itemProposal')
-            ->filter()
-            ->each(fn (ItemProposal $proposal) => NotificationScanner::periksaUsulanBarang($proposal->fresh('proposedBy')));
 
         return redirect()->route('request.index')->with('status', 'Permintaan barang berhasil dibuat.');
     }
@@ -512,7 +644,7 @@ class RequestController extends Controller
 
         $validatedData = $httpRequest->validated();
 
-        $error = DB::transaction(function () use ($request, $validatedData, $workflow): ?string {
+        $error = DB::transaction(function () use ($request, $validatedData, $workflow, $httpRequest): ?string {
             $submittedItems = collect($validatedData['items'])
                 ->keyBy('item_id');
             $existingDetails = $request->item()->get()->keyBy('item_id');
@@ -522,6 +654,8 @@ class RequestController extends Controller
                 return 'Barang yang tidak ada dalam permintaan tidak dapat ditambahkan.';
             }
 
+            $changes = [];
+
             foreach ($existingDetails as $itemId => $detail) {
                 $approved = (int) ($submittedItems->get($itemId)['qty'] ?? 0);
                 $item = Item::query()->lockForUpdate()->findOrFail($itemId);
@@ -530,16 +664,54 @@ class RequestController extends Controller
                     return 'Jumlah disetujui tidak boleh melebihi jumlah yang diminta.';
                 }
 
-                if ($approved > (int) $item->stock_current) {
-                    return "Jumlah disetujui untuk {$item->item_name} tidak boleh melebihi stok gudang.";
+                // Stok tersedia, bukan stok fisik: permintaan lain yang masih
+                // berjalan menahan jatahnya (StockReservation).
+                if ($approved > StockReservation::availableFor($item, $request->request_id)) {
+                    return "Jumlah disetujui untuk {$item->item_name} melebihi stok tersedia setelah dikurangi tahanan permintaan lain.";
+                }
+
+                if ($approved !== (int) $detail->quantity_requested) {
+                    $changes[] = [
+                        'item_name' => $item->item_name,
+                        'before' => (int) $detail->quantity_requested,
+                        'after' => $approved,
+                    ];
                 }
 
                 $detail->update(['quantity_approved' => $approved]);
             }
 
-            $workflow->assignNotaDinasNumber($request, $validatedData['nd_sequence']);
-            $request->update(['status' => 'processed_by_staff']);
-            app(RequestDocumentGenerator::class)->renumberNotaDinas($request);
+            // Nomor dari pemohon sudah tercetak sejak diajukan; Nota Dinas
+            // dicetak ulang hanya bila Pengelola Gudang membetulkannya, atau
+            // bila permintaan lama/gabungan belum bernomor.
+            $renumbers = $request->ndSequence() !== $validatedData['nd_sequence'];
+
+            if ($renumbers) {
+                $workflow->assignNotaDinasNumber($request, $validatedData['nd_sequence']);
+            }
+
+            // Permintaan darurat diselesaikan langsung dari tahap ini, jadi
+            // statusnya tetap; tombol Selesaikan lalu menyerahkan jumlah yang
+            // baru. Permintaan normal maju ke tahap berikutnya.
+            $isEmergency = $request->type === 'emergency';
+            $toStatus = $isEmergency ? 'approved_by_head' : 'processed_by_staff';
+            $request->update(['status' => $toStatus]);
+
+            if ($renumbers) {
+                app(RequestDocumentGenerator::class)->renumberNotaDinas($request);
+            }
+
+            if ($changes !== [] || ! $isEmergency) {
+                RequestHistory::catat(
+                    $request,
+                    $httpRequest->user(),
+                    $changes === [] ? RequestHistoryAction::Disetujui : RequestHistoryAction::KuantitasDiubah,
+                    'approved_by_head',
+                    $toStatus,
+                    $validatedData['adjustment_note'] ?? null,
+                    $changes,
+                );
+            }
 
             return null;
         });
@@ -548,13 +720,23 @@ class RequestController extends Controller
             return redirect()->back()->withInput()->with('error', $error);
         }
 
+        $note = $validatedData['adjustment_note'] ?? null;
+
         AuditLogger::record(
             user: $httpRequest->user(),
-            activity: "Mengubah permintaan barang: {$request->request_number} (status menjadi {$request->statusLabel()})",
+            activity: "Mengubah permintaan barang: {$request->request_number} (status menjadi {$request->statusLabel()})"
+                .($note !== null ? ". Alasan: {$note}" : ''),
             module: AuditModule::Permintaan,
             event: AuditEvent::Ubah,
             subject: $request,
         );
+        NotificationScanner::periksaPermintaan($request->fresh('user'));
+
+        if ($request->type === 'emergency') {
+            return redirect()
+                ->route('request.show', $request)
+                ->with('status', 'Kuantitas permintaan darurat diperbarui. Tekan Selesaikan untuk menyerahkan barang.');
+        }
 
         return redirect()
             ->route('request.index')
@@ -598,11 +780,20 @@ class RequestController extends Controller
         }
 
         try {
-            $workflow->respond($request, $user, $action, $httpRequest->input('nd_sequence'));
+            $workflow->respond(
+                $request,
+                $user,
+                $action,
+                $httpRequest->input('nd_sequence'),
+                $httpRequest->input('note'),
+            );
         } catch (AuthorizationException $exception) {
             return redirect()->back()->with('error', $exception->getMessage());
         } catch (ValidationException $exception) {
-            return redirect()->back()->with('error', $exception->validator->errors()->first());
+            return redirect()->back()
+                ->withInput()
+                ->withErrors($exception->errors())
+                ->with('error', $exception->validator->errors()->first());
         } catch (InsufficientStockException $exception) {
             return redirect()->back()->with(
                 'error',
@@ -611,11 +802,54 @@ class RequestController extends Controller
             );
         }
 
-        if ($action === 'reject') {
-            return redirect()->back()->with('status', 'Permintaan telah ditolak.');
+        $message = $action === 'reject' ? 'Permintaan telah ditolak.' : 'Permintaan berhasil diproses.';
+
+        // Kepala Unit menyetujui langsung dari antrean di dasbor.
+        if ($httpRequest->input('kembali') === 'dasbor') {
+            return redirect()->route('dashboard')->with('status', $message);
         }
 
-        return redirect()->route('request.index')->with('status', 'Permintaan berhasil diproses.');
+        if ($action === 'reject') {
+            return redirect()->back()->with('status', $message);
+        }
+
+        return redirect()->route('request.index')->with('status', $message);
+    }
+
+    /**
+     * Konfirmasi penerimaan, laporan masalah, tanggapan Gudang, dan penutupan
+     * atas nama pemohon. Siapa boleh melakukan apa diperiksa di
+     * RequestWorkflowService::receipt(), karena pemohon bisa berperan apa saja.
+     */
+    public function receipt(
+        ModelsRequest $request,
+        Request $httpRequest,
+        RequestWorkflowService $workflow,
+    )
+    {
+        $action = (string) $httpRequest->input('action');
+
+        if (! in_array($action, ['confirm', 'report', 'reply', 'close'], true)) {
+            return redirect()->back()->with('error', 'Aksi tidak valid.');
+        }
+
+        try {
+            $workflow->receipt($request, $httpRequest->user(), $action, $httpRequest->input('note'));
+        } catch (AuthorizationException $exception) {
+            return redirect()->back()->with('error', $exception->getMessage());
+        } catch (ValidationException $exception) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors($exception->errors())
+                ->with('error', $exception->validator->errors()->first());
+        }
+
+        return redirect()->route('request.show', $request)->with('status', match ($action) {
+            'confirm' => 'Terima kasih, penerimaan barang telah dikonfirmasi.',
+            'report' => 'Laporan masalah terkirim ke Pengelola Gudang.',
+            'reply' => 'Tanggapan terkirim ke pemohon.',
+            default => 'Permintaan ditutup atas nama pemohon.',
+        });
     }
 
     public function revertStatus(

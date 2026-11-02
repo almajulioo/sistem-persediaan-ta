@@ -3,6 +3,9 @@
 namespace App\Http\Requests\Request;
 
 use App\Enums\UserRole;
+use App\Models\Item;
+use App\Models\Request as ModelsRequest;
+use App\Support\StockReservation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -17,6 +20,10 @@ class StorePermintaanBarangRequest extends FormRequest
     }
 
     /**
+     * Hanya barang yang sudah terdaftar. Barang yang belum terdaftar diajukan
+     * lewat menu Permohonan. Nomor urut Nota Dinas diisi pemohon saat
+     * mengajukan; nomor lengkapnya disusun RequestWorkflowService.
+     *
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -24,12 +31,9 @@ class StorePermintaanBarangRequest extends FormRequest
         return [
             'emergency' => ['sometimes', 'boolean'],
             'requester_id' => ['nullable', 'uuid', Rule::exists('users', 'user_id')->where('is_active', true)],
+            'nd_sequence' => ['required', 'regex:'.ModelsRequest::ND_SEQUENCE_PATTERN],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.source' => ['required', Rule::in(['item', 'proposal'])],
-            'items.*.item_id' => ['nullable', 'string', 'required_if:items.*.source,item', Rule::exists('items', 'item_id')],
-            'items.*.item_name' => ['nullable', 'string', 'max:255', 'required_if:items.*.source,proposal'],
-            'items.*.unit' => ['nullable', Rule::enum(\App\Enums\SatuanBarang::class), 'required_if:items.*.source,proposal'],
-            'items.*.purpose_note' => ['nullable', 'string', 'max:500', 'required_if:items.*.source,proposal'],
+            'items.*.item_id' => ['required', 'string', Rule::exists('items', 'item_id')],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:999999'],
         ];
     }
@@ -38,43 +42,28 @@ class StorePermintaanBarangRequest extends FormRequest
     {
         $this->merge([
             'emergency' => $this->boolean('emergency'),
+            'nd_sequence' => trim((string) $this->input('nd_sequence')),
         ]);
 
         // Item ID adalah UUID; cukup rapikan whitespace tanpa mengubah casing.
+        // Barang yang sama digabung supaya pemeriksaan stok memakai totalnya.
         if ($this->has('items') && is_array($this->items)) {
             $mergedItems = [];
             foreach ($this->items as $item) {
-                if (($item['source'] ?? 'item') === 'item' && isset($item['item_id'])) {
-                    $item['item_id'] = trim((string) $item['item_id']);
+                if (! isset($item['item_id'], $item['qty'])) {
+                    continue;
                 }
-                if (isset($item['qty'])) {
-                    $item['qty'] = (int) $item['qty'];
-                }
-                if (($item['source'] ?? 'item') === 'item' && isset($item['item_id'], $item['qty'])) {
-                    $mergedItems[$item['item_id']] = ($mergedItems[$item['item_id']] ?? 0) + $item['qty'];
-                }
-            }
 
-            $formattedItems = array_map(
-                fn ($itemId, $qty) => ['source' => 'item', 'item_id' => $itemId, 'qty' => $qty],
-                array_keys($mergedItems),
-                array_values($mergedItems),
-            );
-
-            foreach ($this->input('items', []) as $item) {
-                if (($item['source'] ?? 'item') === 'proposal') {
-                    $formattedItems[] = [
-                        'source' => 'proposal',
-                        'item_name' => trim((string) ($item['item_name'] ?? '')),
-                        'unit' => $item['unit'] ?? null,
-                        'purpose_note' => trim((string) ($item['purpose_note'] ?? '')),
-                        'qty' => (int) ($item['qty'] ?? 0),
-                    ];
-                }
+                $itemId = trim((string) $item['item_id']);
+                $mergedItems[$itemId] = ($mergedItems[$itemId] ?? 0) + (int) $item['qty'];
             }
 
             $this->merge([
-                'items' => $formattedItems,
+                'items' => array_map(
+                    fn ($itemId, $qty) => ['item_id' => $itemId, 'qty' => $qty],
+                    array_keys($mergedItems),
+                    array_values($mergedItems),
+                ),
             ]);
         }
     }
@@ -82,6 +71,8 @@ class StorePermintaanBarangRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $this->validateStock($validator);
+
             if (! $this->boolean('emergency')) {
                 return;
             }
@@ -98,6 +89,56 @@ class StorePermintaanBarangRequest extends FormRequest
     }
 
     /**
+     * Permintaan tidak boleh melebihi stok tersedia: stok fisik dikurangi
+     * yang ditahan permintaan lain yang masih berjalan (StockReservation).
+     * Kekurangannya dimohonkan lewat menu Permohonan.
+     */
+    private function validateStock(Validator $validator): void
+    {
+        $items = $this->input('items', []);
+
+        if (! is_array($items) || $items === []) {
+            return;
+        }
+
+        $itemIds = array_column($items, 'item_id');
+        $stock = Item::query()
+            ->whereIn('item_id', $itemIds)
+            ->get(['item_id', 'item_name', 'stock_current'])
+            ->keyBy('item_id');
+        $reserved = StockReservation::reservedFor($itemIds, $this->excludedRequestId());
+
+        foreach ($items as $index => $item) {
+            $found = $stock->get($item['item_id']);
+
+            if ($found === null) {
+                continue;
+            }
+
+            $held = $reserved->get($found->item_id, 0);
+            $available = max(0, (int) $found->stock_current - $held);
+
+            if ((int) $item['qty'] > $available) {
+                $validator->errors()->add(
+                    "items.{$index}.qty",
+                    "Jumlah {$found->item_name} ({$item['qty']}) melebihi stok tersedia ({$available}). "
+                        .($held > 0 ? "{$held} ditahan permintaan lain yang masih berjalan. " : '')
+                        .'Untuk kekurangannya, ajukan permohonan tambah stok lewat menu Permohonan.',
+                );
+            }
+        }
+    }
+
+    /**
+     * Permintaan yang tahanannya tidak ikut dihitung. Saat mengajukan belum
+     * ada; saat Ubah Kuantitas, permintaan itu sendiri.
+     */
+    protected function excludedRequestId(): ?string
+    {
+        return null;
+    }
+
+    /**
      * @return array<string, string>
      */
     public function attributes(): array
@@ -105,6 +146,7 @@ class StorePermintaanBarangRequest extends FormRequest
         return [
             'emergency' => 'jenis permintaan',
             'requester_id' => 'peminta',
+            'nd_sequence' => 'nomor urut Nota Dinas',
             'items' => 'Daftar Barang',
             'items.*.item_id' => 'Kode Barang',
             'items.*.qty' => 'Jumlah Barang',
@@ -127,6 +169,8 @@ class StorePermintaanBarangRequest extends FormRequest
             'items.*.qty.min' => 'Jumlah barang minimal 1.',
             'requester_id.exists' => 'Peminta yang dipilih tidak ditemukan atau sudah nonaktif.',
             'requester_id.uuid' => 'Format peminta tidak valid.',
+            'nd_sequence.required' => 'Nomor urut Nota Dinas wajib diisi.',
+            'nd_sequence.regex' => 'Nomor urut Nota Dinas hanya berupa angka, paling banyak 6 digit.',
         ];
     }
 }

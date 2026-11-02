@@ -25,6 +25,7 @@ enum AuditModule: string
     case Penerimaan = 'penerimaan';
     case DokumenPengadaan = 'dokumen_pengadaan';
     case Permintaan = 'permintaan';
+    case Permohonan = 'permohonan';
 
     public function label(): string
     {
@@ -42,6 +43,7 @@ enum AuditModule: string
             self::Penerimaan => 'Penerimaan Barang',
             self::DokumenPengadaan => 'Dokumen Pengadaan',
             self::Permintaan => 'Permintaan Barang',
+            self::Permohonan => 'Permohonan Barang',
         };
     }
 
@@ -61,6 +63,7 @@ enum AuditModule: string
             self::Penerimaan => 'Konfirmasi penerimaan barang yang menambah stok.',
             self::DokumenPengadaan => 'Berkas pengadaan pada disk privat: unggah, unduh, dan hapus.',
             self::Permintaan => 'Permintaan barang oleh unit kerja. Disediakan untuk sub sistem Permintaan.',
+            self::Permohonan => 'Permohonan barang baru dan tambah stok oleh unit kerja, beserta keputusan Pengelola Gudang.',
         };
     }
 
@@ -77,7 +80,7 @@ enum AuditModule: string
             self::Pengguna, self::Profil => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
             self::Barang, self::UsulanBarang, self::Mutasi, self::Opname => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
             self::Penyedia, self::UsulanPengadaan, self::Pengadaan, self::Penerimaan, self::DokumenPengadaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
-            self::Permintaan => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
+            self::Permintaan, self::Permohonan => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
         };
     }
 

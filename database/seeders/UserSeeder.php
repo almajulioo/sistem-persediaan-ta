@@ -134,8 +134,7 @@ class UserSeeder extends Seeder
                 'unit' => UnitKerja::SubbagianUmumTi,
                 'role' => UserRole::Pengguna,
             ],
-
-
+            ...$this->penggunaPerUnit(),
         ];
 
         foreach ($accounts as $account) {
@@ -150,6 +149,42 @@ class UserSeeder extends Seeder
         }
 
         $this->reportCredentials($accounts, $password);
+    }
+
+    /**
+     * Tiga akun Pengguna untuk tiap bidang dan subbagian, bernama {kode}-1
+     * sampai {kode}-3 (mis. umumti-1), supaya permintaan bisa dicoba dari
+     * semua unit. Kepala Perwakilan dan Sekretariat Perwakilan tidak diberi.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function penggunaPerUnit(): array
+    {
+        $units = [
+            'bidrik1' => UnitKerja::BidangPemeriksaanLampungI,
+            'bidrik2' => UnitKerja::BidangPemeriksaanLampungII,
+            'humastu' => UnitKerja::SubbagianHumasTu,
+            'sdm' => UnitKerja::SubbagianSdm,
+            'keuangan' => UnitKerja::SubbagianKeuangan,
+            'umumti' => UnitKerja::SubbagianUmumTi,
+            'hukum' => UnitKerja::SubbagianHukum,
+        ];
+
+        $accounts = [];
+
+        foreach ($units as $kode => $unit) {
+            for ($i = 1; $i <= 3; $i++) {
+                $accounts[] = [
+                    'username' => "{$kode}-{$i}",
+                    'email' => "{$kode}-{$i}@bpk.go.id",
+                    'fullname' => "Pengguna {$unit->label()} {$i}",
+                    'unit' => $unit,
+                    'role' => UserRole::Pengguna,
+                ];
+            }
+        }
+
+        return $accounts;
     }
 
     /**

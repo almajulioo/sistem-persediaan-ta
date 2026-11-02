@@ -25,6 +25,14 @@ Artisan::command('inspire', function () {
 | waktu — periode opname jatuh tempo, draf menggantung, dan barang tidak
 | bergerak. Lihat App\Support\NotificationScanner.
 */
+// Permintaan yang tidak diputuskan Kepala Unit dalam batas waktunya dibatalkan
+// supaya stok yang ditahannya kembali tersedia. Dijalankan sebelum pemeriksaan
+// notifikasi, sehingga tagihan untuk permintaan yang dibatalkan ikut padam.
+Schedule::command('permintaan:kedaluwarsa')
+    ->dailyAt('05:55')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping();
+
 Schedule::command('notifikasi:periksa --bersihkan')
     ->dailyAt('06:00')
     ->timezone('Asia/Jakarta')

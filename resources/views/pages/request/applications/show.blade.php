@@ -1,0 +1,278 @@
+@extends('layouts.app')
+
+@php
+    $canDecide = $application->isDiajukan() && auth()->user()->can('kelola-permintaan');
+@endphp
+
+@section('content')
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">{{ $application->application_number }}</h2>
+            <nav class="mt-1">
+                <ol class="flex items-center gap-1.5 text-sm">
+                    <li>
+                        <a href="{{ route('item-applications.index') }}" class="text-gray-500 hover:text-brand-500 dark:text-gray-400">Daftar Permohonan</a>
+                    </li>
+                    <li class="text-gray-400">/</li>
+                    <li class="text-gray-800 dark:text-white/90">{{ $application->application_number }}</li>
+                </ol>
+            </nav>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $application->status->badgeClass() }}">
+                {{ $application->status->label() }}
+            </span>
+
+            @if ($canDecide)
+                <button type="button" x-data @click="$dispatch('buka-setujui-permohonan')"
+                    class="bg-success-500 hover:bg-success-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                    Setujui &amp; Teruskan
+                </button>
+                <button type="button" x-data @click="$dispatch('buka-tolak-permohonan')"
+                    class="text-error-500 hover:bg-error-50 ring-error-300 dark:ring-error-500/30 dark:hover:bg-error-500/10 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition">
+                    Tolak
+                </button>
+            @endif
+        </div>
+    </div>
+
+    <x-ui.flash />
+
+    <div class="grid grid-cols-12 gap-4 md:gap-6">
+
+        <div class="col-span-12 space-y-4 md:space-y-6 xl:col-span-5">
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+                <dl class="space-y-3">
+                    @foreach ([
+                        'Pemohon' => $application->user?->fullname ?? '—',
+                        'Unit Kerja' => $application->user?->unit?->label() ?? '—',
+                        'Tanggal' => $application->date?->translatedFormat('d F Y') ?? '—',
+                        'Rincian' => ucfirst($application->ringkasan()),
+                    ] as $label => $value)
+                        <div class="flex items-start justify-between gap-4">
+                            <dt class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                            <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">{{ $value }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
+
+                <div class="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+                    <p class="text-theme-sm text-gray-500 dark:text-gray-400">Keperluan</p>
+                    <p class="text-theme-sm mt-1 whitespace-pre-line text-gray-800 dark:text-white/90">{{ $application->purpose }}</p>
+                </div>
+            </div>
+
+            @unless ($application->isDiajukan())
+                <div @class([
+                    'rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6',
+                    'border-error-200 dark:border-error-500/30' => $application->isDitolak(),
+                    'border-gray-200 dark:border-gray-800' => ! $application->isDitolak(),
+                ])>
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">{{ $application->status->label() }}</h3>
+                    <dl class="mt-3 space-y-3">
+                        @foreach ([
+                            'Diputuskan Oleh' => $application->decidedBy?->fullname ?? '—',
+                            'Tanggal' => $application->decided_at?->translatedFormat('d F Y, H:i') ?? '—',
+                        ] as $label => $value)
+                            <div class="flex items-start justify-between gap-4">
+                                <dt class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $label }}</dt>
+                                <dd class="text-theme-sm text-right font-medium text-gray-800 dark:text-white/90">{{ $value }}</dd>
+                            </div>
+                        @endforeach
+                    </dl>
+                    @if ($application->decision_note)
+                        <p class="text-theme-xs mt-4 border-t border-gray-100 pt-4 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                            {{ $application->decision_note }}
+                        </p>
+                    @endif
+                </div>
+            @endunless
+        </div>
+
+        <div class="col-span-12 xl:col-span-7">
+            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+                <div class="border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+                    <h3 class="text-base font-semibold text-gray-800 dark:text-white/90">Barang yang Dimohon</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full min-w-[640px]">
+                        <thead>
+                            <tr class="border-b border-gray-100 dark:border-gray-800">
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Barang</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Jumlah</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Tindak Lanjut</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($application->details as $detail)
+                                <tr class="border-b border-gray-100 align-top last:border-0 dark:border-gray-800">
+                                    <td class="px-6 py-4">
+                                        <span class="text-theme-xs mb-1 inline-block rounded-full px-2 py-0.5 font-medium {{ $detail->type->badgeClass() }}">
+                                            {{ $detail->type->label() }}
+                                        </span>
+                                        <p class="text-sm font-medium text-gray-800 dark:text-white/90">
+                                            @if ($detail->item)
+                                                {{ $detail->item->item_code }} — {{ $detail->item->item_name }}
+                                            @else
+                                                {{ $detail->namaBarang() }}
+                                            @endif
+                                        </p>
+                                        @if ($detail->isTambahStok() && $detail->item)
+                                            <p class="text-theme-xs text-gray-500 dark:text-gray-400">Stok saat ini: {{ number_format($detail->item->stock_current, 0, ',', '.') }}</p>
+                                        @endif
+                                        @if ($detail->note)
+                                            <p class="text-theme-xs mt-1 whitespace-pre-line text-gray-500 dark:text-gray-400">{{ $detail->note }}</p>
+                                        @endif
+                                    </td>
+                                    <td class="px-6 py-4 text-right text-sm text-gray-700 dark:text-gray-300">
+                                        {{ number_format($detail->quantity, 0, ',', '.') }} {{ $detail->satuan()?->label() }}
+                                    </td>
+                                    <td class="text-theme-sm px-6 py-4 text-gray-600 dark:text-gray-300">
+                                        @if (! $application->isDisetujui())
+                                            —
+                                        @elseif ($detail->isTambahStok())
+                                            @if ($detail->procurementRequest === null)
+                                                Sudah dikeluarkan dari draf usulan pengadaan
+                                            @elseif ($detail->procurementRequest->isDraf())
+                                                @can('kelola-gudang')
+                                                    <a href="{{ route('procurement-requests.draft.edit') }}" class="text-brand-600 hover:text-brand-700 dark:text-brand-400">Draf usulan pengadaan</a>
+                                                @else
+                                                    Masuk draf usulan pengadaan
+                                                @endcan
+                                            @else
+                                                @can('akses-pengadaan')
+                                                    <a href="{{ route('procurement-requests.show', $detail->procurementRequest) }}" class="text-brand-600 hover:text-brand-700 dark:text-brand-400">{{ $detail->procurementRequest->judul() }}</a>
+                                                @else
+                                                    {{ $detail->procurementRequest->judul() }}
+                                                @endcan
+                                                · {{ $detail->procurementRequest->status->label() }}
+                                            @endif
+                                        @elseif ($detail->itemProposal)
+                                            @can('akses-pengadaan')
+                                                <a href="{{ route('item-proposals.show', $detail->itemProposal) }}" class="text-brand-600 hover:text-brand-700 dark:text-brand-400">Usulan barang baru</a>
+                                            @else
+                                                Usulan barang baru
+                                            @endcan
+                                            · {{ $detail->itemProposal->status->label() }}
+                                            @if ($detail->itemProposal->item)
+                                                <span class="block text-theme-xs text-gray-500 dark:text-gray-400">Terdaftar sebagai {{ $detail->itemProposal->item->item_code }}</span>
+                                            @endif
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    @if ($canDecide)
+        @php
+            $tambahStok = $application->details->filter->isTambahStok();
+            $barangBaru = $application->details->filter->isBarangBaru();
+        @endphp
+
+        {{-- Konfirmasi persetujuan: menjelaskan ke mana tiap barang diteruskan. --}}
+        <x-ui.modal @buka-setujui-permohonan.window="open = true" :isOpen="false" class="max-w-[560px]">
+            <form method="POST" action="{{ route('item-applications.approve', $application) }}" class="p-6 sm:p-8">
+                @csrf
+                @method('PATCH')
+
+                <p class="text-sm font-medium text-success-600">Setujui permohonan {{ $application->application_number }}</p>
+                <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Teruskan permohonan ini?</h3>
+                <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                    Setelah disetujui, permohonan tidak bisa dibatalkan dari sini. Barangnya diteruskan sebagai berikut.
+                </p>
+
+                <div class="mt-5 space-y-3">
+                    @if ($tambahStok->isNotEmpty())
+                        <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+                            <div class="flex items-start gap-3">
+                                <span class="bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400 flex size-9 shrink-0 items-center justify-center rounded-lg">
+                                    <x-ui.icon name="file-plus" class="size-5" />
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 dark:text-white/90">{{ $tambahStok->count() }} barang masuk draf usulan pengadaan</p>
+                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">Jumlahnya ditambahkan ke draf; Pengelola Gudang masih bisa menyesuaikannya sebelum diajukan.</p>
+                                    <ul class="text-theme-xs mt-2 space-y-0.5 text-gray-600 dark:text-gray-300">
+                                        @foreach ($tambahStok as $detail)
+                                            <li>{{ $detail->namaBarang() }} — {{ number_format($detail->quantity, 0, ',', '.') }} {{ $detail->satuan()?->label() }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if ($barangBaru->isNotEmpty())
+                        <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
+                            <div class="flex items-start gap-3">
+                                <span class="bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400 flex size-9 shrink-0 items-center justify-center rounded-lg">
+                                    <x-ui.icon name="package-plus" class="size-5" />
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-medium text-gray-800 dark:text-white/90">{{ $barangBaru->count() }} usulan barang baru dibuat</p>
+                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">Diputuskan lagi lewat Usulan Barang Baru: daftarkan ke master barang atau tolak.</p>
+                                    <ul class="text-theme-xs mt-2 space-y-0.5 text-gray-600 dark:text-gray-300">
+                                        @foreach ($barangBaru as $detail)
+                                            <li>{{ $detail->namaBarang() }} — {{ number_format($detail->quantity, 0, ',', '.') }} {{ $detail->satuan()?->label() }}</li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="open = false"
+                        class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">
+                        Batal
+                    </button>
+                    <button type="submit" class="bg-success-500 hover:bg-success-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white">
+                        Ya, Setujui &amp; Teruskan
+                    </button>
+                </div>
+            </form>
+        </x-ui.modal>
+
+        {{-- Penolakan; terbuka sendiri bila validasinya gagal supaya pesan
+             galatnya tidak tersembunyi. --}}
+        <x-ui.modal @buka-tolak-permohonan.window="open = true" :isOpen="$errors->has('decision_note')" class="max-w-[520px]">
+            <form method="POST" action="{{ route('item-applications.reject', $application) }}" class="p-6 sm:p-8">
+                @csrf
+                @method('PATCH')
+
+                <p class="text-sm font-medium text-error-500">Tolak permohonan {{ $application->application_number }}</p>
+                <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Tolak permohonan ini?</h3>
+                <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                    Permohonan tidak akan diteruskan ke pengadaan. Alasannya dikirim ke pemohon.
+                </p>
+
+                <label for="decision_note" class="mt-5 mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                    Alasan Penolakan<span class="text-error-500">*</span>
+                </label>
+                <textarea id="decision_note" name="decision_note" rows="3" required maxlength="500"
+                    placeholder="mis. stok masih mencukupi untuk tiga bulan ke depan"
+                    class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ old('decision_note') }}</textarea>
+                @error('decision_note')
+                    <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                @enderror
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" @click="open = false"
+                        class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">
+                        Batal
+                    </button>
+                    <button type="submit" class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white">
+                        Ya, Tolak
+                    </button>
+                </div>
+            </form>
+        </x-ui.modal>
+    @endif
+@endsection

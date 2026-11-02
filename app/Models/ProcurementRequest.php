@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Collection;
 
 /**
  * Usulan pengadaan — permintaan dari Gudang kepada Pejabat Pengadaan.
@@ -145,6 +146,29 @@ class ProcurementRequest extends Model
     public function procurement(): HasOne
     {
         return $this->hasOne(Procurement::class, 'procurement_request_id', 'procurement_request_id');
+    }
+
+    /**
+     * Baris permohonan pengguna yang diteruskan ke usulan ini. Satu usulan
+     * bisa menampung beberapa permohonan, jadi asalnya ditunjuk per barang.
+     */
+    public function applicationDetails(): HasMany
+    {
+        return $this->hasMany(ItemApplicationDetail::class, 'procurement_request_id', 'procurement_request_id');
+    }
+
+    /**
+     * Permohonan yang menyumbang setiap barang usulan ini, dikelompokkan per
+     * `item_id`, untuk ditampilkan di draf dan detail usulan.
+     *
+     * @return Collection<string, Collection<int, ItemApplicationDetail>>
+     */
+    public function permohonanPerBarang(): Collection
+    {
+        return $this->applicationDetails()
+            ->with('application.user')
+            ->get()
+            ->groupBy('item_id');
     }
 
     /**

@@ -171,13 +171,14 @@
             </tr>
         </thead>
         <tbody>
-            @foreach ($request->item as $index => $detail)
+            {{-- Hanya barang yang diserahkan; jumlah 0 berarti tidak diberikan. --}}
+            @foreach ($request->item->filter(fn ($detail) => (int) $detail->quantity_approved > 0)->values() as $index => $detail)
                 <tr>
                     <td class="center">{{ $index + 1 }}</td>
                     <td>{{ $detail->item?->item_code ?? '-' }}</td>
                     <td>{{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}</td>
                     <td class="center">{{ $detail->item?->unit?->label() ?? '-' }}</td>
-                    <td class="num">{{ number_format($detail->quantity_approved ?: $detail->quantity_requested, 0, ',', '.') }}</td>
+                    <td class="num">{{ number_format($detail->quantity_approved, 0, ',', '.') }}</td>
                 </tr>
             @endforeach
         </tbody>

@@ -30,7 +30,7 @@ function permintaanKembali(string $status, array $attributes = []): ModelsReques
         'request_id' => $request->request_id,
         'item_id' => Item::factory()->create()->item_id,
         'quantity_requested' => 5,
-        'quantity_approved' => 0,
+        'quantity_approved' => null,
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -93,14 +93,14 @@ test('mengembalikan dari diproses staf mengosongkan jumlah disetujui dan membuan
 
     expect($details)->toHaveCount(1)
         ->and($details->first()->quantity_requested)->toEqual(5)
-        ->and($details->first()->quantity_approved)->toEqual(0);
+        ->and($details->first()->quantity_approved)->toBeNull();
 });
 
 test('penolakan mencatat status asal dan admin bisa memulihkannya', function () {
     $request = permintaanKembali('processed_by_staff');
 
     $this->actingAs($this->admin)
-        ->post(route('request.respond', ['request' => $request, 'action' => 'reject']));
+        ->post(route('request.respond', ['request' => $request, 'action' => 'reject']), ['note' => 'Salah input jumlah.']);
 
     expect($request->refresh())
         ->status->toBe('rejected')
@@ -124,6 +124,7 @@ test('status yang tidak punya langkah sebelumnya tidak bisa dikembalikan', funct
     expect($request->refresh()->status)->toBe($status);
 })->with([
     'selesai' => ['completed'],
+    'diserahkan' => ['delivered'],
     'terkirim' => ['submitted'],
     'ditolak sebelum status asal dicatat' => ['rejected'],
     'permintaan umum' => ['rejected', ['type' => 'umum', 'rejected_from_status' => 'submitted']],

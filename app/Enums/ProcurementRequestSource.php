@@ -9,10 +9,20 @@ namespace App\Enums;
  * lahir dari tiga jalur berbeda, bukan satu jenis "manual" generik. Hanya
  * `DariPermintaan` yang punya dokumen asal untuk ditunjuk — lihat
  * `reference_type`/`reference_id` pada `ProcurementRequest`.
+ *
+ * Jalur keempat, `DariPermohonan`, lahir dari menu Permohonan sub sistem
+ * Permintaan: permohonan tambah stok yang disetujui Pengelola Gudang masuk ke
+ * draf usulan. Satu draf bisa menampung beberapa permohonan sekaligus, jadi
+ * dokumen asalnya ditunjuk per barang lewat
+ * `item_application_details.procurement_request_id`, bukan lewat
+ * `reference_type`/`reference_id` yang hanya muat satu dokumen. Sejak jalur
+ * ini ada, permintaan tidak lagi meneruskan kekurangan stoknya, sehingga
+ * `DariPermintaan` hanya tersisa pada data lama.
  */
 enum ProcurementRequestSource: string
 {
     case DariPermintaan = 'dari_permintaan';
+    case DariPermohonan = 'dari_permohonan';
     case PemantauanStok = 'pemantauan_stok';
     case Manual = 'manual';
 
@@ -20,6 +30,7 @@ enum ProcurementRequestSource: string
     {
         return match ($this) {
             self::DariPermintaan => 'Dari Permintaan',
+            self::DariPermohonan => 'Permohonan Pengguna',
             self::PemantauanStok => 'Pemantauan Stok',
             self::Manual => 'Manual',
         };
@@ -29,6 +40,7 @@ enum ProcurementRequestSource: string
     {
         return match ($this) {
             self::DariPermintaan => 'Permintaan unit kerja tidak dapat dipenuhi karena stok kurang atau habis.',
+            self::DariPermohonan => 'Permohonan tambah stok dari unit kerja yang sudah disetujui Pengelola Gudang.',
             self::PemantauanStok => 'Muncul dari notifikasi stok habis atau menipis.',
             self::Manual => 'Diajukan langsung oleh Pengelola Gudang tanpa pemicu otomatis.',
         };
@@ -47,6 +59,7 @@ enum ProcurementRequestSource: string
     {
         return match ($this) {
             self::DariPermintaan => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
+            self::DariPermohonan => 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
             self::PemantauanStok => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::Manual => 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
         };

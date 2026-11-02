@@ -159,12 +159,12 @@ describe('akses cepat', function () {
         'Pejabat Pengadaan' => [UserRole::PejabatPengadaan, ['Usulan Pengadaan', 'Penyedia Barang'], ['Master Barang', 'Stok Opname', 'Log Aktivitas']],
         // Pengawas baca-saja (ADR 0041): seluruh modul subbagiannya, tanpa administrasi sistem.
         'Kasubbag' => [UserRole::KasubbagUmumTi, ['Realisasi Pengadaan', 'Master Barang', 'Stok Opname', 'Penyedia Barang'], ['Manajemen Pengguna', 'Log Aktivitas']],
-        'Pengguna' => [UserRole::Pengguna, ['Permintaan Barang'], ['Master Barang', 'Realisasi Pengadaan']],
+        'Pengguna' => [UserRole::Pengguna, ['Permintaan Barang', 'Permohonan'], ['Master Barang', 'Realisasi Pengadaan']],
     ]);
 
     it('menampilkan seluruh modul bagi Admin', function () {
         $this->actingAs(penggunaDasbor(UserRole::Admin))->get('/dasbor')
-            ->assertViewHas('aksesCepat', fn (array $ubin) => count($ubin) === 10);
+            ->assertViewHas('aksesCepat', fn (array $ubin) => count($ubin) === 11);
     });
 
     it('tidak menautkan halaman yang akan ditolak', function () {
@@ -260,6 +260,7 @@ describe('perlu ditindaklanjuti', function () {
 
         permintaanDasbor($rekanSeunit, 'submitted');
         permintaanDasbor($rekanSeunit, 'approved_by_head');
+        permintaanDasbor($rekanSeunit, 'delivered');
         permintaanDasbor($rekanSeunit, 'completed');
         permintaanDasbor($rekanSeunit, 'rejected');
         permintaanDasbor($unitLain, 'submitted');
@@ -268,7 +269,10 @@ describe('perlu ditindaklanjuti', function () {
         permintaanDasbor($unitLain, 'submitted', 'umum');
 
         expect(tugasDasbor($kepalaUnit))->toBe(['Permintaan menunggu persetujuan' => 1])
-            ->and(tugasDasbor($rekanSeunit))->toBe(['Permintaan saya yang berjalan' => 2])
+            ->and(tugasDasbor($rekanSeunit))->toBe([
+                'Permintaan saya yang berjalan' => 3,
+                'Barang menunggu konfirmasi Anda' => 1,
+            ])
             ->and(tugasDasbor(penggunaDasbor(UserRole::Admin)))->toBe([
                 'Permintaan menunggu persetujuan' => 2,
                 'Permintaan perlu diproses' => 1,
@@ -335,6 +339,7 @@ describe('alur permintaan', function () {
         $unitLain = penggunaDasbor(UserRole::Pengguna, ['unit' => UnitKerja::SekretariatPerwakilan]);
 
         permintaanDasbor($this->pemohon, 'submitted');
+        permintaanDasbor($this->pemohon, 'delivered');
         permintaanDasbor($this->pemohon, 'completed');
         permintaanDasbor($this->pemohon, 'rejected');
         permintaanDasbor($rekanSeunit, 'approved_by_head');
@@ -350,16 +355,16 @@ describe('alur permintaan', function () {
         $kepalaUnit = penggunaDasbor(UserRole::KepalaUnit, ['unit' => UnitKerja::BidangPemeriksaanLampungI]);
         $admin = penggunaDasbor(UserRole::Admin);
 
-        expect(collect($alur($this->pemohon))->pluck('jumlah')->all())->toBe([1, 0, 0, 0, 1])
-            ->and($alur($this->pemohon)[4]['ditolak']['jumlah'])->toBe(1)
-            ->and(collect($alur($kepalaUnit))->pluck('jumlah')->all())->toBe([1, 1, 0, 0, 1])
-            ->and(collect($alur($admin))->pluck('jumlah')->all())->toBe([1, 1, 1, 1, 1])
-            ->and($alur($admin)[4]['ditolak'])->toBe(['jumlah' => 2, 'url' => route('request.index', ['status' => 'rejected'])]);
+        expect(collect($alur($this->pemohon))->pluck('jumlah')->all())->toBe([1, 0, 0, 0, 1, 1])
+            ->and($alur($this->pemohon)[5]['ditolak']['jumlah'])->toBe(1)
+            ->and(collect($alur($kepalaUnit))->pluck('jumlah')->all())->toBe([1, 1, 0, 0, 1, 1])
+            ->and(collect($alur($admin))->pluck('jumlah')->all())->toBe([1, 1, 1, 1, 1, 1])
+            ->and($alur($admin)[5]['ditolak'])->toBe(['jumlah' => 2, 'url' => route('request.index', ['status' => 'rejected'])]);
     });
 
     it('menautkan tiap tahap ke daftar permintaan dengan angka yang sama', function () {
         $alur = $this->actingAs($this->pemohon)->get('/dasbor')->viewData('alurPermintaan');
-        $tautan = [...$alur, $alur[4]['ditolak']];
+        $tautan = [...$alur, $alur[5]['ditolak']];
 
         foreach ($tautan as $tahap) {
             expect($this->get($tahap['url'])->assertOk()->viewData('requests')->total())->toBe($tahap['jumlah']);

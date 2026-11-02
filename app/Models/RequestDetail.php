@@ -20,6 +20,23 @@ class RequestDetail extends Model
         'quantity_approved',
     ];
 
+    /**
+     * `quantity_approved` NULL berarti belum diputuskan, 0 berarti barang ini
+     * tidak diberikan. Cast integer mempertahankan NULL.
+     */
+    protected function casts(): array
+    {
+        return [
+            'quantity_requested' => 'integer',
+            'quantity_approved' => 'integer',
+        ];
+    }
+
+    public function isDecided(): bool
+    {
+        return $this->quantity_approved !== null;
+    }
+
     public function request()
     {
         return $this->belongsTo(Request::class, 'request_id', 'request_id');

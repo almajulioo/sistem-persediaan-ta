@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RequestHistoryAction;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class Request extends Model
@@ -52,6 +54,7 @@ class Request extends Model
         'nd_number',
         'merged_into_request_id',
         'rejected_from_status',
+        'delivered_at',
         // TODO: Tambahkan Description field di sini nanti ditambah juga di show request 
     ];
 
@@ -64,6 +67,7 @@ class Request extends Model
     {
         return [
             'date' => 'date',
+            'delivered_at' => 'datetime',
             'request_amount' => 'integer',
             'accept_amount' => 'integer',
         ];
@@ -97,6 +101,16 @@ class Request extends Model
     {
         return $this->hasMany(RequestDetail::class, 'request_id', 'request_id')
             ->with(['item', 'itemProposal']);
+    }
+
+    /**
+     * Riwayat langkah beserta catatan petugas, urut dari yang paling awal.
+     */
+    public function histories(): HasMany
+    {
+        return $this->hasMany(RequestHistory::class, 'request_id', 'request_id')
+            ->orderBy('created_at')
+            ->orderBy('request_history_id');
     }
 
     public function hasItemProposals(): bool
@@ -149,6 +163,7 @@ class Request extends Model
         'approved_by_head' => 'Disetujui Kepala Unit',
         'processed_by_staff' => 'Disetujui Pengelola Gudang',
         'in_issuance' => 'Dalam Proses Pengeluaran',
+        'delivered' => 'Diserahkan',
         'completed' => 'Selesai',
         'rejected' => 'Ditolak',
         'merged' => 'Digabung',
@@ -165,7 +180,42 @@ class Request extends Model
     }
 
     /**
-     * Nomor urut Nota Dinas yang diisi Pengelola Gudang: hanya angka.
+     * Warna badge status, satu sumber untuk daftar, detail, dan dasbor.
+     * Tahap yang masih berjalan kuning, yang menunggu pemohon biru.
+     */
+    public static function statusBadgeClass(?string $status): string
+    {
+        return match ($status) {
+            'submitted' => 'bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-500',
+            'approved_by_head', 'processed_by_staff', 'in_issuance' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+            'delivered' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
+            'completed' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
+            'rejected' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
+            default => 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+        };
+    }
+
+    /**
+     * Ringkasan nama barang untuk baris daftar, mis. "Kertas A4, Pulpen +2".
+     */
+    public function ringkasanBarang(int $tampil = 2): string
+    {
+        $names = $this->item
+            ->map(fn (RequestDetail $detail) => $detail->item?->item_name ?? $detail->itemProposal?->item_name)
+            ->filter()
+            ->values();
+
+        if ($names->isEmpty()) {
+            return '-';
+        }
+
+        $sisa = $names->count() - $tampil;
+
+        return $names->take($tampil)->implode(', ').($sisa > 0 ? " +{$sisa}" : '');
+    }
+
+    /**
+     * Nomor urut Nota Dinas yang diisi pemohon saat mengajukan: hanya angka.
      */
     public const ND_SEQUENCE_PATTERN = '/^\d{1,6}$/';
 
@@ -201,8 +251,9 @@ class Request extends Model
     /**
      * Status satu langkah sebelum status sekarang, tujuan Admin saat
      * mengembalikan status. Null berarti tidak bisa dikembalikan: permintaan
-     * yang sudah selesai (stok sudah keluar dan BAST terbit), masih di tahap
-     * awal, permintaan umum, atau ditolak sebelum status asalnya dicatat.
+     * yang sudah diserahkan atau selesai (stok sudah keluar dan BAST terbit),
+     * masih di tahap awal, permintaan umum, atau ditolak sebelum status
+     * asalnya dicatat.
      */
     public function previousStatus(): ?string
     {
@@ -217,5 +268,47 @@ class Request extends Model
             'rejected' => $this->rejected_from_status,
             default => null,
         };
+    }
+
+    /**
+     * Hari sejak barang diserahkan sebelum Pengelola Gudang atau Admin boleh
+     * menutup permintaan atas nama pemohon yang tidak kunjung mengonfirmasi.
+     */
+    public const BATAS_HARI_KONFIRMASI = 7;
+
+    /**
+     * Hari sejak diajukan sebelum permintaan yang belum diputuskan Kepala Unit
+     * dibatalkan otomatis, supaya stok yang ditahannya kembali tersedia
+     * (RequestWorkflowService::expireStale()).
+     */
+    public const BATAS_HARI_PERSETUJUAN = 14;
+
+    /**
+     * Pemohon melaporkan masalah penerimaan yang belum ditanggapi Gudang.
+     */
+    public function hasOpenReceiptProblem(): bool
+    {
+        $last = $this->histories()
+            ->reorder()
+            ->whereIn('action', [RequestHistoryAction::MasalahDilaporkan, RequestHistoryAction::MasalahDitanggapi])
+            ->latest('request_history_id')
+            ->first();
+
+        return $last?->action === RequestHistoryAction::MasalahDilaporkan;
+    }
+
+    /**
+     * Saat penutupan atas nama pemohon mulai boleh dilakukan.
+     */
+    public function closableOnBehalfFrom(): ?Carbon
+    {
+        return $this->delivered_at?->copy()->addDays(self::BATAS_HARI_KONFIRMASI);
+    }
+
+    public function canBeClosedOnBehalf(): bool
+    {
+        return $this->status === 'delivered'
+            && $this->closableOnBehalfFrom()?->lte(now()) === true
+            && ! $this->hasOpenReceiptProblem();
     }
 }

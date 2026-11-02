@@ -55,7 +55,8 @@ class RequestDocumentGenerator
     }
 
     /**
-     * Mencetak ulang Nota Dinas setelah Pengelola Gudang memberinya nomor.
+     * Mencetak ulang Nota Dinas setelah nomornya ditetapkan atau dibetulkan
+     * Pengelola Gudang.
      * Persetujuan yang sudah ada dipertahankan, tetapi QR-nya diterbitkan
      * ulang karena token lama tidak tersimpan; QR pada PDF sebelumnya tidak
      * berlaku lagi.
@@ -200,7 +201,9 @@ class RequestDocumentGenerator
                 'request_number' => $request->request_number,
             ]);
 
-         $details = $request->item->values();
+        // Hanya barang yang benar-benar diserahkan; jumlah 0 berarti barang
+        // itu tidak diberikan dan stoknya memang tidak dikeluarkan.
+        $details = $request->item->filter(fn ($detail) => (int) $detail->quantity_approved > 0)->values();
         if ($details->isEmpty()) {
             throw new RuntimeException('BAST tidak dapat dibuat karena tidak memiliki rincian barang.');
         }
@@ -208,7 +211,7 @@ class RequestDocumentGenerator
         $itemList = $details
             ->map(fn ($detail) => trim(sprintf(
                 '%s %s %s',
-                number_format($detail->quantity_approved ?: $detail->quantity_requested, 0, ',', '.'),
+                number_format($detail->quantity_approved, 0, ',', '.'),
                 $detail->item?->unit?->label() ?? '',
                 $detail->item?->item_name ?? 'Barang tidak dikenal',
             )))
