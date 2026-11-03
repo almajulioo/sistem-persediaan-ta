@@ -1,42 +1,48 @@
 @extends('layouts.app')
 
+@use('App\Enums\ModulPengajuan')
+@use('App\Models\Request', 'Permintaan')
+@use('App\Support\Warna')
+
 @php
-    // Pindah tab membuang filter status tunggal dan halaman, tetapi
+    $modul = ModulPengajuan::Permintaan;
+    // Pindah tab atau status membuang filter tahap/status dan halaman, tetapi
     // mempertahankan pencarian, tipe, dan rentang tanggal.
-    $tabUrl = fn (string $key) => route('request.index', array_filter(
-        [...request()->except(['tahap', 'status', 'page']), 'tahap' => $key],
+    $filterUrl = fn (string $key, string $value) => route('request.index', array_filter(
+        [...request()->except(['tahap', 'status', 'page']), $key => $value],
         fn ($value) => $value !== '' && $value !== null,
     ));
+    $tabNav = collect($tabs)->map(fn (array $tab, string $key) => [
+        ...$tab,
+        'url' => $filterUrl('tahap', $key),
+        'aktif' => $tahap === $key && $status === '',
+    ])->values()->all();
     $adaFilter = $keyword !== '' || $type !== '' || $status !== '' || $dateFrom !== '' || $dateTo !== '';
     $tombolGaris = 'text-theme-xs rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition';
 @endphp
 
 @section('content')
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Permintaan Barang</h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ $isUser ? 'Pantau permintaan barang yang Anda ajukan, dari persetujuan sampai barang diterima.' : 'Kelola dan pantau permintaan barang dari unit kerja.' }}
-            </p>
-        </div>
-
-        <a href="{{ route('request.create') }}"
-            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+    <x-modul.judul :modul="$modul"
+        :deskripsi="$isUser ? 'Pantau permintaan barang yang Anda ajukan, dari persetujuan sampai barang diterima.' : 'Kelola dan pantau permintaan barang dari unit kerja.'">
+        <a href="{{ $modul->ruteBuat() }}"
+            class="shadow-theme-xs inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition {{ $modul->tombolClass() }}">
             <x-ui.icon name="plus" class="size-5" />
-            Buat Permintaan
+            {{ $modul->labelBuat() }}
         </a>
-    </div>
+    </x-modul.judul>
+
+    <x-modul.catatan :modul="$modul" class="mb-6" />
 
     <x-ui.flash />
 
     <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
         @foreach ([
-            ['label' => 'Sedang Berjalan', 'value' => $summary['pending'], 'icon' => 'inbox', 'chip' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400'],
-            ['label' => 'Diajukan Bulan Ini', 'value' => $summary['bulan_ini'], 'icon' => 'file-text', 'chip' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400'],
-            ['label' => 'Selesai Bulan Ini', 'value' => $summary['selesai_bulan_ini'], 'icon' => 'check-circle', 'chip' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500'],
+            ['label' => 'Sedang Berjalan', 'value' => $summary['pending'], 'icon' => 'clock', 'warna' => 'warning'],
+            ['label' => 'Diajukan Bulan Ini', 'value' => $summary['bulan_ini'], 'icon' => 'file-text', 'warna' => $modul->warna()],
+            ['label' => 'Selesai Bulan Ini', 'value' => $summary['selesai_bulan_ini'], 'icon' => 'check-circle', 'warna' => 'success'],
         ] as $card)
             <div class="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
-                <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $card['chip'] }}">
+                <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ Warna::lembut($card['warna']) }}">
                     <x-ui.icon :name="$card['icon']" class="size-5" />
                 </span>
                 <div>
@@ -47,26 +53,11 @@
         @endforeach
     </div>
 
-    <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        {{-- Tab status --}}
-        <nav class="custom-scrollbar flex gap-1 overflow-x-auto border-b border-gray-100 px-3 dark:border-gray-800 sm:px-4" aria-label="Tahap permintaan">
-            @foreach ($tabs as $key => $tab)
-                @php $aktif = $tahap === $key && $status === ''; @endphp
-                <a href="{{ $tabUrl($key) }}" @if ($aktif) aria-current="page" @endif
-                    @class([
-                        'text-theme-sm -mb-px inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-3.5 font-medium transition',
-                        'border-brand-500 text-brand-600 dark:text-brand-400' => $aktif,
-                        'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300' => ! $aktif,
-                    ])>
-                    {{ $tab['label'] }}
-                    <span @class([
-                        'text-theme-xs rounded-full px-2 py-0.5',
-                        'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400' => $aktif,
-                        'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400' => ! $aktif,
-                    ])>{{ $tab['jumlah'] }}</span>
-                </a>
-            @endforeach
-        </nav>
+    <div class="rounded-2xl border border-t-[3px] border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] {{ $modul->aksenClass() }}">
+        {{-- Tab tahap --}}
+        <div class="border-b border-gray-100 px-3 dark:border-gray-800 sm:px-4">
+            @include('pages.request._tabs', ['tabs' => $tabNav, 'ariaLabel' => 'Tahap permintaan'])
+        </div>
 
         <form method="GET" action="{{ route('request.index') }}"
             class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-5 dark:border-gray-800">
@@ -80,7 +71,7 @@
                 :selected="$type" placeholder="Semua tipe" />
 
             <x-form.select-field name="status" label="Status rinci"
-                :options="Arr::except(\App\Models\Request::STATUS_LABELS, 'merged')"
+                :options="Arr::except(Permintaan::STATUS_LABELS, 'merged')"
                 :selected="$status" placeholder="Semua status" />
 
             <x-form.date-picker name="date_from" label="Dari Tanggal" placeholder="Pilih tanggal"
@@ -91,7 +82,7 @@
 
             <div class="flex items-end gap-3 sm:col-span-2 xl:col-span-5">
                 <button type="submit"
-                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                    class="shadow-theme-xs inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition {{ $modul->tombolClass() }}">
                     <x-ui.icon name="search" class="size-4" />
                     Terapkan
                 </button>
@@ -103,6 +94,20 @@
                 @endif
             </div>
         </form>
+
+        {{-- Keterangan warna tiap status, sekaligus pintasan saring status rinci. --}}
+        <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 px-5 py-3 dark:border-gray-800">
+            <span class="text-theme-xs mr-1 text-gray-500 dark:text-gray-400">Keterangan status:</span>
+            @foreach (Arr::except(Permintaan::STATUS_LABELS, 'merged') as $kode => $label)
+                <a href="{{ $filterUrl('status', $status === $kode ? '' : $kode) }}"
+                    title="{{ $status === $kode ? 'Hapus saringan status' : 'Tampilkan hanya status ini' }}">
+                    <x-ui.pill :warna="Permintaan::statusWarna($kode)" :ikon="Permintaan::statusIcon($kode)"
+                        @class(['transition hover:opacity-80', 'ring-1 ring-current' => $status === $kode])>
+                        {{ $label }}
+                    </x-ui.pill>
+                </a>
+            @endforeach
+        </div>
 
         @if ($requests->isEmpty())
             <div class="flex flex-col items-center px-5 py-14 text-center">
@@ -116,8 +121,8 @@
                     {{ $adaFilter || $tahap !== '' ? 'Coba ubah tab atau penyaring.' : 'Permintaan yang diajukan akan tampil di sini.' }}
                 </p>
                 @unless ($adaFilter || $tahap !== '')
-                    <a href="{{ route('request.create') }}"
-                        class="bg-brand-500 hover:bg-brand-600 mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                    <a href="{{ $modul->ruteBuat() }}"
+                        class="mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition {{ $modul->tombolClass() }}">
                         <x-ui.icon name="plus" class="size-4" />
                         Buat Permintaan
                     </a>
@@ -139,14 +144,23 @@
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                         @foreach ($requests as $row)
                             <tr class="align-top transition hover:bg-gray-50/60 dark:hover:bg-white/[0.02]">
-                                <td class="px-5 py-4">
-                                    <a href="{{ route('request.show', $row) }}" class="text-theme-sm font-semibold text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-400">
-                                        {{ $row->request_number }}
-                                    </a>
-                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">{{ $row->nd_number ?? 'Nota Dinas belum bernomor' }}</p>
-                                    @if ($row->type === 'emergency')
-                                        <span class="text-theme-xs bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400 mt-1.5 inline-block rounded-full px-2 py-0.5 font-medium">Darurat</span>
-                                    @endif
+                                {{-- Garis kiri berwarna status; kotak ikon menandai jenisnya. --}}
+                                <td class="border-l-[3px] px-5 py-4 {{ Warna::garis(Permintaan::statusWarna($row->status)) }}">
+                                    <div class="flex items-start gap-3">
+                                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ Warna::lembut($row->jenisWarna()) }}"
+                                            title="Permintaan {{ strtolower($row->jenisLabel()) }}">
+                                            <x-ui.icon :name="$row->jenisIcon()" class="size-[18px]" />
+                                        </span>
+                                        <div class="min-w-0">
+                                            <a href="{{ route('request.show', $row) }}" class="text-theme-sm font-semibold text-gray-800 hover:text-brand-600 dark:text-white/90 dark:hover:text-brand-400">
+                                                {{ $row->request_number }}
+                                            </a>
+                                            <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">{{ $row->nd_number ?? 'Nota Dinas belum bernomor' }}</p>
+                                            @if ($row->type === 'emergency')
+                                                <x-ui.pill :warna="$row->jenisWarna()" :ikon="$row->jenisIcon()" class="mt-1.5">Darurat</x-ui.pill>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
@@ -167,10 +181,9 @@
                                     {{ $row->date?->translatedFormat('d M Y') ?? '-' }}
                                 </td>
                                 <td class="px-5 py-4">
-                                    <span class="text-theme-xs inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium whitespace-nowrap {{ \App\Models\Request::statusBadgeClass($row->status) }}">
-                                        <span class="size-1.5 rounded-full bg-current"></span>
+                                    <x-ui.pill :warna="Permintaan::statusWarna($row->status)" :ikon="Permintaan::statusIcon($row->status)" class="whitespace-nowrap">
                                         {{ $row->statusLabel() }}
-                                    </span>
+                                    </x-ui.pill>
                                 </td>
                                 <td class="px-5 py-4">
                                     <div class="flex flex-wrap items-center gap-2">
@@ -254,23 +267,28 @@
             <ul class="divide-y divide-gray-100 lg:hidden dark:divide-gray-800">
                 @foreach ($requests as $row)
                     <li>
-                        <a href="{{ route('request.show', $row) }}" class="block px-5 py-4 transition hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                            <div class="flex items-start justify-between gap-3">
-                                <div class="min-w-0">
-                                    <p class="text-theme-sm font-semibold text-gray-800 dark:text-white/90">{{ $row->request_number }}</p>
-                                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">
-                                        {{ $row->user?->fullname ?? '-' }} · {{ $row->date?->translatedFormat('d M Y') ?? '-' }}
-                                    </p>
+                        <a href="{{ route('request.show', $row) }}"
+                            class="flex items-start gap-3 border-l-[3px] px-5 py-4 transition hover:bg-gray-50 dark:hover:bg-white/[0.02] {{ Warna::garis(Permintaan::statusWarna($row->status)) }}">
+                            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ Warna::lembut($row->jenisWarna()) }}">
+                                <x-ui.icon :name="$row->jenisIcon()" class="size-[18px]" />
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <p class="text-theme-sm font-semibold text-gray-800 dark:text-white/90">{{ $row->request_number }}</p>
+                                        <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                                            {{ $row->user?->fullname ?? '-' }} · {{ $row->date?->translatedFormat('d M Y') ?? '-' }}
+                                        </p>
+                                    </div>
+                                    <x-ui.pill :warna="Permintaan::statusWarna($row->status)" :ikon="Permintaan::statusIcon($row->status)" class="shrink-0">
+                                        {{ $row->statusLabel() }}
+                                    </x-ui.pill>
                                 </div>
-                                <span class="text-theme-xs inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-medium {{ \App\Models\Request::statusBadgeClass($row->status) }}">
-                                    <span class="size-1.5 rounded-full bg-current"></span>
-                                    {{ $row->statusLabel() }}
-                                </span>
+                                <p class="text-theme-sm mt-2 truncate text-gray-700 dark:text-gray-300">{{ $row->ringkasanBarang() }}</p>
+                                @if ($row->type === 'emergency')
+                                    <x-ui.pill :warna="$row->jenisWarna()" :ikon="$row->jenisIcon()" class="mt-2">Darurat</x-ui.pill>
+                                @endif
                             </div>
-                            <p class="text-theme-sm mt-2 truncate text-gray-700 dark:text-gray-300">{{ $row->ringkasanBarang() }}</p>
-                            @if ($row->type === 'emergency')
-                                <span class="text-theme-xs bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400 mt-2 inline-block rounded-full px-2 py-0.5 font-medium">Darurat</span>
-                            @endif
                         </a>
                     </li>
                 @endforeach

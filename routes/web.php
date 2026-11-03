@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Gudang\ItemController;
 use App\Http\Controllers\Gudang\ItemProposalController;
+use App\Http\Controllers\Gudang\ItemSubcategoryController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
@@ -207,6 +208,13 @@ Route::middleware('auth')->group(function () {
         Route::patch('barang/{item}/status', [ItemController::class, 'toggleStatus'])
             ->name('items.toggle-status');
 
+        // Sub kategori barang (ADR 0043). Tanpa halaman rincian: daftarnya
+        // sudah memuat semua kolom, dan jumlah barangnya menaut ke Master Barang.
+        Route::resource('sub-kategori-barang', ItemSubcategoryController::class)
+            ->except(['index', 'show'])
+            ->parameters(['sub-kategori-barang' => 'subcategory'])
+            ->names('item-subcategories');
+
         // Riwayat mutasi bersifat immutable: tidak ada rute ubah maupun hapus.
         Route::get('mutasi/create', [StockMutationController::class, 'create'])->name('mutations.create');
         Route::post('mutasi', [StockMutationController::class, 'store'])->name('mutations.store');
@@ -367,6 +375,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('barang/{item}/kartu-persediaan', [StockMutationController::class, 'kartuPersediaan'])
             ->name('items.kartu-persediaan');
+
+        Route::get('sub-kategori-barang', [ItemSubcategoryController::class, 'index'])
+            ->name('item-subcategories.index');
 
         Route::get('mutasi/cetak/pdf', [StockMutationController::class, 'exportPdf'])->name('mutations.pdf');
         Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');

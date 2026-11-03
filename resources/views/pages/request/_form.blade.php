@@ -15,6 +15,10 @@
             'max' => (int) $detail->quantity_requested,
         ])->values()->all()
         : [];
+    $modul = \App\Enums\ModulPengajuan::Permintaan;
+    // Warna baris daftar barang: toska seperti identitas Permintaan; saat
+    // mengubah kuantitas, kuning bila dikurangi dan merah bila tidak diberikan.
+    $warnaBaris = collect([$modul->warna(), 'warning', 'error'])->mapWithKeys(fn ($warna) => [$warna => \App\Support\Warna::lembut($warna)]);
     $fieldClass = 'dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30';
     $stepperButton = 'flex size-9 shrink-0 items-center justify-center text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-white/[0.05]';
 @endphp
@@ -31,13 +35,16 @@
 
     <div class="space-y-6 lg:col-span-3">
         @if ($canCreateEmergency && ! $isEdit)
-            <div class="rounded-2xl border border-warning-200 bg-warning-50 p-5 dark:border-warning-500/30 dark:bg-warning-500/10">
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 dark:border-rose-500/30 dark:bg-rose-500/10">
                 <input type="hidden" name="emergency" :value="isEmergency ? '1' : '0'">
                 <label class="flex cursor-pointer items-start gap-3">
-                    <input type="checkbox" x-model="isEmergency" class="mt-0.5 size-4 rounded border-gray-300 text-warning-500 focus:ring-warning-500">
-                    <span>
+                    <input type="checkbox" x-model="isEmergency" class="mt-0.5 size-4 rounded border-gray-300 text-rose-500 focus:ring-rose-500">
+                    <span class="flex-1">
                         <span class="block text-sm font-medium text-gray-800 dark:text-white/90">Permintaan darurat</span>
                         <span class="mt-1 block text-xs text-gray-600 dark:text-gray-400">Centang bila permintaan dibuat atas nama peminta lain.</span>
+                    </span>
+                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400">
+                        <x-ui.icon name="alert-triangle" class="size-5" />
                     </span>
                 </label>
 
@@ -68,7 +75,7 @@
             </div>
         @endif
 
-        <x-form.section number="1" title="Nota Dinas"
+        <x-form.section number="1" title="Nota Dinas" :warna="$modul->warna()"
             :description="$isEdit ? 'Sudah terisi nomor dari pemohon; ubah hanya bila keliru.' : 'Nomor urut Nota Dinas dari agenda unit Anda. Nomor BAST memakai nomor urut yang sama.'">
             @if ($isEdit)
                 <x-form.text-field name="nd_sequence" label="Nomor Urut Nota Dinas" required inputmode="numeric"
@@ -86,7 +93,7 @@
 
         @if ($isEdit)
             {{-- Alasan ini dibaca pemohon di riwayat permintaan dan notifikasinya. --}}
-            <x-form.section number="2" title="Alasan Perubahan"
+            <x-form.section number="2" title="Alasan Perubahan" :warna="$modul->warna()"
                 description="Wajib diisi bila ada jumlah yang tidak sama dengan permintaan. Isi 0 untuk barang yang tidak diberikan.">
                 <div>
                     <textarea id="adjustment_note" name="adjustment_note" rows="4" maxlength="500" aria-label="Alasan perubahan"
@@ -98,51 +105,22 @@
                 </div>
             </x-form.section>
         @else
-            <x-form.section number="2" title="Pilih Barang" description="Cari barang yang terdaftar, isi jumlahnya, lalu tambahkan ke daftar.">
-                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Barang <span class="text-error-500">*</span>
-                    </label>
-                    <button type="button" @click="open = !open; $nextTick(() => $refs.itemSearch?.focus())"
-                        class="shadow-theme-xs flex h-11 w-full items-center gap-3 rounded-lg border border-gray-300 bg-transparent px-4 text-left text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
-                        <x-ui.icon name="search" class="size-4 text-gray-400" />
-                        <span class="flex-1 truncate" x-text="selectedItem ? selectedItem.item_name : 'Cari dan pilih barang'" :class="!selectedItem ? 'text-gray-400' : ''"></span>
-                        <span x-show="selectedItem" class="text-theme-xs text-gray-500 dark:text-gray-400" x-text="selectedItem ? selectedItem.item_code : ''"></span>
-                    </button>
-
-                    <div x-show="open" x-transition style="display: none;"
-                        class="absolute z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900">
-                        <input type="text" x-ref="itemSearch" x-model.debounce.200ms="searchQuery" placeholder="Ketik nama atau kode barang..."
-                            class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90">
-                        <ul class="mt-2 max-h-64 space-y-0.5 overflow-y-auto">
-                            <template x-for="item in filteredItems" :key="item.item_id">
-                                <li>
-                                    <button type="button" @click="selectItem(item); open = false" :disabled="item.available < 1"
-                                        class="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/[0.05]">
-                                        <span class="min-w-0">
-                                            <span class="block truncate font-medium text-gray-800 dark:text-white/90" x-text="item.item_name"></span>
-                                            <span class="text-theme-xs text-gray-500 dark:text-gray-400" x-text="item.item_code"></span>
-                                        </span>
-                                        <span class="text-theme-xs shrink-0 text-right">
-                                            <span class="block rounded-full px-2 py-0.5 font-medium"
-                                                :class="item.available < 1 ? 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-400' : 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300'"
-                                                x-text="stockLabel(item)"></span>
-                                            <span x-show="item.reserved > 0" class="mt-0.5 block text-gray-400" x-text="`${item.reserved} ditahan permintaan lain`"></span>
-                                        </span>
-                                    </button>
-                                </li>
-                            </template>
-                            <template x-if="filteredItems.length === 0">
-                                <li class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    Barang tidak ditemukan.
-                                    <a href="{{ route('item-applications.create') }}" class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                                        Ajukan permohonan barang baru
-                                    </a>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
+            <x-form.section number="2" title="Pilih Barang" :warna="$modul->warna()" description="Cari barang yang terdaftar, isi jumlahnya, lalu tambahkan ke daftar.">
+                {{-- Barang yang seluruh stoknya habis atau ditahan tetap tampil, tetapi tidak dapat dipilih. --}}
+                <x-request.pemilih-barang :subkategori="$subcategories ?? null" pilih="selectItem(item)" nonaktif="item.available < 1">
+                    <x-slot:badge>
+                        <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium" :class="stockClass(item)">
+                            <span class="size-1.5 rounded-full bg-current"></span>
+                            <span x-text="stockLabel(item)"></span>
+                        </span>
+                        <span x-show="item.reserved > 0" class="mt-0.5 block text-gray-400" x-text="`${item.reserved} ditahan permintaan lain`"></span>
+                    </x-slot:badge>
+                    <x-slot:kosong>
+                        <a href="{{ route('item-applications.create') }}" class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                            Ajukan permohonan barang baru
+                        </a>
+                    </x-slot:kosong>
+                </x-request.pemilih-barang>
 
                 <div class="flex flex-wrap items-end gap-3">
                     <div>
@@ -163,35 +141,24 @@
                     <p x-show="selectedItem" class="text-theme-sm pb-3 text-gray-500 dark:text-gray-400"
                         x-text="selectedItem ? `Tersedia ${selectedItem.available} dari ${selectedItem.stock_current} ${unitOf(selectedItem)}` : ''"></p>
                     <button type="button" @click="addItem"
-                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 ml-auto inline-flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition">
+                        class="shadow-theme-xs ml-auto inline-flex h-11 items-center gap-2 rounded-lg px-4 text-sm font-medium transition {{ $modul->tombolClass() }}">
                         <x-ui.icon name="plus" class="size-4" />
                         Tambah ke Daftar
                     </button>
                 </div>
 
-                {{-- Barang yang belum terdaftar dan kekurangan stok tidak
-                     ditampung di sini; keduanya dimohonkan lewat Permohonan. --}}
-                <div class="flex items-start gap-3 rounded-lg border border-dashed border-gray-300 px-4 py-3 dark:border-gray-700">
-                    <x-ui.icon name="clipboard-list" class="mt-0.5 size-5 text-gray-400" />
-                    <p class="text-theme-sm text-gray-600 dark:text-gray-400">
-                        Barang belum terdaftar atau stoknya tidak mencukupi?
-                        <a href="{{ route('item-applications.create') }}" class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                            Ajukan lewat menu Permohonan
-                        </a>.
-                    </p>
-                </div>
             </x-form.section>
         @endif
     </div>
 
     {{-- Daftar barang, tetap terlihat saat halaman digulir. --}}
     <aside class="lg:sticky lg:top-24 lg:col-span-2">
-        <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+        <div class="rounded-2xl border border-t-[3px] border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] {{ $modul->aksenClass() }}">
             <header class="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
                 <h3 class="text-base font-semibold text-gray-800 dark:text-white/90">
                     {{ $isEdit ? 'Jumlah Disetujui' : 'Daftar Barang' }}
                 </h3>
-                <span class="text-theme-xs bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400 rounded-full px-2.5 py-0.5 font-medium"
+                <span class="text-theme-xs rounded-full px-2.5 py-0.5 font-medium {{ \App\Support\Warna::lembut($modul->warna()) }}"
                     x-text="`${requestedList.length} jenis`"></span>
             </header>
 
@@ -207,10 +174,16 @@
             <ul class="max-h-[28rem] divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800" x-show="requestedList.length > 0">
                 <template x-for="(item, index) in requestedList" :key="item.item_id">
                     <li class="flex items-center gap-3 px-5 py-3">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg" :class="warnaBaris[toneOf(item)]">
+                            <x-ui.icon name="package" class="size-[18px]" />
+                        </span>
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm font-medium text-gray-800 dark:text-white/90" x-text="item.item_name"></p>
                             <p class="text-theme-xs text-gray-500 dark:text-gray-400"
                                 x-text="item.max !== undefined ? `Diminta ${item.max} ${item.unit}` : `Tersedia ${maxFor(item)} ${unitOf(item)}`"></p>
+                            <p x-show="toneOf(item) !== @js($modul->warna())" style="display: none;" class="text-theme-xs font-medium"
+                                :class="toneOf(item) === 'error' ? 'text-error-600 dark:text-error-400' : 'text-warning-600 dark:text-warning-400'"
+                                x-text="toneOf(item) === 'error' ? 'Tidak diberikan' : 'Dikurangi dari permintaan'"></p>
                             <input type="hidden" :name="`items[${index}][item_id]`" :value="item.item_id">
                         </div>
                         <div class="inline-flex h-9 items-center overflow-hidden rounded-lg border border-gray-300 dark:border-gray-700">
@@ -241,7 +214,7 @@
                     <span x-text="`Total ${totalQty} unit`"></span>
                 </div>
                 <button type="submit" :disabled="requestedList.length === 0"
-                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                    class="shadow-theme-xs inline-flex w-full items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 {{ $modul->tombolClass() }}">
                     {{ $isEdit ? 'Simpan Kuantitas' : 'Ajukan Permintaan' }}
                     <x-ui.icon name="arrow-right" class="size-4" />
                 </button>
@@ -279,12 +252,12 @@
             selectedRequesterText: '',
             requesterSearch: '',
             selectedItem: null,
-            searchQuery: '',
             inputQty: 1,
             ndTemplate: @json($ndTemplate ?? ''),
             ndSequence: @json((string) old('nd_sequence', '')),
             requestedList: @json($existingItems),
             isEdit: @json($isEdit),
+            warnaBaris: @json($warnaBaris),
 
             init() {
                 const mergedItems = new Map();
@@ -326,21 +299,29 @@
                 return `Tersedia ${item.available} dari ${item.stock_current} ${this.unitOf(item)}`;
             },
 
+            // Merah bila stok habis, kuning bila seluruhnya ditahan
+            // permintaan lain, hijau bila masih bisa diminta.
+            stockClass(item) {
+                if (item.stock_current < 1) return 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-400';
+                if (item.available < 1) return 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400';
+                return 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500';
+            },
+
+            // Saat mengubah kuantitas: dikurangi atau tidak diberikan.
+            toneOf(item) {
+                const biasa = @js($modul->warna());
+                if (!this.isEdit) return biasa;
+                const qty = parseInt(item.qty, 10) || 0;
+                if (qty === 0) return 'error';
+                return qty < item.max ? 'warning' : biasa;
+            },
+
             showStockError(item) {
                 const master = this.items.find(i => i.item_id == item.item_id) ?? item;
                 const ditahan = master.reserved > 0 ? ` ${master.reserved} ditahan permintaan lain yang masih berjalan.` : '';
                 this.$dispatch('show-request-validation-modal', {
                     message: `Jumlah melebihi stok ${item.item_name} yang tersedia (${master.available ?? 0}).${ditahan} Untuk kekurangannya, ajukan permohonan tambah stok lewat menu Permohonan.`
                 });
-            },
-
-            get filteredItems() {
-                const query = this.searchQuery.toLowerCase().trim();
-                if (!query) return this.items;
-                return this.items.filter(item =>
-                    item.item_name.toLowerCase().includes(query) ||
-                    (item.item_code || '').toLowerCase().includes(query)
-                );
             },
 
             // Kode unit pada nomor mengikuti peminta: diri sendiri, atau peminta
@@ -370,7 +351,6 @@
 
             selectItem(item) {
                 this.selectedItem = item;
-                this.searchQuery = '';
             },
 
             addItem() {

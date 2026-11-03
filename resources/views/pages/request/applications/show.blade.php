@@ -5,24 +5,22 @@
 @endphp
 
 @section('content')
-    <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">{{ $application->application_number }}</h2>
+    <x-modul.judul :modul="\App\Enums\ModulPengajuan::Permohonan" :judul="$application->application_number">
+        <x-slot:bawah>
             <nav class="mt-1">
                 <ol class="flex items-center gap-1.5 text-sm">
                     <li>
-                        <a href="{{ route('item-applications.index') }}" class="text-gray-500 hover:text-brand-500 dark:text-gray-400">Daftar Permohonan</a>
+                        <a href="{{ route('item-applications.index') }}" class="text-gray-500 hover:text-violet-600 dark:text-gray-400">Daftar Permohonan</a>
                     </li>
                     <li class="text-gray-400">/</li>
                     <li class="text-gray-800 dark:text-white/90">{{ $application->application_number }}</li>
                 </ol>
             </nav>
-        </div>
+        </x-slot:bawah>
 
-        <div class="flex flex-wrap items-center gap-3">
-            <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $application->status->badgeClass() }}">
+            <x-ui.pill :warna="$application->status->warna()" :ikon="$application->status->icon()">
                 {{ $application->status->label() }}
-            </span>
+            </x-ui.pill>
 
             @if ($canDecide)
                 <button type="button" x-data @click="$dispatch('buka-setujui-permohonan')"
@@ -34,8 +32,7 @@
                     Tolak
                 </button>
             @endif
-        </div>
-    </div>
+    </x-modul.judul>
 
     <x-ui.flash />
 
@@ -67,9 +64,14 @@
                 <div @class([
                     'rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6',
                     'border-error-200 dark:border-error-500/30' => $application->isDitolak(),
-                    'border-gray-200 dark:border-gray-800' => ! $application->isDitolak(),
+                    'border-success-200 dark:border-success-500/30' => $application->isDisetujui(),
                 ])>
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">{{ $application->status->label() }}</h3>
+                    <h3 class="flex items-center gap-3 text-base font-medium text-gray-800 dark:text-white/90">
+                        <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ \App\Support\Warna::lembut($application->status->warna()) }}">
+                            <x-ui.icon :name="$application->status->icon()" class="size-5" />
+                        </span>
+                        {{ $application->status->label() }}
+                    </h3>
                     <dl class="mt-3 space-y-3">
                         @foreach ([
                             'Diputuskan Oleh' => $application->decidedBy?->fullname ?? '—',
@@ -107,10 +109,10 @@
                         <tbody>
                             @foreach ($application->details as $detail)
                                 <tr class="border-b border-gray-100 align-top last:border-0 dark:border-gray-800">
-                                    <td class="px-6 py-4">
-                                        <span class="text-theme-xs mb-1 inline-block rounded-full px-2 py-0.5 font-medium {{ $detail->type->badgeClass() }}">
+                                    <td class="border-l-[3px] px-6 py-4 {{ \App\Support\Warna::garis($detail->type->warna()) }}">
+                                        <x-ui.pill :warna="$detail->type->warna()" :ikon="$detail->type->icon()" class="mb-1">
                                             {{ $detail->type->label() }}
-                                        </span>
+                                        </x-ui.pill>
                                         <p class="text-sm font-medium text-gray-800 dark:text-white/90">
                                             @if ($detail->item)
                                                 {{ $detail->item->item_code }} — {{ $detail->item->item_name }}

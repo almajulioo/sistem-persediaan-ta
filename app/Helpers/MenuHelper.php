@@ -84,6 +84,7 @@ class MenuHelper
                 // mendapatkannya di sana, jadi tidak perlu muncul dua kali.
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
+                    ['name' => 'Sub Kategori Barang', 'path' => '/sub-kategori-barang'],
                     ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang', 'roles' => [UserRole::PengelolaGudang]],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stok Opname', 'path' => '/opname'],

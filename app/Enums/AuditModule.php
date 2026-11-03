@@ -16,6 +16,7 @@ enum AuditModule: string
     case Pengguna = 'pengguna';
     case Profil = 'profil';
     case Barang = 'barang';
+    case SubKategoriBarang = 'sub_kategori_barang';
     case UsulanBarang = 'usulan_barang';
     case Mutasi = 'mutasi';
     case Opname = 'opname';
@@ -34,6 +35,7 @@ enum AuditModule: string
             self::Pengguna => 'Manajemen Pengguna',
             self::Profil => 'Profil Pengguna',
             self::Barang => 'Master Barang',
+            self::SubKategoriBarang => 'Sub Kategori Barang',
             self::UsulanBarang => 'Usulan Barang Baru',
             self::Mutasi => 'Mutasi Stok',
             self::Opname => 'Stok Opname',
@@ -54,6 +56,7 @@ enum AuditModule: string
             self::Pengguna => 'Pembuatan akun, pengubahan peran, dan penonaktifan pengguna.',
             self::Profil => 'Perubahan akun oleh pemiliknya sendiri: email, kata sandi, dan foto profil.',
             self::Barang => 'Pendaftaran dan perubahan data induk barang persediaan.',
+            self::SubKategoriBarang => 'Sub kategori barang beserta kategorinya (ATK / ARTK).',
             self::UsulanBarang => 'Usulan barang yang belum terdaftar di katalog, beserta keputusannya.',
             self::Mutasi => 'Pencatatan mutasi stok manual.',
             self::Opname => 'Pembuatan, pencacahan, dan pemostingan stok opname.',
@@ -78,7 +81,7 @@ enum AuditModule: string
         return match ($this) {
             self::Autentikasi => 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
             self::Pengguna, self::Profil => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-            self::Barang, self::UsulanBarang, self::Mutasi, self::Opname => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
+            self::Barang, self::SubKategoriBarang, self::UsulanBarang, self::Mutasi, self::Opname => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
             self::Penyedia, self::UsulanPengadaan, self::Pengadaan, self::Penerimaan, self::DokumenPengadaan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::Permintaan, self::Permohonan => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
         };

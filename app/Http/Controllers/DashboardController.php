@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ItemApplicationStatus;
 use App\Enums\ItemProposalStatus;
+use App\Enums\ModulPengajuan;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
 use App\Enums\ProcurementRequestStatus;
@@ -94,15 +95,16 @@ class DashboardController extends Controller
     private function aksesCepat(User $user): array
     {
         $ubin = [
-            ['Permintaan Barang', 'request.index', null, 'inbox', 'sky'],
-            ['Permohonan', 'item-applications.index', null, 'clipboard-list', 'indigo'],
+            ['Permintaan Barang', 'request.index', null, ModulPengajuan::Permintaan->icon(), ModulPengajuan::Permintaan->warna()],
+            ['Permohonan', 'item-applications.index', null, ModulPengajuan::Permohonan->icon(), ModulPengajuan::Permohonan->warna()],
             ['Master Barang', 'items.index', 'akses-gudang', 'package', 'brand'],
             ['Mutasi Stok', 'mutations.index', 'akses-gudang', 'arrows', 'success'],
             ['Stok Opname', 'opname.index', 'akses-gudang', 'clipboard-check', 'orange'],
             ['Usulan Pengadaan', 'procurement-requests.index', 'akses-pengadaan', 'file-plus', 'purple'],
             ['Realisasi Pengadaan', 'procurements.index', 'akses-pengadaan', 'cart', 'amber'],
             ['Usulan Barang Baru', 'item-proposals.index', 'akses-pengadaan', 'package-plus', 'pink'],
-            ['Penyedia Barang', 'suppliers.index', 'akses-penyedia', 'building', 'teal'],
+            // Bukan toska: toska warna identitas Permintaan.
+            ['Penyedia Barang', 'suppliers.index', 'akses-penyedia', 'building', 'sky'],
             ['Manajemen Pengguna', 'users.index', 'kelola-pengguna', 'users', 'rose'],
             ['Log Aktivitas', 'activity-logs.index', 'kelola-pengguna', 'history', 'gray'],
         ];
@@ -145,13 +147,13 @@ class DashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(fn (ModelsRequest $request) => [
-                'jenis' => 'Permintaan',
-                'ikon' => 'inbox',
+                'modul' => ModulPengajuan::Permintaan,
                 'nomor' => $request->request_number,
                 'barang' => $request->ringkasanBarang(),
                 'waktu' => $request->created_at,
                 'status' => $request->statusLabel(),
-                'badge' => ModelsRequest::statusBadgeClass($request->status),
+                'statusIkon' => ModelsRequest::statusIcon($request->status),
+                'statusWarna' => ModelsRequest::statusWarna($request->status),
                 'url' => route('request.show', $request),
             ])
             ->concat($milikPermohonan()
@@ -160,13 +162,13 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get()
                 ->map(fn (ItemApplication $application) => [
-                    'jenis' => 'Permohonan',
-                    'ikon' => 'clipboard-list',
+                    'modul' => ModulPengajuan::Permohonan,
                     'nomor' => $application->application_number,
                     'barang' => $application->ringkasanBarang(),
                     'waktu' => $application->created_at,
                     'status' => $application->status->label(),
-                    'badge' => $application->status->badgeClass(),
+                    'statusIkon' => $application->status->icon(),
+                    'statusWarna' => $application->status->warna(),
                     'url' => route('item-applications.show', $application),
                 ]))
             ->sortByDesc('waktu')
@@ -181,9 +183,23 @@ class DashboardController extends Controller
                         'label' => 'Berjalan',
                         'jumlah' => (int) $permintaan->only(['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'])->sum(),
                         'url' => route('request.index', ['tahap' => 'berjalan']),
+                        'ikon' => 'clock',
+                        'warna' => 'warning',
                     ],
-                    ['label' => 'Diserahkan', 'jumlah' => $diserahkan, 'url' => route('request.index', ['tahap' => 'diserahkan'])],
-                    ['label' => 'Selesai', 'jumlah' => (int) ($permintaan['completed'] ?? 0), 'url' => route('request.index', ['tahap' => 'selesai'])],
+                    [
+                        'label' => 'Diserahkan',
+                        'jumlah' => $diserahkan,
+                        'url' => route('request.index', ['tahap' => 'diserahkan']),
+                        'ikon' => ModelsRequest::statusIcon('delivered'),
+                        'warna' => ModelsRequest::statusWarna('delivered'),
+                    ],
+                    [
+                        'label' => 'Selesai',
+                        'jumlah' => (int) ($permintaan['completed'] ?? 0),
+                        'url' => route('request.index', ['tahap' => 'selesai']),
+                        'ikon' => ModelsRequest::statusIcon('completed'),
+                        'warna' => ModelsRequest::statusWarna('completed'),
+                    ],
                 ],
                 'perhatian' => $diserahkan > 0
                     ? "{$diserahkan} permintaan sudah diserahkan dan menunggu konfirmasi penerimaan Anda."
@@ -194,6 +210,8 @@ class DashboardController extends Controller
                     'label' => $status->label(),
                     'jumlah' => (int) ($permohonan[$status->value] ?? 0),
                     'url' => route('item-applications.index', ['status' => $status->value]),
+                    'ikon' => $status->icon(),
+                    'warna' => $status->warna(),
                 ], ItemApplicationStatus::cases()),
             ],
             'aktivitas' => $aktivitas,
@@ -286,6 +304,8 @@ class DashboardController extends Controller
                 'label' => $status->label(),
                 'jumlah' => (int) ($permohonan[$status->value] ?? 0),
                 'url' => route('item-applications.index', ['status' => $status->value]),
+                'ikon' => $status->icon(),
+                'warna' => $status->warna(),
             ], ItemApplicationStatus::cases()),
         ];
     }
@@ -384,12 +404,14 @@ class DashboardController extends Controller
     private function tugasPermintaan(User $user): array
     {
         $permintaan = fn (): Builder => ModelsRequest::query()->where('type', '!=', 'umum');
+        // Ikon dan warna mengikuti status yang ditunggu, sama dengan badge di
+        // daftar permintaan; tanpa status berarti seluruh tahap yang berjalan.
         $baris = fn (string $label, int $jumlah, ?string $status) => [
             'label' => $label,
             'jumlah' => $jumlah,
             'url' => route('request.index', $status === null ? [] : ['status' => $status]),
-            'ikon' => 'inbox',
-            'warna' => 'sky',
+            'ikon' => $status === null ? 'clock' : ModelsRequest::statusIcon($status),
+            'warna' => $status === null ? 'warning' : ModelsRequest::statusWarna($status),
         ];
 
         $tugas = [];
@@ -487,7 +509,7 @@ class DashboardController extends Controller
      * yang lain: penolakan bisa terjadi di tahap mana pun, dan daftar
      * permintaan tidak bisa menyaring menurut tahap asal penolakannya.
      *
-     * @return array<int, array{label: string, jumlah: int, url: string, ditolak?: array{jumlah: int, url: string}}>
+     * @return array<int, array{label: string, jumlah: int, url: string, ikon: string, warna: string, ditolak?: array{jumlah: int, url: string}}>
      */
     private function alurPermintaan(User $user): array
     {
@@ -501,6 +523,8 @@ class DashboardController extends Controller
             'label' => ModelsRequest::labelStatus($status),
             'jumlah' => (int) ($jumlah[$status] ?? 0),
             'url' => route('request.index', ['status' => $status]),
+            'ikon' => ModelsRequest::statusIcon($status),
+            'warna' => ModelsRequest::statusWarna($status),
         ];
 
         $selesai = $tahap('completed');

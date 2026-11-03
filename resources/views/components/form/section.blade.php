@@ -1,14 +1,15 @@
 {{--
     Kartu satu bagian formulir, dengan nomor langkah opsional di judulnya.
     Dipakai formulir permintaan dan permohonan, misalnya
-    `<x-form.section number="1" title="Nota Dinas" description="...">`.
+    `<x-form.section number="1" title="Nota Dinas" description="..." warna="teal">`.
+    `warna` (App\Support\Warna) mewarnai nomor langkah menurut modulnya.
 --}}
-@props(['number' => null, 'title', 'description' => null])
+@props(['number' => null, 'title', 'description' => null, 'warna' => 'brand'])
 
 <section {{ $attributes->class('rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]') }}>
     <header class="flex items-start gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
         @if ($number)
-            <span class="bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400 flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+            <span class="flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold {{ \App\Support\Warna::lembut($warna) }}">
                 {{ $number }}
             </span>
         @endif

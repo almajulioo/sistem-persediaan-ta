@@ -76,46 +76,17 @@
             @endif
 
             <x-form.section number="1" title="Pilih Barang" description="Cari barang yang terdaftar, isi jumlahnya, lalu tambahkan ke daftar.">
-                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                        Barang <span class="text-error-500">*</span>
-                    </label>
-                    <button type="button" @click="open = !open; $nextTick(() => $refs.itemSearch?.focus())"
-                        class="shadow-theme-xs flex h-11 w-full items-center gap-3 rounded-lg border border-gray-300 bg-transparent px-4 text-left text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
-                        <x-ui.icon name="search" class="size-4 text-gray-400" />
-                        <span class="flex-1 truncate" x-text="selectedItem ? selectedItem.item_name : 'Cari dan pilih barang'" :class="!selectedItem ? 'text-gray-400' : ''"></span>
-                        <span x-show="selectedItem" class="text-theme-xs text-gray-500 dark:text-gray-400" x-text="selectedItem ? selectedItem.item_code : ''"></span>
-                    </button>
-
-                    <div x-show="open" x-transition style="display: none;"
-                        class="absolute z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900">
-                        <input type="text" x-ref="itemSearch" x-model.debounce.200ms="search" placeholder="Ketik nama atau kode barang..."
-                            class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90">
-                        <ul class="mt-2 max-h-64 space-y-0.5 overflow-y-auto">
-                            <template x-for="item in filteredItems" :key="item.item_id">
-                                <li>
-                                    <button type="button" @click="selectedItem = item; search = ''; open = false"
-                                        class="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-gray-100 dark:hover:bg-white/[0.05]">
-                                        <span class="min-w-0">
-                                            <span class="block truncate font-medium text-gray-800 dark:text-white/90" x-text="item.item_name"></span>
-                                            <span class="text-theme-xs text-gray-500 dark:text-gray-400" x-text="item.item_code"></span>
-                                        </span>
-                                        <span class="text-theme-xs shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
-                                            x-text="`Stok ${item.stock_current} ${unitOf(item)}`"></span>
-                                    </button>
-                                </li>
-                            </template>
-                            <template x-if="filteredItems.length === 0">
-                                <li class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                    Barang tidak ditemukan.
-                                    <a href="{{ route('item-applications.create') }}" class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                                        Ajukan permohonan barang baru
-                                    </a>
-                                </li>
-                            </template>
-                        </ul>
-                    </div>
-                </div>
+                <x-request.pemilih-barang :subkategori="$subcategories">
+                    <x-slot:badge>
+                        <span class="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                            x-text="`Stok ${item.stock_current} ${unitOf(item)}`"></span>
+                    </x-slot:badge>
+                    <x-slot:kosong>
+                        <a href="{{ route('item-applications.create') }}" class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                            Ajukan permohonan barang baru
+                        </a>
+                    </x-slot:kosong>
+                </x-request.pemilih-barang>
 
                 <div class="flex flex-wrap items-end gap-3">
                     <div>
@@ -241,19 +212,10 @@
                 units: @json(\App\Enums\SatuanBarang::options()),
                 original: @json((object) $originalQty),
                 isEdit: @json($isEdit),
-                search: '',
                 selectedItem: null,
                 quantity: 1,
                 formError: '',
                 requestedItems: @json(array_values((array) $initialItems)),
-
-                get filteredItems() {
-                    const query = this.search.toLowerCase().trim();
-                    if (!query) return this.items;
-                    return this.items.filter(item =>
-                        item.item_name.toLowerCase().includes(query) || (item.item_code || '').toLowerCase().includes(query)
-                    );
-                },
 
                 get totalQty() {
                     return this.requestedItems.reduce((total, item) => total + (parseInt(item.qty, 10) || 0), 0);

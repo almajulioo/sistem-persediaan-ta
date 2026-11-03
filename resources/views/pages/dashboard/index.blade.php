@@ -1,32 +1,10 @@
 @extends('layouts.app')
 
+{{-- Warna ubin, chip, dan badge diambil dari App\Support\Warna menurut
+     `warna` yang dikirim DashboardController. --}}
+@use('App\Support\Warna')
+
 @php
-    // Kelas warna ditulis utuh, bukan dirangkai dari nama warna, supaya
-    // terbaca pemindai Tailwind. Kunci = `warna` dari DashboardController.
-    $chipUbin = [
-        'sky' => 'bg-sky-500',
-        'brand' => 'bg-brand-500',
-        'success' => 'bg-success-500',
-        'orange' => 'bg-orange-500',
-        'purple' => 'bg-purple-500',
-        'amber' => 'bg-amber-500',
-        'pink' => 'bg-pink-500',
-        'teal' => 'bg-teal-500',
-        'indigo' => 'bg-indigo-500',
-        'rose' => 'bg-rose-500',
-        'gray' => 'bg-gray-500 dark:bg-gray-600',
-    ];
-
-    $chipTugas = [
-        'sky' => 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400',
-        'purple' => 'bg-purple-50 text-purple-600 dark:bg-purple-500/15 dark:text-purple-400',
-        'amber' => 'bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
-        'pink' => 'bg-pink-50 text-pink-600 dark:bg-pink-500/15 dark:text-pink-400',
-        'orange' => 'bg-orange-50 text-orange-600 dark:bg-orange-500/15 dark:text-orange-400',
-        'error' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
-        'success' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-    ];
-
     // Isi bilah memakai warna status; lintasannya tingkat yang lebih terang
     // dari warna yang sama, sehingga barang habis (isi nol) tetap terbaca merah.
     $warnaStok = [
@@ -57,49 +35,41 @@
     <x-ui.flash />
 
     @if ($pintuPengguna !== null)
-        {{-- Dua pintu utama Pengguna: permintaan dan permohonan. --}}
+        {{-- Dua pintu utama Pengguna: permintaan dan permohonan, masing-masing
+             berwarna identitasnya dan berdampingan dengan catatan kapan dipakai
+             dan apa hasilnya, supaya perbedaannya terbaca sebelum memilih. --}}
         <div class="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             @foreach ([
-                [
-                    'judul' => 'Permintaan Barang',
-                    'deskripsi' => 'Ambil barang yang tersedia di gudang.',
-                    'ikon' => 'inbox',
-                    'warna' => 'sky',
-                    'data' => $pintuPengguna['permintaan'],
-                    'buat' => route('request.create'),
-                    'buatLabel' => 'Buat Permintaan',
-                    'daftar' => route('request.index'),
-                ],
-                [
-                    'judul' => 'Permohonan',
-                    'deskripsi' => 'Mohon barang baru atau tambah stok barang yang kurang.',
-                    'ikon' => 'clipboard-list',
-                    'warna' => 'indigo',
-                    'data' => $pintuPengguna['permohonan'],
-                    'buat' => route('item-applications.create'),
-                    'buatLabel' => 'Ajukan Permohonan',
-                    'daftar' => route('item-applications.index'),
-                ],
+                ['modul' => \App\Enums\ModulPengajuan::Permintaan, 'data' => $pintuPengguna['permintaan']],
+                ['modul' => \App\Enums\ModulPengajuan::Permohonan, 'data' => $pintuPengguna['permohonan']],
             ] as $pintu)
-                <section class="{{ $kartu }} flex flex-col">
+                @php $modul = $pintu['modul']; @endphp
+                <section class="{{ $kartu }} flex flex-col border-t-[3px] {{ $modul->aksenClass() }}">
                     <div class="flex items-start gap-4">
-                        <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl text-white {{ $chipUbin[$pintu['warna']] }}">
-                            <x-ui.icon :name="$pintu['ikon']" class="size-6" />
+                        <span class="flex size-12 shrink-0 items-center justify-center rounded-2xl text-white {{ Warna::isi($modul->warna()) }}">
+                            <x-ui.icon :name="$modul->icon()" class="size-6" />
                         </span>
                         <div>
-                            <h3 class="{{ $judulKartu }}">{{ $pintu['judul'] }}</h3>
-                            <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">{{ $pintu['deskripsi'] }}</p>
+                            <h3 class="{{ $judulKartu }}">{{ $modul->label() }}</h3>
+                            <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">{{ $modul->ringkas() }}</p>
                         </div>
                     </div>
+
+                    <dl class="text-theme-sm mt-4 space-y-2 rounded-xl border px-4 py-3 {{ $modul->catatanClass() }}">
+                        <div class="flex gap-3">
+                            <dt class="w-24 shrink-0 font-medium text-gray-800 dark:text-white/90">Dipakai bila</dt>
+                            <dd class="text-gray-600 dark:text-gray-300">{{ $modul->dipakaiBila() }}</dd>
+                        </div>
+                        <div class="flex gap-3">
+                            <dt class="w-24 shrink-0 font-medium text-gray-800 dark:text-white/90">Hasilnya</dt>
+                            <dd class="text-gray-600 dark:text-gray-300">{{ $modul->hasil($user) }}</dd>
+                        </div>
+                    </dl>
 
                     <ul class="mt-5 grid grid-cols-3 gap-3">
                         @foreach ($pintu['data']['statistik'] as $statistik)
                             <li>
-                                <a href="{{ $statistik['url'] }}"
-                                    class="block rounded-xl bg-gray-50 px-3 py-3 transition hover:bg-gray-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
-                                    <span class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $statistik['label'] }}</span>
-                                    <span class="mt-1 block text-2xl font-semibold text-gray-800 dark:text-white/90">{{ $statistik['jumlah'] }}</span>
-                                </a>
+                                @include('pages.dashboard._statistik-ubin', ['statistik' => $statistik])
                             </li>
                         @endforeach
                     </ul>
@@ -107,19 +77,19 @@
                     @if ($pintu['data']['perhatian'] ?? null)
                         <a href="{{ route('request.index', ['tahap' => 'diserahkan']) }}"
                             class="text-theme-sm bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300 mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5">
-                            <x-ui.icon name="package" class="size-4" />
+                            <x-ui.icon name="truck" class="size-4" />
                             <span class="flex-1">{{ $pintu['data']['perhatian'] }}</span>
                             <x-ui.icon name="chevron-right" class="size-4" />
                         </a>
                     @endif
 
                     <div class="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
-                        <a href="{{ $pintu['buat'] }}"
-                            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
+                        <a href="{{ $modul->ruteBuat() }}"
+                            class="shadow-theme-xs inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition {{ $modul->tombolClass() }}">
                             <x-ui.icon name="plus" class="size-4" />
-                            {{ $pintu['buatLabel'] }}
+                            {{ $modul->labelBuat() }}
                         </a>
-                        <a href="{{ $pintu['daftar'] }}" class="text-theme-sm text-brand-600 hover:text-brand-700 dark:text-brand-400 inline-flex items-center gap-1 font-medium">
+                        <a href="{{ $modul->ruteDaftar() }}" class="text-theme-sm inline-flex items-center gap-1 font-medium {{ $modul->tautanClass() }}">
                             Lihat semua
                             <x-ui.icon name="arrow-right" class="size-4" />
                         </a>
@@ -133,7 +103,7 @@
         @foreach ($aksesCepat as $ubin)
             <a href="{{ $ubin['url'] }}"
                 class="hover:shadow-theme-sm flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-gray-300 dark:border-gray-800 dark:bg-white/[0.03] dark:hover:border-gray-700 dark:hover:bg-white/[0.05]">
-                <span class="flex size-10 shrink-0 items-center justify-center rounded-xl text-white {{ $chipUbin[$ubin['warna']] }}">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-xl text-white {{ Warna::isi($ubin['warna']) }}">
                     <x-ui.icon :name="$ubin['ikon']" class="size-5" />
                 </span>
                 <span class="text-theme-sm leading-snug font-medium text-gray-800 dark:text-white/90">{{ $ubin['label'] }}</span>
@@ -148,7 +118,7 @@
             @foreach ($dasborUnit['statistik'] as $statistik)
                 <a href="{{ $statistik['url'] }}"
                     class="{{ $kartu }} flex items-center gap-4 transition hover:border-gray-300 dark:hover:border-gray-700">
-                    <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ $chipTugas[$statistik['warna']] }}">
+                    <span class="flex size-11 shrink-0 items-center justify-center rounded-xl {{ Warna::lembut($statistik['warna']) }}">
                         <x-ui.icon :name="$statistik['ikon']" class="size-5" />
                     </span>
                     <span>
@@ -160,13 +130,14 @@
         </div>
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
-            <section class="{{ $kartu }} xl:col-span-3">
+            <section class="{{ $kartu }} border-t-[3px] xl:col-span-3 {{ \App\Enums\ModulPengajuan::Permintaan->aksenClass() }}">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
+                        <x-modul.label :modul="\App\Enums\ModulPengajuan::Permintaan" class="mb-1.5" />
                         <h3 class="{{ $judulKartu }}">Menunggu Persetujuan Anda</h3>
                         <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">Permintaan dari {{ $dasborUnit['unit'] }}, yang terlama di atas.</p>
                     </div>
-                    <a href="{{ route('request.index', ['status' => 'submitted']) }}" class="text-theme-sm text-brand-600 hover:text-brand-700 dark:text-brand-400 inline-flex items-center gap-1 font-medium">
+                    <a href="{{ route('request.index', ['status' => 'submitted']) }}" class="text-theme-sm inline-flex items-center gap-1 font-medium {{ \App\Enums\ModulPengajuan::Permintaan->tautanClass() }}">
                         Lihat semua
                         <x-ui.icon name="arrow-right" class="size-4" />
                     </a>
@@ -201,7 +172,7 @@
                                         <p class="text-theme-sm truncate font-medium text-gray-800 dark:text-white/90">
                                             {{ $antrean->user?->fullname ?? '-' }}
                                             @if ($antrean->type === 'emergency')
-                                                <span class="text-theme-xs bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400 ml-1 rounded-full px-2 py-0.5 font-medium">Darurat</span>
+                                                <x-ui.pill :warna="$antrean->jenisWarna()" :ikon="$antrean->jenisIcon()" class="ml-1">Darurat</x-ui.pill>
                                             @endif
                                         </p>
                                         <p class="text-theme-xs truncate text-gray-500 dark:text-gray-400">
@@ -257,19 +228,16 @@
                     @endif
                 </section>
 
-                <section class="{{ $kartu }}">
+                <section class="{{ $kartu }} border-t-[3px] {{ \App\Enums\ModulPengajuan::Permohonan->aksenClass() }}">
+                    <x-modul.label :modul="\App\Enums\ModulPengajuan::Permohonan" class="mb-1.5" />
                     <div class="flex items-center justify-between gap-3">
                         <h3 class="{{ $judulKartu }}">Permohonan Unit</h3>
-                        <a href="{{ route('item-applications.index') }}" class="text-theme-sm text-brand-600 hover:text-brand-700 dark:text-brand-400 font-medium">Lihat semua</a>
+                        <a href="{{ \App\Enums\ModulPengajuan::Permohonan->ruteDaftar() }}" class="text-theme-sm font-medium {{ \App\Enums\ModulPengajuan::Permohonan->tautanClass() }}">Lihat semua</a>
                     </div>
                     <ul class="mt-4 grid grid-cols-3 gap-3">
                         @foreach ($dasborUnit['permohonan'] as $statistik)
                             <li>
-                                <a href="{{ $statistik['url'] }}"
-                                    class="block rounded-xl bg-gray-50 px-3 py-3 transition hover:bg-gray-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
-                                    <span class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $statistik['label'] }}</span>
-                                    <span class="mt-1 block text-2xl font-semibold text-gray-800 dark:text-white/90">{{ $statistik['jumlah'] }}</span>
-                                </a>
+                                @include('pages.dashboard._statistik-ubin', ['statistik' => $statistik])
                             </li>
                         @endforeach
                     </ul>
@@ -297,7 +265,7 @@
                         <li>
                             <a href="{{ $baris['url'] }}"
                                 class="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-                                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ $chipTugas[$baris['warna']] }}">
+                                <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ Warna::lembut($baris['warna']) }}">
                                     <x-ui.icon :name="$baris['ikon']" class="size-[18px]" />
                                 </span>
                                 <span class="text-theme-sm flex-1 text-gray-700 dark:text-gray-300">{{ $baris['label'] }}</span>
@@ -325,26 +293,21 @@
                             <li>
                                 <a href="{{ $aktivitas['url'] }}"
                                     class="group flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-                                    <span @class([
-                                        'flex size-9 shrink-0 items-center justify-center rounded-lg',
-                                        'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' => $aktivitas['jenis'] === 'Permintaan',
-                                        'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400' => $aktivitas['jenis'] === 'Permohonan',
-                                    ])>
-                                        <x-ui.icon :name="$aktivitas['ikon']" class="size-[18px]" />
+                                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg {{ Warna::lembut($aktivitas['modul']->warna()) }}">
+                                        <x-ui.icon :name="$aktivitas['modul']->icon()" class="size-[18px]" />
                                     </span>
                                     <span class="min-w-0 flex-1">
-                                        <span class="text-theme-sm block truncate font-medium text-gray-800 dark:text-white/90">
-                                            {{ $aktivitas['nomor'] }}
-                                            <span class="font-normal text-gray-400">· {{ $aktivitas['jenis'] }}</span>
+                                        <span class="text-theme-sm flex items-center gap-2 font-medium text-gray-800 dark:text-white/90">
+                                            <span class="truncate">{{ $aktivitas['nomor'] }}</span>
+                                            <x-modul.label :modul="$aktivitas['modul']" class="shrink-0" />
                                         </span>
                                         <span class="text-theme-xs block truncate text-gray-500 dark:text-gray-400">
                                             {{ $aktivitas['barang'] }} · {{ $aktivitas['waktu']?->translatedFormat('d M Y') }}
                                         </span>
                                     </span>
-                                    <span class="text-theme-xs inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-medium {{ $aktivitas['badge'] }}">
-                                        <span class="size-1.5 rounded-full bg-current"></span>
+                                    <x-ui.pill :warna="$aktivitas['statusWarna']" :ikon="$aktivitas['statusIkon']" class="shrink-0">
                                         {{ $aktivitas['status'] }}
-                                    </span>
+                                    </x-ui.pill>
                                 </a>
                             </li>
                         @endforeach
@@ -432,7 +395,7 @@
 
     {{-- Alur permintaan: cakupannya mengikuti daftar permintaan, jadi
          Pengguna hanya melihat miliknya dan Kepala Unit hanya unitnya. --}}
-    @include('pages.dashboard._alur', ['judul' => 'Alur Permintaan', 'tahapan' => $alurPermintaan])
+    @include('pages.dashboard._alur', ['judul' => 'Alur Permintaan', 'tahapan' => $alurPermintaan, 'modulAlur' => \App\Enums\ModulPengajuan::Permintaan])
 
     {{-- Alur pengadaan --}}
     @if ($alur !== null)

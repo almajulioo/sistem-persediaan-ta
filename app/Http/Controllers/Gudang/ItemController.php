@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Gudang;
 use App\Enums\AuditEvent;
 use App\Enums\AuditModule;
 use App\Enums\ItemProposalStatus;
+use App\Enums\KategoriBarang;
 use App\Enums\MutationType;
 use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
@@ -13,6 +14,7 @@ use App\Http\Requests\Gudang\StoreItemRequest;
 use App\Http\Requests\Gudang\UpdateItemRequest;
 use App\Models\Item;
 use App\Models\ItemProposal;
+use App\Models\ItemSubcategory;
 use App\Support\AuditLogger;
 use App\Support\NotificationScanner;
 use App\Support\Notifier;
@@ -38,12 +40,17 @@ class ItemController extends Controller
     public function index(Request $request): View
     {
         $keyword = trim((string) $request->query('q', ''));
+        $category = (string) $request->query('category', '');
+        $subcategory = (string) $request->query('subcategory', '');
         $unit = (string) $request->query('unit', '');
         $stock = (string) $request->query('stock', '');
         $status = (string) $request->query('status', '');
 
         $items = Item::query()
+            ->with('subcategory')
             ->when($keyword !== '', fn ($query) => $query->search($keyword))
+            ->when(KategoriBarang::tryFrom($category), fn ($query, $kategori) => $query->where('category', $kategori))
+            ->when($subcategory !== '', fn ($query) => $query->where('subcategory_id', $subcategory))
             ->when(SatuanBarang::tryFrom($unit), fn ($query, $satuan) => $query->where('unit', $satuan))
             ->when(StockStatus::tryFrom($stock), fn ($query, $stockStatus) => $query->stockStatus($stockStatus))
             ->when($status === 'aktif', fn ($query) => $query->where('is_active', true))
@@ -56,6 +63,9 @@ class ItemController extends Controller
             'title' => 'Master Barang',
             'items' => $items,
             'keyword' => $keyword,
+            'category' => $category,
+            'subcategory' => $subcategory,
+            'subcategoryOptions' => ItemSubcategory::options(),
             'unit' => $unit,
             'stock' => $stock,
             'status' => $status,
@@ -109,6 +119,7 @@ class ItemController extends Controller
                 'unit' => $proposal?->unit?->value,
             ]),
             'itemProposal' => $proposal,
+            'subcategoryOptions' => ItemSubcategory::options(),
         ]);
     }
 
@@ -194,7 +205,7 @@ class ItemController extends Controller
     {
         return view('pages.items.show', [
             'title' => $item->item_name,
-            'item' => $item,
+            'item' => $item->load('subcategory'),
             'mutations' => $item->stockMutations()
                 ->with('user')
                 ->latest('created_at')
@@ -207,6 +218,7 @@ class ItemController extends Controller
         return view('pages.items.edit', [
             'title' => 'Ubah Barang',
             'item' => $item,
+            'subcategoryOptions' => ItemSubcategory::options(),
         ]);
     }
 

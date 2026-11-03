@@ -22,7 +22,7 @@ hanya tabel yang dipakai bersama.
 
 ### Tabel bersama — hanya diubah lewat kesepakatan
 
-`users`, `items`, `stock_mutations`, `audit_logs`
+`users`, `items`, `item_subcategories`, `stock_mutations`, `audit_logs`
 
 Bila tabel-tabel ini muncul di kedua ERD, kolomnya harus digambar sama persis.
 Sumber kebenarannya adalah migrasi yang berjalan, bukan gambar di naskah. Migrasi

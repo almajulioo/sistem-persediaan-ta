@@ -1,11 +1,13 @@
 <?php
 
+use App\Enums\KategoriBarang;
 use App\Enums\MutationType;
 use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemSubcategory;
 use App\Models\User;
 use App\Support\StockLedger;
 
@@ -19,6 +21,11 @@ function itemPayload(array $overrides = []): array
     return array_merge([
         'item_code' => 'ATK-001',
         'item_name' => 'Kertas HVS A4 70 gram',
+        // Hanya dibuat bila tidak di-override, supaya tidak menyisakan sub
+        // kategori yatim di tes yang memilih sub kategorinya sendiri.
+        'subcategory_id' => array_key_exists('subcategory_id', $overrides)
+            ? $overrides['subcategory_id']
+            : ItemSubcategory::factory()->atk()->create()->subcategory_id,
         'unit' => SatuanBarang::Rim->value,
         'stock_awal' => 50,
         'stock_min' => 10,
@@ -149,6 +156,73 @@ describe('membuat barang', function () {
     });
 });
 
+describe('kategori dan sub kategori', function () {
+    it('mewajibkan sub kategori yang terdaftar', function () {
+        $actor = pengelolaGudang();
+
+        $this->actingAs($actor)
+            ->post('/barang', itemPayload(['subcategory_id' => '']))
+            ->assertSessionHasErrors('subcategory_id');
+
+        $this->actingAs($actor)
+            ->post('/barang', itemPayload(['subcategory_id' => 'bukan-sub-kategori']))
+            ->assertSessionHasErrors('subcategory_id');
+
+        expect(Item::where('item_code', 'ATK-001')->exists())->toBeFalse();
+    });
+
+    // Kategori barang adalah salinan kategori sub kategorinya (ADR 0043):
+    // tidak dapat dipilih sendiri, sekalipun dikirim di request.
+    it('mengisi kategori dari sub kategori dan mengabaikan kategori kiriman', function () {
+        $atk = ItemSubcategory::factory()->atk()->create();
+
+        $this->actingAs(pengelolaGudang())
+            ->post('/barang', itemPayload([
+                'subcategory_id' => $atk->subcategory_id,
+                'category' => KategoriBarang::ARTK->value,
+            ]))
+            ->assertRedirect('/barang');
+
+        $item = Item::where('item_code', 'ATK-001')->first();
+
+        expect($item->subcategory_id)->toBe($atk->subcategory_id)
+            ->and($item->category)->toBe(KategoriBarang::ATK);
+    });
+
+    it('menampilkan sub kategori berkelompok per kategori di formulir', function () {
+        ItemSubcategory::factory()->atk()->create(['subcategory_code' => '1010301001', 'subcategory_name' => 'ALAT TULIS']);
+        ItemSubcategory::factory()->artk()->create(['subcategory_code' => '1010306001', 'subcategory_name' => 'KABEL LISTRIK']);
+
+        $this->actingAs(pengelolaGudang())->get('/barang/create')
+            ->assertOk()
+            ->assertSeeInOrder([
+                'optgroup label="ATK — Alat Tulis Kantor"',
+                '1010301001 — ALAT TULIS',
+                'optgroup label="ARTK — Alat Rumah Tangga Kantor"',
+                '1010306001 — KABEL LISTRIK',
+            ], escape: false);
+    });
+
+    it('menyaring daftar barang menurut kategori dan sub kategori', function () {
+        $actor = pengelolaGudang();
+        $alatTulis = ItemSubcategory::factory()->atk()->create();
+        $kertas = ItemSubcategory::factory()->atk()->create();
+        $kabel = ItemSubcategory::factory()->artk()->create();
+        Item::factory()->create(['item_name' => 'Pulpen Hitam', 'subcategory_id' => $alatTulis]);
+        Item::factory()->create(['item_name' => 'Kertas Folio', 'subcategory_id' => $kertas]);
+        Item::factory()->create(['item_name' => 'Kabel Roll', 'subcategory_id' => $kabel]);
+
+        $this->actingAs($actor)->get('/barang?category='.KategoriBarang::ATK->value)
+            ->assertSee('Pulpen Hitam')->assertSee('Kertas Folio')->assertDontSee('Kabel Roll');
+
+        $this->actingAs($actor)->get('/barang?category='.KategoriBarang::ARTK->value)
+            ->assertSee('Kabel Roll')->assertDontSee('Pulpen Hitam');
+
+        $this->actingAs($actor)->get('/barang?subcategory='.$kertas->subcategory_id)
+            ->assertSee('Kertas Folio')->assertDontSee('Pulpen Hitam')->assertDontSee('Kabel Roll');
+    });
+});
+
 describe('mengubah barang', function () {
     it('memperbarui data induk', function () {
         $item = Item::factory()->create(['item_code' => 'ATK-001', 'stock_current' => 40]);
@@ -157,6 +231,7 @@ describe('mengubah barang', function () {
             ->put("/barang/{$item->item_id}", [
                 'item_code' => 'ATK-001',
                 'item_name' => 'Kertas HVS A4 80 gram',
+                'subcategory_id' => $item->subcategory_id,
                 'unit' => SatuanBarang::Rim->value,
                 'stock_min' => 25,
                 'stock_max' => 400,
@@ -178,6 +253,7 @@ describe('mengubah barang', function () {
         $this->actingAs(pengelolaGudang())->put("/barang/{$item->item_id}", [
             'item_code' => 'ATK-001',
             'item_name' => $item->item_name,
+            'subcategory_id' => $item->subcategory_id,
             'unit' => $item->unit->value,
             'stock_min' => 10,
             'stock_max' => 200,
@@ -188,6 +264,24 @@ describe('mengubah barang', function () {
 
         expect($item->refresh()->stock_current)->toBe(40)
             ->and($item->stockMutations()->count())->toBe(0);
+    });
+
+    it('memindahkan kategori barang bersama sub kategorinya', function () {
+        $item = Item::factory()->create(['subcategory_id' => ItemSubcategory::factory()->atk()]);
+        $artk = ItemSubcategory::factory()->artk()->create();
+
+        $this->actingAs(pengelolaGudang())->put("/barang/{$item->item_id}", [
+            'item_code' => $item->item_code,
+            'item_name' => $item->item_name,
+            'subcategory_id' => $artk->subcategory_id,
+            'unit' => $item->unit->value,
+            'stock_min' => $item->stock_min,
+            'stock_max' => $item->stock_max,
+            'is_active' => 1,
+        ])->assertRedirect('/barang');
+
+        expect($item->refresh()->subcategory_id)->toBe($artk->subcategory_id)
+            ->and($item->category)->toBe(KategoriBarang::ARTK);
     });
 });
 

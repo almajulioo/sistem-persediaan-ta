@@ -5,6 +5,74 @@ perubahan.
 
 ---
 
+## 3 November 2026 — Kategori dan sub kategori barang (dikerjakan Alma)
+
+Entri ini ditulis **Alma**, yang mengubah modul Master Barang milik Narendra.
+Keputusannya di [ADR 0043](keputusan/0043-kategori-dan-sub-kategori-barang.md).
+Menyentuh tabel bersama `items` — **Narendra perlu dikabari**.
+
+**Yang berubah.**
+
+- Tabel baru `item_subcategories` (kode unik, nama, `category` enum
+  `ATK`/`ARTK`); `items` mendapat `category` (enum) dan `subcategory_id` (FK,
+  `restrictOnDelete`), keduanya nullable di basis data.
+- `items.category` selalu disalin dari sub kategori (hook `saving` di `Item`,
+  tidak fillable); mengubah kategori sub kategori ikut memindahkan barangnya.
+- Formulir barang wajib memilih sub kategori — dropdown berkelompok ATK/ARTK
+  lewat `x-form.select-field` yang kini mendukung `<optgroup>`. Master Barang
+  dapat penyaring Kategori dan Sub Kategori serta kolom Kategori; rincian
+  barang menampilkan keduanya.
+- Halaman baru **Sub Kategori Barang** (`/sub-kategori-barang`, menu Manajemen
+  Gudang): tambah, ubah, hapus bila belum dipakai; Kasubbag baca-saja. Modul
+  log baru `SubKategoriBarang`.
+- Data kantor diganti: `barang.csv` (1.801 barang, berkolom
+  `subcategory_code`), `kategori_barang.csv` (75 sub kategori, baru), dan
+  `saldo_awal_2026_10_01.csv` (120 barang, total 1.792; berkas ber-CRLF, jadi
+  `bacaCsv()` kini men-`trim` nama kolom). `ItemSubcategorySeeder` baru,
+  `ItemSeeder` menautkan sub kategori dan mengisi barang lama yang belum punya.
+
+**Ikut berubah di luar modul ini.**
+
+- Sub sistem Permintaan (milik Alma): ketiga pemilih barang — Buat
+  Permintaan, Permintaan Umum, Ajukan Permohonan — disatukan menjadi
+  komponen `x-request.pemilih-barang` dengan penyaring bertingkat — chip
+  kategori berjumlah, lalu chip sub kategori di bawah kategori terpilih
+  (dikelompokkan menurut kolom `category` milik sub kategori, hanya yang masih
+  punya barang cocok) — pencarian banyak kata, navigasi papan ketik, dan
+  render 50 baris pertama. Katalog dan daftar sub kategorinya dari
+  `App\Support\KatalogBarang`.
+- `layouts/app.blade.php`: kolom konten mendapat `min-w-0`. Sebelumnya tabel
+  lebar melebarkan **seluruh halaman** alih-alih bergulir di dalam kartunya —
+  `/mutasi` melebar sampai 1.560 px di layar 1.366 px. Kini semua halaman
+  pas, termasuk halaman gudang dan pengadaan.
+- `x-form.select-field`: pembungkusnya `min-w-0` supaya opsi panjang (nama
+  sub kategori) tidak melebarkan kolom grid penyaring.
+
+**Basis data dev (Railway).** Hanya jalur aditif: `migrate` dua migrasi
+baru, lalu `ItemSubcategorySeeder` dan `ItemSeeder`. 75 sub kategori dibuat,
+1.801 barang terisi sub kategori (ATK 837, ARTK 964); stok, mutasi, dan
+permintaan tidak berubah. 941 barang obat lama tetap ada tanpa sub kategori
+karena tidak ada di CSV baru.
+
+**Verifikasi.** 786 test lulus (+4 `ItemManagementTest` kategori,
++1 ubah sub kategori barang, +13 `ItemSubcategoryManagementTest`,
++2 `ItemSeederTest` yang menjalankan seeder atas CSV sungguhan: 75 sub
+kategori, 1.801 barang, semua bersub kategori dengan kategori cocok, 120
+aktif, saldo 1.792, idempoten; +6 `PemilihBarangTest`). Dua kegagalan
+tersisa adalah locale (`APP_LOCALE=en` di `.env` Alma), bukan dari sesi ini.
+Pint bersih untuk berkas yang diubah — `MenuHelper.php` dan
+`RequestController.php` punya temuan gaya yang sudah ada sebelumnya, tidak
+disentuh. `migrate:fresh --seed` berhasil di SQLite terpisah. Uji peramban
+(Edge headless lewat DevTools Protocol, server kedua di port 8123 atas
+SQLite itu): ketiga pemilih diuji cari satu dan dua kata, chip ATK/ARTK,
+chip sub kategori di bawahnya (klik ulang melepas, pindah kategori
+mengosongkan sub kategori, chip menyempit mengikuti kata kunci), keadaan
+kosong dan reset, serta ↓ ↓ Enter; tampilan ponsel 390 px diperiksa. Galat JS
+`classList of null` yang muncul juga muncul di `/mutasi`, jadi sudah ada
+sebelumnya.
+
+---
+
 ## 24 Oktober 2026 (lanjutan) — BAST pengadaan format resmi BPK
 
 Narendra membawa format resmi Berita Acara Serah Terima Barang Persediaan BPK

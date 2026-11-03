@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\ItemApplication;
 use App\Models\ItemProposal;
+use App\Models\ItemSubcategory;
 use App\Models\Procurement;
 use App\Models\ProcurementDocument;
 use App\Models\ProcurementRequest;
@@ -72,6 +73,7 @@ class AppServiceProvider extends ServiceProvider
 
             'pengguna' => User::class,
             'barang' => Item::class,
+            'sub_kategori_barang' => ItemSubcategory::class,
             'penyedia' => Supplier::class,
             'usulan_barang' => ItemProposal::class,
             'usulan_pengadaan' => ProcurementRequest::class,

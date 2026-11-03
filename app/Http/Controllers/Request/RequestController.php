@@ -24,6 +24,7 @@ use App\Models\RequestDocument;
 use App\Models\User;
 use App\Services\RequestWorkflowService;
 use App\Support\AuditLogger;
+use App\Support\KatalogBarang;
 use App\Enums\AuditEvent;
 use App\Enums\AuditModule;
 use App\Exceptions\InsufficientStockException;
@@ -41,10 +42,10 @@ class RequestController extends Controller
      * Filter `status` tunggal tetap ada untuk tautan dari dasbor.
      */
     private const TAHAP_DAFTAR = [
-        'berjalan' => ['label' => 'Berjalan', 'status' => ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance']],
-        'diserahkan' => ['label' => 'Diserahkan', 'status' => ['delivered']],
-        'selesai' => ['label' => 'Selesai', 'status' => ['completed']],
-        'ditolak' => ['label' => 'Ditolak', 'status' => ['rejected']],
+        'berjalan' => ['label' => 'Berjalan', 'ikon' => 'clock', 'warna' => 'warning', 'status' => ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance']],
+        'diserahkan' => ['label' => 'Diserahkan', 'ikon' => 'truck', 'warna' => 'brand', 'status' => ['delivered']],
+        'selesai' => ['label' => 'Selesai', 'ikon' => 'check-circle', 'warna' => 'success', 'status' => ['completed']],
+        'ditolak' => ['label' => 'Ditolak', 'ikon' => 'x-circle', 'warna' => 'error', 'status' => ['rejected']],
     ];
 
     public function index(Request $request)
@@ -83,9 +84,11 @@ class RequestController extends Controller
             ->selectRaw('status, count(*) as jumlah')
             ->groupBy('status')
             ->pluck('jumlah', 'status');
-        $tabs = ['' => ['label' => 'Semua', 'jumlah' => (int) $jumlahStatus->sum()]]
+        $tabs = ['' => ['label' => 'Semua', 'ikon' => 'layers', 'warna' => 'gray', 'jumlah' => (int) $jumlahStatus->sum()]]
             + array_map(fn (array $tab) => [
                 'label' => $tab['label'],
+                'ikon' => $tab['ikon'],
+                'warna' => $tab['warna'],
                 'jumlah' => (int) $jumlahStatus->only($tab['status'])->sum(),
             ], self::TAHAP_DAFTAR);
 
@@ -130,14 +133,10 @@ class RequestController extends Controller
     {
         // Formulir menampilkan dan membatasi jumlah dengan stok tersedia,
         // yaitu stok fisik dikurangi yang ditahan permintaan lain.
-        $items = Item::where('is_active', true)->orderBy('item_name')->get();
+        $items = KatalogBarang::barangAktif();
         $reserved = StockReservation::reservedFor($items->pluck('item_id')->all());
         $items = $items->map(fn (Item $item) => [
-            'item_id' => $item->item_id,
-            'item_code' => $item->item_code,
-            'item_name' => $item->item_name,
-            'unit' => $item->unit?->value,
-            'stock_current' => (int) $item->stock_current,
+            ...KatalogBarang::baris($item),
             'reserved' => $reserved->get($item->item_id, 0),
             'available' => max(0, (int) $item->stock_current - $reserved->get($item->item_id, 0)),
         ]);
@@ -156,6 +155,7 @@ class RequestController extends Controller
         return view('pages.request.create', [
             'title' => 'Request',
             'items' => $items,
+            'subcategories' => KatalogBarang::subkategori(),
             'users' => $users,
             'canCreateEmergency' => $canCreateEmergency,
             'ndTemplate' => $this->notaDinasTemplate($request->user()),
@@ -180,7 +180,8 @@ class RequestController extends Controller
 
         return view('pages.request.umum.create', [
             'title' => 'Buat Permintaan Umum',
-            'items' => Item::where('is_active', true)->orderBy('item_name')->get(),
+            'items' => KatalogBarang::untukPemilih(),
+            'subcategories' => KatalogBarang::subkategori(),
         ]);
     }
 
@@ -276,7 +277,8 @@ class RequestController extends Controller
 
         return view('pages.request.umum.create', [
             'title' => 'Ubah Permintaan Umum',
-            'items' => Item::where('is_active', true)->orderBy('item_name')->get(),
+            'items' => KatalogBarang::untukPemilih(),
+            'subcategories' => KatalogBarang::subkategori(),
             'requestData' => $request->load('item.item'),
             'isEdit' => true,
         ]);

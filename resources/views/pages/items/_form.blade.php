@@ -7,6 +7,7 @@
     $itemProposal : ?App\Models\ItemProposal — terisi bila barangnya lahir dari
                     usulan barang baru (ADR 0032); menyimpan formulir ini
                     sekaligus menyetujui usulan itu
+    $subcategoryOptions : array — ItemSubcategory::options()
 --}}
 @php($itemProposal = $itemProposal ?? null)
 
@@ -38,6 +39,10 @@
 
         <x-form.text-field name="item_name" label="Nama Barang" :value="$item->item_name" required
             placeholder="mis. Kertas HVS A4 70 gram" />
+
+        {{-- Kategori (ATK/ARTK) tidak dipilih sendiri: ikut sub kategori (ADR 0043). --}}
+        <x-form.select-field name="subcategory_id" label="Sub Kategori" :options="$subcategoryOptions"
+            :selected="$item->subcategory_id" required placeholder="Pilih sub kategori" />
 
         <x-form.select-field name="unit" label="Satuan" :options="\App\Enums\SatuanBarang::options()"
             :selected="$item->unit?->value" required placeholder="Pilih satuan" />

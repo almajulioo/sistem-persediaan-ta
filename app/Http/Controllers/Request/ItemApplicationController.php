@@ -9,10 +9,10 @@ use App\Enums\SatuanBarang;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Request\RejectItemApplicationRequest;
 use App\Http\Requests\Request\StoreItemApplicationRequest;
-use App\Models\Item;
 use App\Models\ItemApplication;
 use App\Services\ItemApplicationWorkflowService;
 use App\Support\AuditLogger;
+use App\Support\KatalogBarang;
 use App\Support\NotificationScanner;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -47,10 +47,24 @@ class ItemApplicationController extends Controller
             ->selectRaw('status, count(*) as jumlah')
             ->groupBy('status')
             ->pluck('jumlah', 'status');
-        $tabs = ['' => ['label' => 'Semua', 'jumlah' => (int) $jumlahStatus->sum()]];
+        $tabs = ['' => ['label' => 'Semua', 'ikon' => 'layers', 'warna' => 'gray', 'jumlah' => (int) $jumlahStatus->sum()]];
         foreach (ItemApplicationStatus::cases() as $status) {
-            $tabs[$status->value] = ['label' => $status->label(), 'jumlah' => (int) ($jumlahStatus[$status->value] ?? 0)];
+            $tabs[$status->value] = [
+                'label' => $status->label(),
+                'ikon' => $status->icon(),
+                'warna' => $status->warna(),
+                'jumlah' => (int) ($jumlahStatus[$status->value] ?? 0),
+            ];
         }
+
+        // Kartu ringkasan tidak mengikuti pencarian, sama dengan daftar permintaan.
+        $visible = fn () => ItemApplication::query()->terlihatOleh($request->user());
+        $bulanIni = [now()->startOfMonth(), now()->endOfMonth()];
+        $summary = [
+            'menunggu' => $visible()->where('status', ItemApplicationStatus::Diajukan)->count(),
+            'bulan_ini' => $visible()->whereBetween('date', $bulanIni)->count(),
+            'disetujui_bulan_ini' => $visible()->where('status', ItemApplicationStatus::Disetujui)->whereBetween('date', $bulanIni)->count(),
+        ];
 
         $applications = $searched()
             ->with(['user', 'details.item'])
@@ -65,6 +79,7 @@ class ItemApplicationController extends Controller
             'applications' => $applications,
             'filters' => $filters,
             'tabs' => $tabs,
+            'summary' => $summary,
         ]);
     }
 
@@ -72,7 +87,8 @@ class ItemApplicationController extends Controller
     {
         return view('pages.request.applications.create', [
             'title' => 'Ajukan Permohonan',
-            'items' => Item::aktif()->orderBy('item_name')->get(['item_id', 'item_code', 'item_name', 'unit', 'stock_current']),
+            'items' => KatalogBarang::untukPemilih(),
+            'subcategories' => KatalogBarang::subkategori(),
             'satuan' => SatuanBarang::options(),
         ]);
     }

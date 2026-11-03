@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\KategoriBarang;
 use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Item extends Model
@@ -25,21 +27,38 @@ class Item extends Model
      * `stock_current` sengaja tidak fillable: stok hanya boleh berubah lewat
      * App\Support\StockLedger agar setiap perubahan punya jejak mutasi.
      *
+     * `category` juga tidak fillable: nilainya selalu disalin dari sub
+     * kategori saat disimpan (ADR 0043).
+     *
      * @var list<string>
      */
     protected $fillable = [
-        'item_code', 'item_name', 'unit', 'stock_min', 'stock_max', 'is_active',
+        'item_code', 'item_name', 'subcategory_id', 'unit', 'stock_min', 'stock_max', 'is_active',
     ];
 
     protected function casts(): array
     {
         return [
+            'category' => KategoriBarang::class,
             'unit' => SatuanBarang::class,
             'stock_current' => 'integer',
             'stock_min' => 'integer',
             'stock_max' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Kategori barang adalah kategori sub kategorinya. Disalin di sini,
+        // bukan dipilih di formulir, supaya keduanya tidak mungkin berbeda.
+        static::saving(function (Item $item) {
+            if ($item->isDirty('subcategory_id')) {
+                $item->category = $item->subcategory_id === null
+                    ? null
+                    : ItemSubcategory::whereKey($item->subcategory_id)->value('category');
+            }
+        });
     }
 
     /**
@@ -140,6 +159,11 @@ class Item extends Model
                         ->orWhereColumn('stock_current', '<=', 'stock_max');
                 }),
         };
+    }
+
+    public function subcategory(): BelongsTo
+    {
+        return $this->belongsTo(ItemSubcategory::class, 'subcategory_id', 'subcategory_id');
     }
 
     public function opnameDetails(): HasMany

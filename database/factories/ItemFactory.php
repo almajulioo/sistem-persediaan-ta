@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\SatuanBarang;
 use App\Models\Item;
+use App\Models\ItemSubcategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -34,6 +35,7 @@ class ItemFactory extends Factory
         return [
             'item_code' => 'BRG-'.Str::upper(fake()->unique()->bothify('??##')),
             'item_name' => fake()->unique()->words(3, true),
+            'subcategory_id' => ItemSubcategory::factory(),
             'unit' => fake()->randomElement(SatuanBarang::cases()),
             'stock_current' => fake()->numberBetween($min + 1, $min * 5),
             'stock_min' => $min,

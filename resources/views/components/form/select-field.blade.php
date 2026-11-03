@@ -14,7 +14,8 @@
     $current = (string) old($name, $selected);
 @endphp
 
-<div>
+{{-- min-w-0: opsi yang panjang tidak boleh melebarkan kolom grid/flex induknya. --}}
+<div class="min-w-0">
     <label for="{{ $name }}" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
         {{ $label }}@if ($required)<span class="text-error-500">*</span>@endif
     </label>
@@ -31,11 +32,23 @@
                 <option value="" class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">{{ $placeholder }}</option>
             @endif
 
+            {{-- Nilai berupa array dirender sebagai <optgroup>: [label kelompok => [nilai => label]]. --}}
             @foreach ($options as $optionValue => $optionLabel)
-                <option value="{{ $optionValue }}" @selected($current === (string) $optionValue)
-                    class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                    {{ $optionLabel }}
-                </option>
+                @if (is_array($optionLabel))
+                    <optgroup label="{{ $optionValue }}" class="text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                        @foreach ($optionLabel as $groupValue => $groupLabel)
+                            <option value="{{ $groupValue }}" @selected($current === (string) $groupValue)
+                                class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                                {{ $groupLabel }}
+                            </option>
+                        @endforeach
+                    </optgroup>
+                @else
+                    <option value="{{ $optionValue }}" @selected($current === (string) $optionValue)
+                        class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
+                        {{ $optionLabel }}
+                    </option>
+                @endif
             @endforeach
         </select>
 

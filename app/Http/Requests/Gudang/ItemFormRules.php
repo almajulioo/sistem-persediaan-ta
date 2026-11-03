@@ -22,6 +22,7 @@ class ItemFormRules
         return [
             'item_code' => 'kode barang',
             'item_name' => 'nama barang',
+            'subcategory_id' => 'sub kategori',
             'unit' => 'satuan',
             'stock_min' => 'stok minimum',
             'stock_max' => 'stok maksimum',
@@ -41,6 +42,7 @@ class ItemFormRules
             'min' => ':attribute tidak boleh kurang dari :min.',
             'item_code.regex' => 'Kode barang hanya boleh berisi huruf, angka, titik, tanda hubung, dan garis miring.',
             'item_code.unique' => 'Kode barang sudah dipakai barang lain.',
+            'subcategory_id.exists' => 'Sub kategori yang dipilih tidak dikenali.',
             'unit.enum' => 'Satuan yang dipilih tidak dikenali.',
             'stock_max.gte' => 'Stok maksimum tidak boleh kurang dari stok minimum.',
         ];

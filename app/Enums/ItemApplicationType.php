@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use App\Support\Warna;
+
 /**
  * Jenis satu baris permohonan, disimpan pada `item_application_details.type`.
  */
@@ -18,11 +20,28 @@ enum ItemApplicationType: string
         };
     }
 
-    public function badgeClass(): string
+    /**
+     * Nama warna App\Support\Warna. Barang baru merah muda, sama dengan
+     * ubin Usulan Barang Baru, dan tidak bentrok dengan kuning status Diajukan.
+     */
+    public function warna(): string
     {
         return match ($this) {
-            self::TambahStok => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-            self::BarangBaru => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
+            self::TambahStok => 'brand',
+            self::BarangBaru => 'pink',
         };
+    }
+
+    public function icon(): string
+    {
+        return match ($this) {
+            self::TambahStok => 'package',
+            self::BarangBaru => 'package-plus',
+        };
+    }
+
+    public function badgeClass(): string
+    {
+        return Warna::lembut($this->warna());
     }
 }

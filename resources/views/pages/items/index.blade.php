@@ -43,8 +43,14 @@
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         {{-- Penyaring --}}
         <form method="GET" action="{{ route('items.index') }}"
-            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-4 dark:border-gray-800 sm:p-6">
+            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-3 dark:border-gray-800 sm:p-6">
             <x-form.text-field name="q" label="Cari" :value="$keyword" placeholder="Kode atau nama barang" />
+
+            <x-form.select-field name="category" label="Kategori" :options="\App\Enums\KategoriBarang::options()"
+                :selected="$category" placeholder="Semua kategori" />
+
+            <x-form.select-field name="subcategory" label="Sub Kategori" :options="$subcategoryOptions"
+                :selected="$subcategory" placeholder="Semua sub kategori" />
 
             <x-form.select-field name="unit" label="Satuan" :options="\App\Enums\SatuanBarang::options()"
                 :selected="$unit" placeholder="Semua satuan" />
@@ -56,12 +62,12 @@
                 :options="['aktif' => 'Aktif', 'arsip' => 'Diarsipkan']" :selected="$status"
                 placeholder="Semua barang" />
 
-            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-4">
+            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-3">
                 <button type="submit"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Terapkan
                 </button>
-                @if ($keyword !== '' || $unit !== '' || $stock !== '' || $status !== '')
+                @if ($keyword !== '' || $category !== '' || $subcategory !== '' || $unit !== '' || $stock !== '' || $status !== '')
                     <a href="{{ route('items.index') }}"
                         class="text-theme-sm inline-flex items-center rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                         Reset
@@ -76,7 +82,7 @@
                 <table class="w-full min-w-[980px]">
                     <thead>
                         <tr class="border-b border-gray-100 dark:border-gray-800">
-                            @foreach (array_filter(['Kode', 'Nama Barang', 'Satuan', 'Stok Saat Ini', 'Min / Maks', 'Status', $bisaKelola ? 'Aksi' : null]) as $heading)
+                            @foreach (array_filter(['Kode', 'Nama Barang', 'Kategori', 'Satuan', 'Stok Saat Ini', 'Min / Maks', 'Status', $bisaKelola ? 'Aksi' : null]) as $heading)
                                 <th class="px-5 py-3 text-left sm:px-6">
                                     <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                                 </th>
@@ -96,6 +102,16 @@
                                         class="text-theme-sm font-medium text-gray-800 hover:text-brand-500 dark:text-white/90 dark:hover:text-brand-400">
                                         {{ $row->item_name }}
                                     </a>
+                                </td>
+                                <td class="px-5 py-4 sm:px-6">
+                                    @if ($row->category)
+                                        <span class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium {{ $row->category->badgeClass() }}">
+                                            {{ $row->category->value }}
+                                        </span>
+                                    @endif
+                                    <p class="text-theme-xs mt-1 text-gray-500 dark:text-gray-400">
+                                        {{ $row->subcategory?->subcategory_name ?? '-' }}
+                                    </p>
                                 </td>
                                 <td class="px-5 py-4 sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $row->unit->label() }}</p>
@@ -153,7 +169,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ $bisaKelola ? 7 : 6 }}" class="px-5 py-10 text-center sm:px-6">
+                                <td colspan="{{ $bisaKelola ? 8 : 7 }}" class="px-5 py-10 text-center sm:px-6">
                                     <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                         Tidak ada barang yang cocok.
                                     </p>

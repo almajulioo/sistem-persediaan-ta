@@ -39,14 +39,13 @@
 
 
 
-    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Detail Permintaan</h2>
-            <nav class="mt-1.5">
+    <x-modul.judul :modul="\App\Enums\ModulPengajuan::Permintaan" judul="Detail Permintaan">
+        <x-slot:bawah>
+            <nav class="mt-1">
                 <ol class="flex items-center gap-1.5">
                     <li>
                         <a href="{{ route('request.index') }}"
-                            class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
+                            class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-teal-600 dark:text-gray-400">
                             Daftar Permintaan
                             <svg class="stroke-current" width="17" height="16" viewBox="0 0 17 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366" stroke="" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -56,11 +55,11 @@
                     <li class="text-sm text-gray-800 dark:text-white/90">{{ $requestData->request_number }}</li>
                 </ol>
             </nav>
-        </div>
-        <div class="flex flex-wrap gap-2">
+        </x-slot:bawah>
+
             @if ($hasNotaDinas)
                 <a href="{{ route('request.nota-dinas', $requestData) }}" target="_blank" rel="noopener"
-                    class="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600">
+                    class="rounded-lg px-4 py-2.5 text-sm font-medium {{ \App\Enums\ModulPengajuan::Permintaan->tombolClass() }}">
                     Lihat Nota Dinas PDF
                 </a>
             @endif
@@ -70,8 +69,7 @@
                     Lihat BAST PDF
                 </a>
             @endif
-        </div>
-    </div>
+    </x-modul.judul>
 
     <x-ui.flash />
 
@@ -201,14 +199,18 @@
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Nomor Nota Dinas</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->nd_number ?? 'Belum bernomor' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Nama Pemohon</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->user?->fullname ?? '-' }}</dd></div>
             <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tanggal</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ $requestData->date?->translatedFormat('d F Y') ?? '-' }}</dd></div>
-            <div><dt class="text-sm text-gray-500 dark:text-gray-400">Tipe</dt><dd class="mt-1 font-medium text-gray-800 dark:text-white/90">{{ match ($requestData->type) { 'emergency' => 'Darurat', 'umum' => 'Umum', default => 'Normal' } }}</dd></div>
+            <div>
+                <dt class="text-sm text-gray-500 dark:text-gray-400">Tipe</dt>
+                <dd>
+                    <x-ui.pill :warna="$requestData->jenisWarna()" :ikon="$requestData->jenisIcon()" class="mt-1">{{ $requestData->jenisLabel() }}</x-ui.pill>
+                </dd>
+            </div>
             <div>
                 <dt class="text-sm text-gray-500 dark:text-gray-400">Status</dt>
                 <dd>
-                    <span class="text-theme-xs mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium {{ \App\Models\Request::statusBadgeClass($requestData->status) }}">
-                        <span class="size-1.5 rounded-full bg-current"></span>
+                    <x-ui.pill :warna="\App\Models\Request::statusWarna($requestData->status)" :ikon="\App\Models\Request::statusIcon($requestData->status)" class="mt-1">
                         {{ $requestData->statusLabel() }}
-                    </span>
+                    </x-ui.pill>
                 </dd>
             </div>
         </dl>
@@ -235,9 +237,9 @@
                         <td class="px-6 py-4 text-sm font-medium text-gray-800 dark:text-white/90">
                             {{ $detail->item?->item_name ?? $detail->itemProposal?->item_name ?? '-' }}
                             @if ($detail->itemProposal)
-                                <span class="ml-2 rounded-full bg-warning-50 px-2 py-1 text-xs font-medium text-warning-600 dark:bg-warning-500/15 dark:text-warning-400">
+                                <x-ui.pill :warna="\App\Enums\ItemApplicationType::BarangBaru->warna()" :ikon="\App\Enums\ItemApplicationType::BarangBaru->icon()" class="ml-2">
                                     Usulan {{ $detail->itemProposal->status?->label() ?? $detail->itemProposal->status }}
-                                </span>
+                                </x-ui.pill>
                                 @if ($detail->itemProposal->isDitolak() && ($isAdmin || $isKasubbag || $isPengelolaGudang))
                                     <form method="POST" action="{{ route('request.proposal-detail.remove', [$requestData, $detail]) }}" class="mt-2">
                                         @csrf

@@ -1,18 +1,19 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="mb-6">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Ubah Kuantitas Permintaan</h2>
-        <nav class="mt-1.5" aria-label="Breadcrumb">
-            <ol class="text-theme-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                <li><a href="{{ route('request.index') }}" class="hover:text-brand-500">Permintaan</a></li>
-                <li aria-hidden="true">/</li>
-                <li><a href="{{ route('request.show', $request) }}" class="hover:text-brand-500">{{ $request->request_number }}</a></li>
-                <li aria-hidden="true">/</li>
-                <li class="text-gray-800 dark:text-white/90">Ubah Kuantitas</li>
-            </ol>
-        </nav>
-    </div>
+    <x-modul.judul :modul="\App\Enums\ModulPengajuan::Permintaan" judul="Ubah Kuantitas Permintaan">
+        <x-slot:bawah>
+            <nav class="mt-1" aria-label="Breadcrumb">
+                <ol class="text-theme-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                    <li><a href="{{ route('request.index') }}" class="hover:text-teal-600">Permintaan</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li><a href="{{ route('request.show', $request) }}" class="hover:text-teal-600">{{ $request->request_number }}</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li class="text-gray-800 dark:text-white/90">Ubah Kuantitas</li>
+                </ol>
+            </nav>
+        </x-slot:bawah>
+    </x-modul.judul>
 
     <x-ui.flash />
 

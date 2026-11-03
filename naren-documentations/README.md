@@ -71,6 +71,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Diterima |
 | [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
 | [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Diterima |
+| [0043](keputusan/0043-kategori-dan-sub-kategori-barang.md) | Kategori dan sub kategori barang (dikerjakan Alma) | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

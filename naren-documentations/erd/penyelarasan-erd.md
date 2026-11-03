@@ -23,9 +23,10 @@ kebenarannya adalah migrasi yang benar-benar berjalan di
 | `items` | Master barang; dirujuk `procurement_details`/`procurement_request_details` (Naren) — Alma belum punya tabel rincian barangnya sendiri, lihat catatan di bawah |
 | `stock_mutations` | Buku besar stok; dibangun Naren, ditulis Alma lewat `StockLedger` |
 | `audit_logs` | Jejak aktivitas. Ditulis Naren; sub sistem Permintaan belum pernah menulis satu baris pun ke sini (lihat catatan di bawah) |
+| `item_subcategories` | Sub kategori barang beserta kategorinya (ATK/ARTK). Dirujuk `items.subcategory_id`, jadi ikut menjadi tabel bersama. Dibangun Alma (3 November 2026, [ADR 0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md)) |
 | `item_proposals` | Usulan barang baru — pintu depan katalog. Dibangun Naren (skema, keputusan, `items.store()`), ditulis juga oleh sub sistem Permintaan lewat pintunya sendiri (lihat catatan di bawah) |
 
-Perubahan pada kelima tabel ini **hanya lewat kesepakatan**. Migrasi dari dua
+Perubahan pada tabel-tabel ini **hanya lewat kesepakatan**. Migrasi dari dua
 orang pada tabel yang sama rawan bentrok saat merge — persis yang terjadi pada
 `item_proposals` sendiri, lihat [ADR 0033](../keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md).
 
@@ -130,6 +131,8 @@ dikabarkan ke Alma dan tercermin di kedua naskah:
 | `users` | Tambah `avatar_path` (string, nullable) — path foto profil di disk privat. Aditif; **menunggu persetujuan Alma** | [0038](../keputusan/0038-profil-pengguna-dan-foto-profil.md) |
 | `users` | Tambah `nip` (string 18, nullable) dan `position` (string, nullable) — NIP dan jabatan pegawai, dicetak di BAST pengadaan; bisa dipakai juga untuk BAST permintaan dan Nota Dinas. Aditif; **menunggu persetujuan Alma** | [0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md) |
 | `items` | Tambah `is_active` | [0003](../keputusan/0003-arsip-alih-alih-hapus.md) |
+| `items` | Tambah `category` (enum `ATK`/`ARTK`, nullable — salinan kategori sub kategorinya) dan `subcategory_id` (FK `item_subcategories`, nullable, restrictOnDelete). **Dikerjakan Alma — Narendra perlu dikabari** | [0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md) |
+| `item_subcategories` | Tabel baru — sub kategori barang. **Dikerjakan Alma** | [0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md) |
 | `stock_mutations` | Tambah `user_id`, `stock_after`, `reference_number`, `notes` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 | `stock_mutations` | `reference` diganti nama menjadi `reference_id` | [0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) |
 

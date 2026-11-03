@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\ItemApplicationStatus;
+use App\Enums\ItemApplicationType;
+use App\Enums\ModulPengajuan;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Models\Item;
@@ -8,6 +10,8 @@ use App\Models\ItemApplication;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestDetail;
 use App\Models\User;
+use App\Support\Warna;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Str;
 
 /*
@@ -270,5 +274,103 @@ describe('formulir', function () {
             ->assertSee('Tambah Barang')
             ->assertSee('Daftar Barang')
             ->assertSee('Ajukan Permohonan');
+    });
+});
+
+describe('kategori warna dan ikon', function () {
+    it('memberi setiap status dan jenis warna serta ikon yang dikenal', function () {
+        $pasangan = [
+            ...array_map(fn (string $status) => [ModelsRequest::statusWarna($status), ModelsRequest::statusIcon($status)], array_keys(ModelsRequest::STATUS_LABELS)),
+            ...array_map(fn (string $type) => [(new ModelsRequest(['type' => $type]))->jenisWarna(), (new ModelsRequest(['type' => $type]))->jenisIcon()], ['normal', 'emergency', 'umum']),
+            ...array_map(fn (ItemApplicationStatus $status) => [$status->warna(), $status->icon()], ItemApplicationStatus::cases()),
+            ...array_map(fn (ItemApplicationType $type) => [$type->warna(), $type->icon()], ItemApplicationType::cases()),
+        ];
+
+        foreach ($pasangan as [$warna, $ikon]) {
+            expect($warna)->toBeIn(Warna::nama())
+                ->and(Blade::render('<x-ui.icon :name="$ikon" />', ['ikon' => $ikon]))->toContain('<svg');
+        }
+    });
+
+    it('membedakan setiap tahap permintaan dengan warna sendiri', function () {
+        $tahap = ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance', 'delivered', 'completed', 'rejected'];
+
+        expect(collect($tahap)->map(fn (string $status) => ModelsRequest::statusWarna($status))->unique())->toHaveCount(count($tahap))
+            ->and(ItemApplicationType::BarangBaru->warna())->not->toBe(ItemApplicationStatus::Diajukan->warna());
+    });
+
+    it('menolak nama warna yang tidak dikenal', function () {
+        Warna::lembut('ungu-muda');
+    })->throws(InvalidArgumentException::class);
+
+    it('menandai baris daftar permintaan dengan warna status dan menampilkan keterangannya', function () {
+        permintaanTampilan($this->pemohon, 'approved_by_head', $this->kertas);
+
+        $this->actingAs($this->pemohon)
+            ->get(route('request.index'))
+            ->assertOk()
+            ->assertSee('Keterangan status:')
+            ->assertSee(Warna::garis(ModelsRequest::statusWarna('approved_by_head')))
+            ->assertSee('Disetujui Kepala Subbagian');
+    });
+
+    it('menghitung kartu ringkasan daftar permohonan dalam cakupan pemohon', function () {
+        permohonanTampilan($this->pemohon, ItemApplicationStatus::Diajukan, $this->kertas);
+        permohonanTampilan($this->pemohon, ItemApplicationStatus::Disetujui, $this->kertas);
+        permohonanTampilan(User::factory()->role(UserRole::Pengguna)->create(), ItemApplicationStatus::Diajukan, $this->kertas);
+
+        $this->actingAs($this->pemohon)
+            ->get(route('item-applications.index'))
+            ->assertOk()
+            ->assertViewHas('summary', ['menunggu' => 1, 'bulan_ini' => 2, 'disetujui_bulan_ini' => 1])
+            ->assertSee('1 Tambah Stok');
+    });
+});
+
+describe('identitas modul permintaan dan permohonan', function () {
+    it('memberi kedua modul warna sendiri yang tidak dipakai status mana pun', function () {
+        $warnaStatus = collect([
+            ...array_map(fn (string $status) => ModelsRequest::statusWarna($status), array_keys(ModelsRequest::STATUS_LABELS)),
+            ...array_map(fn (ItemApplicationStatus $status) => $status->warna(), ItemApplicationStatus::cases()),
+            ...array_map(fn (ItemApplicationType $type) => $type->warna(), ItemApplicationType::cases()),
+        ]);
+
+        foreach (ModulPengajuan::cases() as $modul) {
+            expect($modul->warna())->toBeIn(Warna::nama())
+                ->and($warnaStatus)->not->toContain($modul->warna())
+                ->and($modul->lawan()->lawan())->toBe($modul);
+        }
+
+        expect(ModulPengajuan::Permintaan->warna())->not->toBe(ModulPengajuan::Permohonan->warna());
+    });
+
+    it('menampilkan catatan perbedaan dan tautan ke modul satunya di daftar dan formulir', function () {
+        $this->actingAs($this->pemohon);
+
+        foreach ([route('request.index'), route('request.create')] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('dipakai bila '.lcfirst(ModulPengajuan::Permintaan->dipakaiBila()))
+                ->assertSee('Disetujui Kepala Subbagian Anda, lalu barang diserahkan Pengelola Gudang.')
+                ->assertSee(ModulPengajuan::Permohonan->ajakan())
+                ->assertSee(route('item-applications.create'));
+        }
+
+        foreach ([route('item-applications.index'), route('item-applications.create')] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('dipakai bila '.lcfirst(ModulPengajuan::Permohonan->dipakaiBila()))
+                ->assertSee(ModulPengajuan::Permintaan->ajakan())
+                ->assertSee(route('request.create'));
+        }
+    });
+
+    it('membandingkan kedua pintu berdampingan di dasbor Pengguna', function () {
+        $this->actingAs($this->pemohon)
+            ->get('/dasbor')
+            ->assertOk()
+            ->assertSeeInOrder([
+                ModulPengajuan::Permintaan->label(), 'Dipakai bila', ModulPengajuan::Permintaan->dipakaiBila(),
+                ModulPengajuan::Permohonan->label(), 'Dipakai bila', ModulPengajuan::Permohonan->dipakaiBila(),
+            ])
+            ->assertSee(ModulPengajuan::Permohonan->hasil());
     });
 });

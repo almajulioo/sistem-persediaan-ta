@@ -1,23 +1,22 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Buat Permintaan Barang</h2>
-            <nav class="mt-1.5" aria-label="Breadcrumb">
+    <x-modul.judul :modul="\App\Enums\ModulPengajuan::Permintaan" judul="Buat Permintaan Barang">
+        <x-slot:bawah>
+            <nav class="mt-1" aria-label="Breadcrumb">
                 <ol class="text-theme-sm flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
-                    <li><a href="{{ route('dashboard') }}" class="hover:text-brand-500">Dasbor</a></li>
+                    <li><a href="{{ route('dashboard') }}" class="hover:text-teal-600">Dasbor</a></li>
                     <li aria-hidden="true">/</li>
-                    <li><a href="{{ route('request.index') }}" class="hover:text-brand-500">Permintaan</a></li>
+                    <li><a href="{{ route('request.index') }}" class="hover:text-teal-600">Permintaan</a></li>
                     <li aria-hidden="true">/</li>
                     <li class="text-gray-800 dark:text-white/90">Buat</li>
                 </ol>
             </nav>
-        </div>
-        <p class="text-theme-sm max-w-md text-gray-500 dark:text-gray-400">
-            Minta barang yang sudah tersedia di gudang. Permintaan disetujui {{ auth()->user()->unit?->sebutanKepala() ?? 'Kepala Subbagian/Bidang' }} Anda, diproses gudang, lalu Anda konfirmasi saat barang diterima.
-        </p>
-    </div>
+        </x-slot:bawah>
+    </x-modul.judul>
+
+    {{-- Sebelum mengisi: pastikan ini pintu yang tepat, bukan Permohonan. --}}
+    <x-modul.catatan :modul="\App\Enums\ModulPengajuan::Permintaan" class="mb-6" />
 
     <x-ui.flash />
 

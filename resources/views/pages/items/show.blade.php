@@ -94,6 +94,8 @@
                 <dl class="mt-6 space-y-3 border-t border-gray-100 pt-5 dark:border-gray-800">
                     @foreach ([
                         'Kode Barang' => $item->item_code,
+                        'Kategori' => $item->category ? "{$item->category->value} — {$item->category->label()}" : '-',
+                        'Sub Kategori' => $item->subcategory?->subcategory_name ?? '-',
                         'Satuan' => $item->unit->label(),
                         'Status' => $item->is_active ? 'Aktif' : 'Diarsipkan',
                         'Didaftarkan' => $item->created_at?->translatedFormat('d F Y, H:i') ?? '-',

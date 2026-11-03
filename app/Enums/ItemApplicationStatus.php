@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use App\Support\Warna;
+
 /**
  * Status permohonan barang baru / tambah stok, disimpan pada
  * `item_applications.status`.
@@ -34,13 +36,30 @@ enum ItemApplicationStatus: string
         };
     }
 
-    public function badgeClass(): string
+    /**
+     * Nama warna App\Support\Warna.
+     */
+    public function warna(): string
     {
         return match ($this) {
-            self::Diajukan => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
-            self::Disetujui => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-            self::Ditolak => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
+            self::Diajukan => 'warning',
+            self::Disetujui => 'success',
+            self::Ditolak => 'error',
         };
+    }
+
+    public function icon(): string
+    {
+        return match ($this) {
+            self::Diajukan => 'clock',
+            self::Disetujui => 'check-circle',
+            self::Ditolak => 'x-circle',
+        };
+    }
+
+    public function badgeClass(): string
+    {
+        return Warna::lembut($this->warna());
     }
 
     /**

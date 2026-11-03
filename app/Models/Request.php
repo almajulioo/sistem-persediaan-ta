@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\RequestHistoryAction;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
+use App\Support\Warna;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -205,18 +206,69 @@ class Request extends Model
     }
 
     /**
-     * Warna badge status, satu sumber untuk daftar, detail, dan dasbor.
-     * Tahap yang masih berjalan kuning, yang menunggu pemohon biru.
+     * Warna kategori status (App\Support\Warna), satu sumber untuk daftar,
+     * detail, formulir, dan dasbor. Tiap tahap berwarna sendiri supaya
+     * posisi permintaan terbaca tanpa membaca labelnya.
      */
-    public static function statusBadgeClass(?string $status): string
+    public static function statusWarna(?string $status): string
     {
         return match ($status) {
-            'submitted' => 'bg-blue-light-50 text-blue-light-600 dark:bg-blue-light-500/15 dark:text-blue-light-500',
-            'approved_by_head', 'processed_by_staff', 'in_issuance' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
-            'delivered' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-            'completed' => 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500',
-            'rejected' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
-            default => 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+            'submitted' => 'blue-light',
+            // Bukan ungu: ungu warna identitas Permohonan (ModulPengajuan).
+            'approved_by_head' => 'indigo',
+            'processed_by_staff' => 'orange',
+            'in_issuance' => 'yellow',
+            'delivered' => 'brand',
+            'completed' => 'success',
+            'rejected' => 'error',
+            default => 'gray',
+        };
+    }
+
+    public static function statusIcon(?string $status): string
+    {
+        return match ($status) {
+            'submitted' => 'send',
+            'approved_by_head' => 'user-check',
+            'processed_by_staff' => 'clipboard-check',
+            'in_issuance' => 'package',
+            'delivered' => 'truck',
+            'completed' => 'check-circle',
+            'rejected' => 'x-circle',
+            'merged' => 'arrows',
+            default => 'clock',
+        };
+    }
+
+    public static function statusBadgeClass(?string $status): string
+    {
+        return Warna::lembut(self::statusWarna($status));
+    }
+
+    public function jenisLabel(): string
+    {
+        return match ($this->type) {
+            'emergency' => 'Darurat',
+            'umum' => 'Umum',
+            default => 'Normal',
+        };
+    }
+
+    public function jenisWarna(): string
+    {
+        return match ($this->type) {
+            'emergency' => 'rose',
+            // Normal memakai toska, warna identitas Permintaan.
+            default => 'teal',
+        };
+    }
+
+    public function jenisIcon(): string
+    {
+        return match ($this->type) {
+            'emergency' => 'alert-triangle',
+            'umum' => 'building',
+            default => 'inbox',
         };
     }
 

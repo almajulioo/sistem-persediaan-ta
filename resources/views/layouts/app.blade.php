@@ -115,7 +115,8 @@
         @include('layouts.backdrop')
         @include('layouts.sidebar')
 
-        <div class="flex-1 transition-all duration-300 ease-in-out"
+        {{-- min-w-0: tabel lebar bergulir di dalam kartunya, bukan melebarkan seluruh halaman. --}}
+        <div class="min-w-0 flex-1 transition-all duration-300 ease-in-out"
             :class="{
                 'xl:ml-[290px]': $store.sidebar.isExpanded || $store.sidebar.isHovered,
                 'xl:ml-[90px]': !$store.sidebar.isExpanded && !$store.sidebar.isHovered,

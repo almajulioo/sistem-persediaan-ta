@@ -7,6 +7,7 @@ use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\ItemProposal;
+use App\Models\ItemSubcategory;
 use App\Models\Notification;
 use App\Models\StockMutation;
 use App\Models\User;
@@ -53,6 +54,7 @@ function payloadBarangDariUsulan(ItemProposal $proposal, array $overrides = []):
         'item_proposal_id' => $proposal->item_proposal_id,
         'item_code' => 'ATK-900',
         'item_name' => $proposal->item_name,
+        'subcategory_id' => $overrides['subcategory_id'] ?? ItemSubcategory::factory()->create()->subcategory_id,
         'unit' => $proposal->unit->value,
         'stock_min' => 5,
         'stock_max' => 50,

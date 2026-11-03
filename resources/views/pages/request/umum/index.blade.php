@@ -1,39 +1,33 @@
 @extends('layouts.app')
 
+@use('App\Models\Request', 'Permintaan')
+
 @php
+    $modul = \App\Enums\ModulPengajuan::Permintaan;
     // Hanya permintaan yang menunggu yang bisa dipilih untuk digabung.
     $bisaGabung = $canManage && $view === '';
     $selectableIds = $bisaGabung ? $requests->getCollection()->pluck('request_id')->values()->all() : [];
-    $statusBadge = [
-        'submitted' => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
-        'rejected' => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
-        'merged' => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-    ];
     $tombolGaris = 'text-theme-xs rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition';
 @endphp
 
 @section('content')
     <div x-data="umumRequestsPage()">
-        <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Permintaan Umum</h2>
-                <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-                    {{ $canManage
-                        ? 'Kebutuhan umum dari Subbagian Umum dan TI. Tinjau, ubah, atau tolak, lalu gabungkan beberapa permintaan menjadi satu permintaan darurat.'
-                        : 'Pantau permintaan umum yang Anda ajukan beserta catatan dari Pengelola Gudang.' }}
-                </p>
-            </div>
+        {{-- Permintaan umum bagian dari modul Permintaan: berwarna toska. --}}
+        <x-modul.judul :modul="$modul" judul="Permintaan Umum"
+            :deskripsi="$canManage
+                ? 'Kebutuhan umum dari Subbagian Umum dan TI. Tinjau, ubah, atau tolak, lalu gabungkan beberapa permintaan menjadi satu permintaan darurat.'
+                : 'Pantau permintaan umum yang Anda ajukan beserta catatan dari Pengelola Gudang.'">
             <a href="{{ route('request.umum.create') }}"
-                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                class="shadow-theme-xs inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition {{ $modul->tombolClass() }}">
                 <x-ui.icon name="plus" class="size-5" />
                 Buat Permintaan Umum
             </a>
-        </div>
+        </x-modul.judul>
 
         <x-ui.flash />
 
         <form id="merge-form" method="POST" action="{{ route('request.umum.merge') }}"
-            class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+            class="rounded-2xl border border-t-[3px] border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] {{ $modul->aksenClass() }}">
             @csrf
             <template x-for="requestId in selectedRequests" :key="requestId">
                 <input type="hidden" name="request_ids[]" :value="requestId">
@@ -159,10 +153,9 @@
                                         <p class="text-theme-xs text-gray-400">{{ $request->created_at?->format('H:i') }}</p>
                                     </td>
                                     <td class="px-5 py-4">
-                                        <span class="text-theme-xs inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium whitespace-nowrap {{ $statusBadge[$request->status] ?? $statusBadge['submitted'] }}">
-                                            <span class="size-1.5 rounded-full bg-current"></span>
+                                        <x-ui.pill :warna="Permintaan::statusWarna($request->status)" :ikon="Permintaan::statusIcon($request->status)" class="whitespace-nowrap">
                                             {{ $request->statusLabel() }}
-                                        </span>
+                                        </x-ui.pill>
                                     </td>
                                     <td class="px-5 py-4">
                                         @if ($view === 'histori')
@@ -214,10 +207,9 @@
                                             {{ $request->user?->fullname ?? '-' }} · {{ $request->date?->translatedFormat('d M Y') ?? '-' }}
                                         </p>
                                     </div>
-                                    <span class="text-theme-xs inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-medium {{ $statusBadge[$request->status] ?? $statusBadge['submitted'] }}">
-                                        <span class="size-1.5 rounded-full bg-current"></span>
+                                    <x-ui.pill :warna="Permintaan::statusWarna($request->status)" :ikon="Permintaan::statusIcon($request->status)" class="shrink-0">
                                         {{ $request->statusLabel() }}
-                                    </span>
+                                    </x-ui.pill>
                                 </div>
                                 <p class="text-theme-sm mt-2 truncate text-gray-700 dark:text-gray-300">{{ $request->ringkasanBarang() }}</p>
                             </a>

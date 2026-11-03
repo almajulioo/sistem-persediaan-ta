@@ -32,6 +32,7 @@ class StoreItemRequest extends FormRequest
         return [
             'item_code' => ['required', 'string', 'max:50', 'regex:'.ItemFormRules::ITEM_CODE_REGEX, Rule::unique('items', 'item_code')],
             'item_name' => ['required', 'string', 'max:255'],
+            'subcategory_id' => ['required', Rule::exists('item_subcategories', 'subcategory_id')],
             'unit' => ['required', Rule::enum(SatuanBarang::class)],
             'stock_min' => ['required', 'integer', 'min:0', 'max:999999'],
             'stock_max' => ['required', 'integer', 'min:0', 'max:999999', 'gte:stock_min'],

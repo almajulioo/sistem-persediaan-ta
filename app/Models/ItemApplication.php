@@ -70,12 +70,26 @@ class ItemApplication extends Model
      */
     public function ringkasan(): string
     {
+        return collect($this->jumlahPerJenis())
+            ->map(fn (array $baris) => $baris['jumlah'].' '.strtolower($baris['jenis']->label()))
+            ->implode(', ');
+    }
+
+    /**
+     * Banyak baris per jenis, urut sesuai urutan kemunculannya, untuk badge
+     * jenis di daftar dan kotak ikon yang mencerminkan isi permohonan.
+     *
+     * @return list<array{jenis: ItemApplicationType, jumlah: int}>
+     */
+    public function jumlahPerJenis(): array
+    {
         $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
 
         return $details
             ->countBy(fn (ItemApplicationDetail $detail) => $detail->type->value)
-            ->map(fn (int $jumlah, string $type) => $jumlah.' '.strtolower(ItemApplicationType::from($type)->label()))
-            ->implode(', ');
+            ->map(fn (int $jumlah, string $type) => ['jenis' => ItemApplicationType::from($type), 'jumlah' => $jumlah])
+            ->values()
+            ->all();
     }
 
     /**
