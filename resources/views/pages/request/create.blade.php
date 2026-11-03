@@ -15,7 +15,7 @@
             </nav>
         </div>
         <p class="text-theme-sm max-w-md text-gray-500 dark:text-gray-400">
-            Minta barang yang sudah tersedia di gudang. Permintaan disetujui Kepala Unit, diproses gudang, lalu Anda konfirmasi saat barang diterima.
+            Minta barang yang sudah tersedia di gudang. Permintaan disetujui {{ auth()->user()->unit?->sebutanKepala() ?? 'Kepala Subbagian/Bidang' }} Anda, diproses gudang, lalu Anda konfirmasi saat barang diterima.
         </p>
     </div>
 

@@ -140,7 +140,7 @@ class DashboardController extends Controller
         $diserahkan = (int) ($permintaan['delivered'] ?? 0);
 
         $aktivitas = $milikPermintaan()
-            ->with('item')
+            ->with(['item', 'user'])
             ->latest('created_at')
             ->limit(5)
             ->get()

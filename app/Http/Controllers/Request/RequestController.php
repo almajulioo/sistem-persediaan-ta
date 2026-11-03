@@ -459,6 +459,9 @@ class RequestController extends Controller
     {
         $viewer = $httpRequest->user();
         $request->load(['user', 'item', 'histories.user']);
+        // Judul riwayat menyebut penyetuju menurut unit pemohon; relasinya
+        // dipasang langsung supaya tidak dimuat ulang per baris.
+        $request->histories->each->setRelation('request', $request);
         $notaDinas = $request->requestDocuments()
             ->where('document_type', 'nota_dinas')
             ->latest('created_at')

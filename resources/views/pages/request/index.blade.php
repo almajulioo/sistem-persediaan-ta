@@ -187,7 +187,7 @@
                                             $canRespond = ($row->status === 'submitted' && ($isKepalaUnit || $isKasubbagKepalaUnit)) ||
                                                         (in_array($row->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
                                                         ($isAdmin && in_array($row->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
-                                                        ($isKasubbag && (in_array($row->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
+                                                        ($isKasubbag && ($row->status === 'processed_by_staff' || $isEmergencyReadyToComplete));
                                             $canRespond = $canRespond && (! $hasItemProposals || ($isAdmin && $row->status === 'submitted'));
                                             // Permintaan darurat juga boleh diubah kuantitasnya (mis. stok kurang).
                                             $canEditQuantity = $row->status === 'approved_by_head'

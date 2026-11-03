@@ -27,7 +27,7 @@
                         <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
                             {{ $history->action->olehSistem() ? 'Sistem' : ($history->user?->fullname ?? 'Akun dihapus') }}
                             @if ($history->user)
-                                · {{ $history->user->role->label() }}
+                                · {{ $history->user->sebutanJabatan() }}
                             @endif
                             · {{ $history->created_at?->translatedFormat('d M Y, H:i') }}
                         </p>

@@ -250,7 +250,8 @@ class RequestWorkflowService
                         'submitted',
                         'rejected',
                         sprintf(
-                            'Tidak diputuskan Kepala Unit dalam %d hari; stok yang ditahan dilepas. Ajukan kembali bila barangnya masih dibutuhkan.',
+                            'Tidak diputuskan %s dalam %d hari; stok yang ditahan dilepas. Ajukan kembali bila barangnya masih dibutuhkan.',
+                            $request->sebutanPenyetuju(),
                             ModelsRequest::BATAS_HARI_PERSETUJUAN,
                         ),
                     );
@@ -401,11 +402,13 @@ class RequestWorkflowService
             $actor->hasRole(UserRole::KepalaUnit) =>
                 $request->status === 'submitted'
                     && $actor->unit === $request->user?->unit,
+            // Setelah Kasubbag memulai pengeluaran, penyerahan barang adalah
+            // giliran Pengelola Gudang yang memegang fisiknya, bukan Kasubbag.
             $actor->hasRole(UserRole::PengelolaGudang) =>
                 in_array($request->status, ['approved_by_head', 'in_issuance'], true),
             $actor->hasRole(UserRole::KasubbagUmumTi) =>
                 ($request->status === 'submitted' && $actor->unit === UnitKerja::SubbagianUmumTi)
-                || in_array($request->status, ['processed_by_staff', 'in_issuance'], true)
+                || $request->status === 'processed_by_staff'
                 || ($request->type === 'emergency' && $request->status === 'approved_by_head'),
             default => false,
         };

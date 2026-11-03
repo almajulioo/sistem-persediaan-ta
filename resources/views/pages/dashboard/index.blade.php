@@ -48,7 +48,7 @@
                 {{ $salam }}, {{ $user->fullname }}
             </h2>
             <span class="text-theme-xs mt-2 inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $user->role->badgeClass() }}">
-                {{ $user->role->label() }}
+                {{ $user->sebutanJabatan() }}
             </span>
         </div>
         <p class="text-theme-sm text-gray-500 dark:text-gray-400">{{ now()->translatedFormat('l, j F Y') }}</p>

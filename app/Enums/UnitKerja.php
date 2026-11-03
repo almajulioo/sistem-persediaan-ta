@@ -61,6 +61,30 @@ enum UnitKerja: string
     }
 
     /**
+     * Sebutan singkat pimpinan unit, untuk status dan riwayat permintaan.
+     *
+     * Peran `kepala_unit` dipakai beberapa jabatan sekaligus. Dalam bahasa
+     * kantor, pimpinan subbagian disebut Kepala Subbagian dan pimpinan bidang
+     * Kepala Bidang Pemeriksaan; Kepala Perwakilan dan Kepala Sekretariat
+     * memakai sebutannya sendiri. Nama unitnya tidak ikut, karena sudah tampil
+     * di samping nama pemohon. Lihat jabatanKepala() untuk sebutan lengkap.
+     */
+    public function sebutanKepala(): string
+    {
+        return match ($this) {
+            self::KepalaPerwakilan => 'Kepala Perwakilan',
+            self::SekretariatPerwakilan => 'Kepala Sekretariat',
+            self::BidangPemeriksaanLampungI,
+            self::BidangPemeriksaanLampungII => 'Kepala Bidang Pemeriksaan',
+            self::SubbagianHumasTu,
+            self::SubbagianSdm,
+            self::SubbagianKeuangan,
+            self::SubbagianUmumTi,
+            self::SubbagianHukum => 'Kepala Subbagian',
+        };
+    }
+
+    /**
      * Jabatan pimpinan unit untuk blok tanda tangan Nota Dinas.
      */
     public function jabatanKepala(): string

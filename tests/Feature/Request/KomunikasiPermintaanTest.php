@@ -140,7 +140,7 @@ describe('menyetujui', function () {
         responKomunikasi($request, 'approve', ['note' => 'Prioritaskan untuk rapat pleno.'])->assertSessionHasNoErrors();
 
         $history = $request->histories()->sole();
-        expect($history->judul())->toBe('Disetujui Kepala Unit')
+        expect($history->judul())->toBe('Disetujui Kepala Subbagian')
             ->and(notifikasiKomunikasi($this->pemohon, NotificationType::PermintaanDiperbarui)?->body)
             ->toContain('Prioritaskan untuk rapat pleno.');
 
@@ -275,7 +275,7 @@ describe('kembalikan status', function () {
             ->assertSessionHasNoErrors();
 
         expect($request->histories()->sole()->judul())
-            ->toBe('Status dikembalikan dari Disetujui Pengelola Gudang ke Disetujui Kepala Unit');
+            ->toBe('Status dikembalikan dari Disetujui Pengelola Gudang ke Disetujui Kepala Subbagian');
 
         $this->actingAs($this->pemohon)
             ->get(route('request.show', $request))

@@ -160,7 +160,10 @@ class Request extends Model
      */
     public const STATUS_LABELS = [
         'submitted' => 'Terkirim',
-        'approved_by_head' => 'Disetujui Kepala Unit',
+        // Label umum, untuk tempat yang tidak terikat satu permintaan
+        // (saringan, alur dasbor). Bila unit pemohonnya diketahui, pakai
+        // labelStatusUntuk() supaya penyetujunya disebut tepat.
+        'approved_by_head' => 'Disetujui Kepala Subbagian/Bidang',
         'processed_by_staff' => 'Disetujui Pengelola Gudang',
         'in_issuance' => 'Dalam Proses Pengeluaran',
         'delivered' => 'Diserahkan',
@@ -174,9 +177,31 @@ class Request extends Model
         return self::STATUS_LABELS[$status] ?? ucfirst(str_replace('_', ' ', (string) $status));
     }
 
+    /**
+     * Label status untuk permintaan ini. Tahap persetujuan atasan disebut
+     * menurut unit pemohon: "Disetujui Kepala Subbagian" atau "Disetujui
+     * Kepala Bidang Pemeriksaan", dst.
+     */
+    public function labelStatusUntuk(?string $status): string
+    {
+        if ($status === 'approved_by_head' && $this->user?->unit !== null) {
+            return 'Disetujui '.$this->sebutanPenyetuju();
+        }
+
+        return self::labelStatus($status);
+    }
+
     public function statusLabel(): string
     {
-        return self::labelStatus($this->status);
+        return $this->labelStatusUntuk($this->status);
+    }
+
+    /**
+     * Sebutan atasan yang menyetujui permintaan ini, menurut unit pemohon.
+     */
+    public function sebutanPenyetuju(): string
+    {
+        return $this->user?->unit?->sebutanKepala() ?? 'Kepala Subbagian/Bidang';
     }
 
     /**

@@ -24,7 +24,7 @@
 
         <span class="mr-1 hidden text-left sm:block">
             <span class="block font-medium text-theme-sm">{{ $user->fullname }}</span>
-            <span class="block text-theme-xs text-gray-500 dark:text-gray-400">{{ $user->role->label() }}</span>
+            <span class="block text-theme-xs text-gray-500 dark:text-gray-400">{{ $user->sebutanJabatan() }}</span>
         </span>
 
         <!-- Chevron Icon -->
@@ -56,7 +56,7 @@
             <span class="block font-medium text-gray-700 text-theme-sm dark:text-gray-400">{{ $user->fullname }}</span>
             <span class="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">{{ $user->email }}</span>
             <span class="text-theme-xs mt-2 inline-flex items-center rounded-full px-2 py-0.5 font-medium {{ $user->role->badgeClass() }}">
-                {{ $user->role->label() }}
+                {{ $user->sebutanJabatan() }}
             </span>
         </div>
 

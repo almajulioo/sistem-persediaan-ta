@@ -209,9 +209,13 @@
         Atas perhatian dan kerjasama yang baik, kami ucapkan terima kasih.
     </div>
 
+    {{-- Nota Dinas ditandatangani pimpinan unit pemohon: Kepala Subbagian
+         atau Kepala Bidang Pemeriksaan unit itu. Jabatannya diambil dari unit
+         pemohon, bukan unit penyetuju, supaya tetap tepat walau yang
+         menyetujui di sistem adalah Admin. --}}
     <div class="signature-container">
         @if ($approvedBy)
-            <div class="sig-head">{{ $approvedBy->unit?->jabatanKepala() ?? '-' }},</div>
+            <div class="sig-head">{{ $request->user?->unit?->jabatanKepala() ?? $approvedBy->unit?->jabatanKepala() ?? '-' }},</div>
             @if ($qrCodeDataUri)
                 <img style="position: relative; left: 50px;" class="verification-qr" src="{{ $qrCodeDataUri }}" alt="QR verifikasi persetujuan">
             @else

@@ -984,7 +984,8 @@ class NotificationScanner
             return;
         }
 
-        // Penyetuju unit: Kepala Unit, kecuali Subbagian Umum dan TI yang
+        // Penyetuju unit: pemegang peran Kepala Unit (Kepala Subbagian atau
+        // Kepala Bidang Pemeriksaan), kecuali Subbagian Umum dan TI yang
         // disetujui Kasubbag Umum dan TI (sama dengan Request::kepalaUnit()).
         $unit = $request->user?->unit;
         $penyetuju = $unit === null
@@ -1018,7 +1019,7 @@ class NotificationScanner
             penerima: $request->type === 'emergency' ? $pengawas->merge(self::pemberiPersetujuan()) : $pengawas,
             type: NotificationType::PermintaanDisetujuiKepalaUnit,
             dedupKey: NotificationType::PermintaanDisetujuiKepalaUnit->dedupKey($request->request_id),
-            title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiKepalaUnit->label(),
+            title: "Permintaan {$request->request_number}: ".$request->labelStatusUntuk('approved_by_head'),
             body: NotificationType::PermintaanDisetujuiKepalaUnit->description().$catatan,
             actionUrl: $tautan,
             subject: $request,
@@ -1036,6 +1037,8 @@ class NotificationScanner
             subject: $request,
         );
 
+        // Lalu Pengelola Gudang menyerahkan barangnya; Kasubbag tidak ikut
+        // menyerahkan.
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'in_issuance',
             penerima: $pengawas,

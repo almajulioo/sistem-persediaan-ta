@@ -102,6 +102,20 @@ class User extends Authenticatable
     }
 
     /**
+     * Sebutan jabatan untuk tampilan. Peran Kepala Unit disebut menurut
+     * unitnya (Kepala Subbagian, Kepala Bidang Pemeriksaan, dst.); peran lain
+     * memakai label perannya. Nilai peran di basis data tidak berubah.
+     */
+    public function sebutanJabatan(): string
+    {
+        if ($this->hasRole(UserRole::KepalaUnit) && $this->unit !== null) {
+            return $this->unit->sebutanKepala();
+        }
+
+        return $this->role->label();
+    }
+
+    /**
      * Inisial nama lengkap, untuk avatar teks pada UI.
      */
     public function initials(): string

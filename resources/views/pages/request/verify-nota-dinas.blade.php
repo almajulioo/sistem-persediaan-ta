@@ -31,6 +31,8 @@
             <dd>{{ $document->request?->user?->unit?->label() ?? '-' }}</dd>
             <dt>Disetujui oleh</dt>
             <dd>{{ $document->approvedBy?->fullname ?? '-' }}</dd>
+            <dt>Jabatan</dt>
+            <dd>{{ $document->request?->user?->unit?->jabatanKepala() ?? '-' }}</dd>
             <dt>Waktu persetujuan</dt>
             <dd>{{ $document->approved_at?->translatedFormat('j F Y H:i:s') ?? '-' }}</dd>
         </dl>

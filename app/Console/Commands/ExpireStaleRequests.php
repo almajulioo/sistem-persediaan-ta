@@ -7,7 +7,7 @@ use App\Services\RequestWorkflowService;
 use Illuminate\Console\Command;
 
 /**
- * Membatalkan permintaan yang tidak diputuskan Kepala Unit dalam batas
+ * Membatalkan permintaan yang tidak diputuskan Kepala Subbagian/Bidang dalam batas
  * waktunya, supaya stok yang ditahannya kembali tersedia bagi permintaan
  * lain. Aman dijalankan berkali-kali: permintaan yang sudah dibatalkan tidak
  * lagi berstatus Terkirim.
@@ -16,7 +16,7 @@ class ExpireStaleRequests extends Command
 {
     protected $signature = 'permintaan:kedaluwarsa';
 
-    protected $description = 'Membatalkan permintaan yang tidak diputuskan Kepala Unit dalam batas waktunya';
+    protected $description = 'Membatalkan permintaan yang tidak diputuskan Kepala Subbagian/Bidang dalam batas waktunya';
 
     public function handle(RequestWorkflowService $workflow): int
     {

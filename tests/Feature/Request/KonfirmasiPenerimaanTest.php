@@ -82,6 +82,28 @@ describe('menyerahkan', function () {
             ->and(tagihanPenerimaan($this->pemohon, NotificationType::PermintaanDiperbarui))->toBeNull();
     });
 
+    it('menyerahkan giliran ke Pengelola Gudang, bukan Kasubbag, setelah pengeluaran dimulai', function () {
+        $kasubbag = User::factory()->role(UserRole::KasubbagUmumTi)->create(['unit' => UnitKerja::SubbagianUmumTi]);
+        $request = permintaanPenerimaan('in_issuance', $this->pemohon, $this->item);
+
+        $this->actingAs($kasubbag)
+            ->get(route('request.show', $request))
+            ->assertOk()
+            ->assertDontSee('Serahkan Barang');
+
+        $this->actingAs($kasubbag)
+            ->from(route('request.show', $request))
+            ->post(route('request.respond', $request), ['action' => 'approve'])
+            ->assertSessionHas('error');
+
+        expect($request->refresh()->status)->toBe('in_issuance')
+            ->and($this->item->refresh()->stock_current)->toBe(10);
+
+        $this->actingAs($this->gudang)
+            ->get(route('request.show', $request))
+            ->assertSee('Serahkan Barang');
+    });
+
     it('memperlakukan permintaan darurat yang diserahkan sama', function () {
         $request = permintaanPenerimaan('approved_by_head', $this->pemohon, $this->item, ['type' => 'emergency']);
         $request->item()->update(['quantity_approved' => null]);

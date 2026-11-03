@@ -70,20 +70,23 @@ class RequestHistory extends Model
 
     /**
      * Judul langkah. Persetujuan disebut dengan status yang dicapainya, mis.
-     * "Disetujui Kepala Unit" atau "Selesai", karena itulah yang dipahami
-     * pemohon.
+     * "Disetujui Kepala Subbagian" atau "Selesai", karena itulah yang dipahami
+     * pemohon. Sebutan penyetuju mengikuti unit pemohon permintaannya.
      */
     public function judul(): string
     {
+        $label = fn (?string $status): string => $this->request?->labelStatusUntuk($status)
+            ?? ModelsRequest::labelStatus($status);
+
         return match ($this->action) {
-            RequestHistoryAction::Disetujui => ModelsRequest::labelStatus($this->to_status),
+            RequestHistoryAction::Disetujui => $label($this->to_status),
             RequestHistoryAction::Ditolak => $this->from_status !== null
-                ? 'Ditolak pada tahap '.ModelsRequest::labelStatus($this->from_status)
+                ? 'Ditolak pada tahap '.$label($this->from_status)
                 : 'Ditolak',
             RequestHistoryAction::Dikembalikan => sprintf(
                 'Status dikembalikan dari %s ke %s',
-                ModelsRequest::labelStatus($this->from_status),
-                ModelsRequest::labelStatus($this->to_status),
+                $label($this->from_status),
+                $label($this->to_status),
             ),
             default => $this->action->label(),
         };
@@ -114,7 +117,7 @@ class RequestHistory extends Model
     {
         $pelaku = match (true) {
             $this->action->olehSistem() => 'Sistem',
-            $this->user !== null => "{$this->user->fullname} ({$this->user->role->label()})",
+            $this->user !== null => "{$this->user->fullname} ({$this->user->sebutanJabatan()})",
             default => 'Petugas',
         };
 

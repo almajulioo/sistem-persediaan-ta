@@ -14,7 +14,7 @@
         $canRespond = ($requestData->status === 'submitted' && ($isKepalaUnit || $isKasubbagKepalaUnit)) ||
                     (in_array($requestData->status, ['approved_by_head', 'in_issuance'], true) && $isPengelolaGudang) ||
                     ($isAdmin && in_array($requestData->status, ['submitted', 'approved_by_head', 'processed_by_staff', 'in_issuance'], true)) ||
-                    ($isKasubbag && (in_array($requestData->status, ['processed_by_staff', 'in_issuance'], true) || $isEmergencyReadyToComplete));
+                    ($isKasubbag && ($requestData->status === 'processed_by_staff' || $isEmergencyReadyToComplete));
         $canRespond = $canRespond
             && $requestData->type !== 'umum'
             && (! $hasItemProposals || ($isAdmin && $requestData->status === 'submitted'));
