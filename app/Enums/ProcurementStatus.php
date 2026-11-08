@@ -95,6 +95,17 @@ enum ProcurementStatus: string
     }
 
     /**
+     * Seluruh keadaan yang `masihBerjalan()`, untuk kueri. Diturunkan dari
+     * predikat itu supaya keduanya tidak pernah menyimpang (ADR 0047).
+     *
+     * @return array<int, self>
+     */
+    public static function berjalan(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $status) => $status->masihBerjalan()));
+    }
+
+    /**
      * Keadaan yang dokumennya tidak pernah menjadi transaksi.
      *
      * Dipakai agregat rekap dan laporan: baris seperti ini tetap ditampilkan,

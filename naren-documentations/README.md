@@ -55,7 +55,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
 | [0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md) | Realisasi dapat diubah selama belum dikonfirmasi diterima | Diterima |
 | [0026](keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md) | Agregat mencacah pengadaan yang terjadi, bukan dokumen yang pernah dibuat | Diterima |
-| [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Sebagian digantikan oleh 0044 dan 0045 |
+| [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Sebagian digantikan oleh 0044, 0045, dan 0047 |
 | [0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md) | Status usulan "Disetujui" dipecah menjadi dua | Diterima |
 | [0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md) | Realisasi boleh melebihi usulan, dan boleh menambah barang | Diterima |
 | [0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) | Persetujuan realisasi pengadaan oleh Kasubbag Umum dan TI | Diterima |
@@ -75,6 +75,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0044](keputusan/0044-sumber-usulan-pengadaan-per-barang.md) | Sumber usulan pengadaan dicatat per barang, keterangan opsional untuk barang manual | Diterima |
 | [0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) | Kiriman ulang formulir usulan dan halaman draf yang usang | Sebagian digantikan oleh 0046 |
 | [0046](keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md) | Token kiriman untuk semua formulir pembuat dokumen | Diterima |
+| [0047](keputusan/0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md) | Barang yang sedang dalam proses pengadaan tidak diusulkan ulang oleh draf | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

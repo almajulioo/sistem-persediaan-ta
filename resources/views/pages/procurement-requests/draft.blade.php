@@ -96,4 +96,69 @@
             </form>
         </x-form.sekali-kirim>
     @endif
+
+    {{-- Barang di bawah minimum yang sengaja tidak dimasukkan pemindaian
+         karena pengadaannya sudah berjalan (ADR 0047). Tanpa daftar ini Gudang
+         akan mengira barangnya terlewat lalu menambahkannya manual. --}}
+    @if ($dalamProses->isNotEmpty())
+        <div class="mt-6 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+            x-data="{ buka: false }">
+            <button type="button" @click="buka = ! buka" :aria-expanded="buka" aria-controls="dalam-proses"
+                class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left sm:px-6">
+                <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
+                    Sedang dalam Proses Pengadaan
+                    <span class="text-theme-xs ml-1.5 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 font-medium text-gray-600 dark:bg-gray-500/15 dark:text-gray-400">
+                        {{ $dalamProses->count() }}
+                    </span>
+                </h3>
+                <x-ui.icon name="chevron-right" class="size-5 text-gray-500 transition-transform dark:text-gray-400"
+                    ::class="buka && 'rotate-90'" />
+            </button>
+
+            <div id="dalam-proses" x-show="buka" style="display: none;"
+                class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">
+                <table class="w-full min-w-[640px]">
+                    <thead>
+                        <tr class="border-b border-gray-100 dark:border-gray-800">
+                            @foreach (['Barang', 'Stok', 'Dokumen'] as $heading)
+                                <th class="px-5 py-3 text-left sm:px-6">
+                                    <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($dalamProses as $baris)
+                            <tr class="border-b border-gray-100 align-top last:border-b-0 dark:border-gray-800">
+                                <td class="px-5 py-4 sm:px-6">
+                                    <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90">{{ $baris['item']->item_name }}</p>
+                                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $baris['item']->item_code }}</p>
+                                </td>
+                                <td class="px-5 py-4 sm:px-6">
+                                    <p class="text-theme-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                        {{ number_format($baris['item']->stock_current, 0, ',', '.') }} {{ $baris['item']->unit->label() }}
+                                    </p>
+                                </td>
+                                <td class="px-5 py-4 sm:px-6">
+                                    <div class="flex flex-col gap-1.5">
+                                        @foreach ($baris['dokumen'] as $dokumen)
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <a href="{{ $dokumen['url'] }}"
+                                                    class="text-theme-sm text-brand-500 hover:text-brand-600 dark:text-brand-400 font-medium">
+                                                    {{ $dokumen['judul'] }}
+                                                </a>
+                                                <span class="text-theme-xs inline-block rounded-full px-2.5 py-0.5 font-medium {{ $dokumen['status']->badgeClass() }}">
+                                                    {{ $dokumen['status']->label() }}
+                                                </span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
 @endsection

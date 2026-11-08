@@ -77,6 +77,9 @@ class ProcurementReceiptPoster
         // notifikasi tidak boleh ikut tertulis bila konfirmasi batal, dan
         // kegagalannya tidak boleh menggagalkan penerimaan yang sudah sah.
         NotificationScanner::catatPenerimaanDikonfirmasi($procurement->fresh(), $actor);
+        // Siklusnya selesai: barang yang datang kurang dan stoknya masih di
+        // bawah minimum kembali ke draf (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurement->details->pluck('item_id'));
 
         return $receipt;
     }

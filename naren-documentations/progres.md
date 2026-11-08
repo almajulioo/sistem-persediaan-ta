@@ -5,6 +5,75 @@ perubahan.
 
 ---
 
+## 8 November 2026 (lanjutan 4) — Barang dalam proses pengadaan tidak diusulkan ulang
+
+Laporan Narendra: barang habis yang sudah diajukan lewat draf muncul lagi di
+draf berikutnya (draf baru yang lahir dari permohonan pengguna), padahal
+usulannya belum selesai
+([ADR 0047](keputusan/0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md)).
+
+**Penyebab.** `ProcurementDraftScanner` hanya memeriksa
+`stock_current <= stock_min`. Membuka halaman draf menjalankan
+`perbaruiSeluruh()`, sehingga setiap barang yang masih kurang tersapu
+kembali, termasuk yang sudah diajukan. Masalahnya sudah ada sejak ADR 0027,
+bukan dari alur Alma. ADR 0027 bahkan menyebut barang berhenti muncul begitu
+diajukan, padahal kodenya tidak pernah melakukannya.
+
+**Keputusan yang dibahas dulu, tanpa kode.** Narendra memilih:
+
+- aturan **biner** (barang dilewati selama prosesnya berjalan), bukan posisi
+  persediaan;
+- barang yang ditolak Pejabat Pengadaan **langsung muncul lagi**;
+- baris manual atas barang yang sedang diproses **tanpa penanda**;
+- tetapi halaman draf **mendapat daftar** barang yang dilewati.
+
+Tafsiran yang dicatat: penolakan realisasi oleh Kasubbag **tidak** melepas
+barang, karena realisasinya masih bisa direvisi (ADR 0030).
+
+**Yang berubah.**
+
+- `ProcurementStatus::berjalan()`, diturunkan dari `masihBerjalan()`.
+- `ProcurementDraftScanner::dokumenDalamProses()`: dokumen berjalan per
+  barang, dari rincian usulan **dan** rincian realisasi, sehingga barang
+  tambahan dan realisasi langsung ikut. Dipakai `perbaruiBarang()`,
+  `perbaruiSeluruh()`, dan halaman draf.
+- `perbaruiBarangDokumen()` dipanggil di usulan manual `store`, usulan
+  `approve`/`reject`, realisasi `store`/`update`/`cancel`, dan
+  `ProcurementReceiptPoster::post()`. Untuk `update`, barang lama dan baru
+  diperiksa supaya barang tambahan yang dihapus ikut lepas.
+- `ProcurementDraftController::edit()` mengirim `dalamProses`.
+  `draft.blade.php` mendapat bagian lipat **Sedang dalam Proses Pengadaan**:
+  barang, stok, dan dokumen beserta lencana statusnya. Bagian ini tetap
+  tampil walau tidak ada draf.
+- Tanpa migrasi. Tidak ada berkas Alma yang diubah.
+
+**Verifikasi.** 830 dari 831 test lulus. Ada 13 test baru, satu per baris
+tabel "dalam proses" ditambah baris manual dan tampilan halaman. Yang gagal
+tetap kegagalan lama `KomunikasiPermintaanTest`. Pint bersih untuk 7 berkas.
+
+Uji mutasi dijalankan dua kali:
+
+- `dokumenDalamProses()` dikosongkan: 8 test gagal.
+- `perbaruiBarangDokumen()` dimatikan: 8 test gagal.
+
+Mutasi kedua sempat menemukan **kelemahan di test sendiri**. Uji "ditolak" dan
+"dibatalkan" tetap lulus walau pemicunya mati, karena baris draf barangnya
+memang tidak pernah terbuang sejak awal. Keempat uji pelepasan kini memeriksa
+dulu bahwa barangnya sudah keluar dari draf.
+
+Untuk render, HTML halaman draf diambil lewat test sementara (sudah dihapus),
+lalu kelima atribut Alpine bagian baru dikompilasi dengan `new Function` di
+Node: semuanya sah, dan `::class` pada `x-ui.icon` sampai sebagai `:class`.
+**Belum diuji di peramban sungguhan.**
+
+**Temuan sampingan.** Penerimaan barang tidak memanggil
+`NotificationScanner::periksaBarang()`, melanggar aturan wajib 7, sehingga
+notifikasi stok barang yang baru diterima menunggu sapuan pagi. Ini tidak
+diperbaiki di sini karena mengubah perilaku notifikasi yang belum dibahas.
+Dicatat sebagai butir terbuka 18 di `CLAUDE.md`.
+
+---
+
 ## 8 November 2026 (lanjutan 3) — Pemilih barang berkategori di semua formulir
 
 Permintaan Narendra: setiap formulir yang memilih barang memakai pencarian

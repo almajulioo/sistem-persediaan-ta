@@ -14,6 +14,7 @@ use App\Support\AuditLogger;
 use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
+use App\Support\ProcurementDraftScanner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +110,9 @@ class ProcurementRequestController extends Controller
             subject: $procurementRequest,
         );
         NotificationScanner::periksaUsulan($procurementRequest);
+        // Barangnya kini dalam proses pengadaan; baris otomatisnya di draf
+        // tidak boleh ikut diajukan dua kali (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurementRequest->details()->pluck('item_id'));
 
         return redirect()
             ->route('procurement-requests.show', $procurementRequest)
@@ -151,6 +155,8 @@ class ProcurementRequestController extends Controller
             subject: $procurementRequest,
         );
         NotificationScanner::catatUsulanDiputuskan($procurementRequest->fresh(['user', 'details']), $request->user());
+        // Barang yang tidak disetujui lepas dari proses pengadaan (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurementRequest->details()->pluck('item_id'));
 
         return redirect()
             ->route('procurement-requests.show', $procurementRequest)
@@ -179,6 +185,9 @@ class ProcurementRequestController extends Controller
             subject: $procurementRequest,
         );
         NotificationScanner::catatUsulanDiputuskan($procurementRequest->fresh(['user', 'details']), $request->user());
+        // Seluruh barangnya lepas dari proses pengadaan dan kembali ke draf
+        // bila stoknya masih kurang (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurementRequest->details()->pluck('item_id'));
 
         return redirect()
             ->route('procurement-requests.show', $procurementRequest)

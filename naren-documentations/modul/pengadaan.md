@@ -261,6 +261,35 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
 **Notifikasi baru**: `DraftUsulanTersedia` (keadaan, ke Pengelola Gudang +
 Admin), aktif selama draf berisi minimal satu barang.
 
+### Barang yang sedang dalam proses pengadaan
+
+Ditambahkan 8 November 2026. Rincian keputusan:
+[ADR 0047](../keputusan/0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md).
+
+- Pemindaian **melewati** barang yang sudah punya pengadaan berjalan, walau
+  stoknya masih di bawah minimum. Baris otomatisnya dibuang bila sudah
+  terlanjur ada di draf.
+- Barang dihitung **dalam proses** bila ada di salah satu dari: usulan
+  `Diajukan`; usulan `DisetujuiMenungguRealisasi` dengan `amount_granted > 0`;
+  atau rincian realisasi yang `masihBerjalan()`. Realisasi yang ditolak
+  Kasubbag termasuk, karena masih bisa diperbaiki. Barang tambahan dan
+  realisasi langsung juga termasuk.
+- Barang **lepas** dan dinilai ulang begitu usulannya ditolak Pejabat
+  Pengadaan (seluruhnya atau barang itu saja), realisasinya dibatalkan, atau
+  barangnya diterima. Barang yang datang kurang dan stoknya masih di bawah
+  minimum langsung kembali dengan saran baru.
+- Hanya baris otomatis yang diatur. Baris permohonan dan baris manual tetap
+  masuk, tanpa penanda.
+- Satu definisi untuk pemindaian dan halaman:
+  `ProcurementDraftScanner::dokumenDalamProses()`, dihitung langsung dari
+  status dokumen. Tidak ada kolom baru.
+- `ProcurementDraftScanner::perbaruiBarangDokumen()` dipanggil setelah usulan
+  manual diajukan, usulan disetujui atau ditolak, realisasi dibuat, diubah,
+  atau dibatalkan, dan penerimaan dikonfirmasi.
+- Halaman draf punya bagian lipat **Sedang dalam Proses Pengadaan** (tertutup
+  secara default, dengan jumlah). Isinya barang yang dilewati beserta tautan
+  dan status setiap dokumennya. Bagian ini tetap tampil walau tidak ada draf.
+
 ## Status usulan disetujui: dua rupa
 
 Ditambahkan 13 September 2026 agar tabel dan filter usulan membedakan dua

@@ -18,6 +18,7 @@ use App\Support\AuditLogger;
 use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
+use App\Support\ProcurementDraftScanner;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -198,6 +199,10 @@ class ProcurementController extends Controller
             NotificationScanner::periksaUsulan($procurement->procurementRequest);
         }
 
+        // Barang tambahan (ADR 0029) dan barang realisasi langsung (ADR 0031)
+        // baru sekarang masuk proses pengadaan (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurement->details()->pluck('item_id'));
+
         return redirect()
             ->route('procurements.show', $procurement)
             ->with('status', "{$procurement->judul()} berhasil dibuat.");
@@ -256,6 +261,7 @@ class ProcurementController extends Controller
         $data = $request->validated();
         // Sejak ADR 0035 persetujuan yang masih berlaku ada di dua status.
         $sebelumnyaDisetujui = $procurement->isProsesBelanja() || $procurement->isMenungguPenerimaan();
+        $barangSebelumnya = $procurement->details->pluck('item_id');
 
         DB::transaction(function () use ($procurement, $data) {
             $procurement->forceFill([
@@ -329,6 +335,13 @@ class ProcurementController extends Controller
         // tagihan persetujuan yang baru.
         NotificationScanner::periksaRealisasi($procurement->fresh(['supplier', 'receipt']));
 
+        // Barang tambahan yang dihapus lepas dari proses pengadaan, yang baru
+        // ditambahkan masuk (ADR 0047) — jadi barang lama dan baru sama-sama
+        // diperiksa.
+        ProcurementDraftScanner::perbaruiBarangDokumen(
+            $barangSebelumnya->merge($procurement->details()->pluck('item_id')),
+        );
+
         return redirect()
             ->route('procurements.show', $procurement)
             ->with('status', $sebelumnyaDisetujui
@@ -384,6 +397,10 @@ class ProcurementController extends Controller
             $procurement->fresh(['supplier', 'receipt']),
             $request->user(),
         );
+        // Barangnya tidak jadi datang, jadi kembali ke draf bila stoknya masih
+        // kurang. Usulan asalnya tidak dapat direalisasi ulang (ADR 0024),
+        // sehingga tanpa ini barangnya tak akan pernah diusulkan lagi (ADR 0047).
+        ProcurementDraftScanner::perbaruiBarangDokumen($procurement->details()->pluck('item_id'));
 
         return redirect()
             ->route('procurements.show', $procurement)

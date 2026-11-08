@@ -7,6 +7,7 @@ use App\Enums\OpnameStatus;
 use App\Enums\PeriodeOpname;
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
+use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
@@ -14,9 +15,11 @@ use App\Models\Notification;
 use App\Models\ProcurementRequest;
 use App\Models\ProcurementRequestDetail;
 use App\Models\StockOpname;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Support\OpnamePoster;
 use App\Support\ProcurementDraftScanner;
+use App\Support\ProcurementReceiptPoster;
 use Illuminate\Support\Facades\Artisan;
 
 function mutasiManual(User $actor, Item $item, MutationType $type, int $amount): void
@@ -80,6 +83,27 @@ function seedDraf(): Item
     ProcurementDraftScanner::perbaruiSeluruh();
 
     return $item;
+}
+
+/**
+ * Barang di bawah minimum yang sudah dipindai ke draf, untuk uji ADR 0047.
+ * Ambangnya eksplisit, bukan `habis()`, karena uji penerimaan di bawah
+ * menghitung saran jumlahnya.
+ */
+function barangKurangDiDraf(int $stok = 0, int $min = 10, int $max = 50): Item
+{
+    $item = Item::factory()->create(['stock_current' => $stok, 'stock_min' => $min, 'stock_max' => $max]);
+    ProcurementDraftScanner::perbaruiSeluruh();
+
+    return $item;
+}
+
+function barisDrafUntuk(Item $item): ?ProcurementRequestDetail
+{
+    return ProcurementRequestDetail::query()
+        ->where('item_id', $item->item_id)
+        ->whereHas('procurementRequest', fn ($query) => $query->draf())
+        ->first();
 }
 
 describe('hak akses draf', function () {
@@ -566,5 +590,240 @@ describe('barang dalam draf tidak dapat dihapus', function () {
             ->assertSessionHas('error');
 
         expect(Item::whereKey($item->item_id)->exists())->toBeTrue();
+    });
+});
+
+describe('barang yang sedang dalam proses pengadaan', function () {
+    it('tidak memasukkan lagi barang dari draf yang sudah diajukan saat halaman draf dibuka', function () {
+        $gudang = pengelolaGudang();
+        $lama = barangKurangDiDraf();
+
+        $this->actingAs($gudang)->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()]);
+
+        // Barang lain yang kemudian kurang melahirkan draf baru, sama seperti
+        // permohonan pengguna yang disetujui.
+        $baru = barangKurangDiDraf();
+
+        $this->actingAs($gudang)->get('/usulan-pengadaan/draf')->assertOk();
+
+        expect(barisDrafUntuk($baru))->not->toBeNull()
+            ->and(barisDrafUntuk($lama))->toBeNull();
+    });
+
+    it('membuang baris otomatis begitu barangnya diajukan lewat formulir manual', function () {
+        $item = barangKurangDiDraf();
+
+        buatUsulan(pengelolaGudang(), [['item_id' => $item->item_id, 'amount_request' => 10]]);
+
+        expect(barisDrafUntuk($item))->toBeNull();
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+
+        expect(barisDrafUntuk($item))->toBeNull();
+    });
+
+    it('tetap melewati barang selama usulannya disetujui dan belum direalisasi', function () {
+        $item = barangKurangDiDraf();
+
+        setujuiUsulan(pejabatPengadaan(), buatUsulan(pengelolaGudang(), [
+            ['item_id' => $item->item_id, 'amount_request' => 10],
+        ]));
+        ProcurementDraftScanner::perbaruiSeluruh();
+
+        expect(barisDrafUntuk($item))->toBeNull();
+    });
+
+    it('mengembalikan barang yang tidak disetujui ke draf seketika', function () {
+        $ditolak = barangKurangDiDraf();
+        $disetujui = barangKurangDiDraf();
+
+        $usulan = buatUsulan(pengelolaGudang(), [
+            ['item_id' => $ditolak->item_id, 'amount_request' => 10],
+            ['item_id' => $disetujui->item_id, 'amount_request' => 10],
+        ]);
+
+        // Prasyarat untuk keempat uji pelepasan ini: barangnya sudah keluar
+        // dari draf, supaya yang terbukti memang pemicu pelepasannya.
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($ditolak))->toBeNull();
+
+        $this->actingAs(pejabatPengadaan())
+            ->patch("/usulan-pengadaan/{$usulan->procurement_request_id}/setujui", [
+                'granted' => $usulan->details->mapWithKeys(fn ($detail) => [
+                    $detail->procurement_request_detail_id => $detail->item_id === $ditolak->item_id ? 0 : 10,
+                ])->all(),
+            ])
+            ->assertSessionHasNoErrors();
+
+        expect(barisDrafUntuk($ditolak)?->is_auto)->toBeTrue()
+            ->and(barisDrafUntuk($disetujui))->toBeNull();
+    });
+
+    it('mengembalikan seluruh barang usulan yang ditolak ke draf seketika', function () {
+        $item = barangKurangDiDraf();
+        $usulan = buatUsulan(pengelolaGudang(), [['item_id' => $item->item_id, 'amount_request' => 10]]);
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($item))->toBeNull();
+
+        $this->actingAs(pejabatPengadaan())->patch("/usulan-pengadaan/{$usulan->procurement_request_id}/tolak");
+
+        expect(barisDrafUntuk($item)?->is_auto)->toBeTrue()
+            ->and(barisDrafUntuk($item)->source)->toBe(ProcurementRequestSource::PemantauanStok);
+    });
+
+    it('tetap melewati barang selama realisasinya berjalan, termasuk yang ditolak Kasubbag', function () {
+        $item = barangKurangDiDraf();
+        $usulan = setujuiUsulan(pejabatPengadaan(), buatUsulan(pengelolaGudang(), [
+            ['item_id' => $item->item_id, 'amount_request' => 10],
+        ]));
+        $procurement = buatRealisasi(pejabatPengadaan(), $usulan, Supplier::factory()->create());
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($item))->toBeNull();
+
+        // Realisasi yang ditolak masih bisa diperbaiki lalu diajukan ulang
+        // (ADR 0030), jadi barangnya belum boleh diusulkan dua kali.
+        $this->actingAs(kasubbagUmumTi())
+            ->patch("/pengadaan/{$procurement->procurement_id}/tolak", ['review_note' => 'Harga terlalu tinggi.']);
+
+        expect($procurement->fresh()->status)->toBe(ProcurementStatus::Ditolak);
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($item))->toBeNull();
+    });
+
+    it('mengembalikan barang ke draf seketika saat realisasinya dibatalkan', function () {
+        $item = barangKurangDiDraf();
+        $usulan = setujuiUsulan(pejabatPengadaan(), buatUsulan(pengelolaGudang(), [
+            ['item_id' => $item->item_id, 'amount_request' => 10],
+        ]));
+        $procurement = buatRealisasi(pejabatPengadaan(), $usulan, Supplier::factory()->create());
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($item))->toBeNull();
+
+        $this->actingAs(pejabatPengadaan())
+            ->patch("/pengadaan/{$procurement->procurement_id}/batal", pembatalanPayload())
+            ->assertSessionHasNoErrors();
+
+        expect($procurement->fresh()->status)->toBe(ProcurementStatus::Dibatalkan)
+            ->and(barisDrafUntuk($item)?->is_auto)->toBeTrue();
+    });
+
+    it('mengembalikan barang yang datang kurang ke draf setelah penerimaan', function () {
+        $kurang = barangKurangDiDraf(stok: 0, min: 10, max: 50);
+        $lengkap = barangKurangDiDraf(stok: 0, min: 10, max: 50);
+        $gudang = pengelolaGudang();
+        $pejabat = pejabatPengadaan();
+
+        $usulan = setujuiUsulan($pejabat, buatUsulan($gudang, [
+            ['item_id' => $kurang->item_id, 'amount_request' => 50],
+            ['item_id' => $lengkap->item_id, 'amount_request' => 50],
+        ]));
+        $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+        expect(barisDrafUntuk($kurang))->toBeNull();
+
+        ProcurementReceiptPoster::post(
+            procurement: $procurement,
+            diterima: $procurement->details->mapWithKeys(fn ($detail) => [
+                $detail->procurement_detail_id => $detail->item_id === $kurang->item_id ? 5 : 50,
+            ])->all(),
+            actor: $gudang,
+            receivedAt: now(),
+        );
+
+        expect(barisDrafUntuk($kurang)?->amount_request)->toBe(45)
+            ->and(barisDrafUntuk($lengkap))->toBeNull();
+    });
+
+    it('membuang baris otomatis barang yang dibeli lewat realisasi langsung', function () {
+        $item = barangKurangDiDraf();
+
+        buatRealisasiLangsung(pejabatPengadaan(), Supplier::factory()->create(), [barisLangsung($item)]);
+
+        expect(barisDrafUntuk($item))->toBeNull();
+    });
+
+    it('mengembalikan barang tambahan yang dihapus dari realisasi ke draf', function () {
+        $pejabat = pejabatPengadaan();
+        $supplier = Supplier::factory()->create();
+        $tambahan = barangKurangDiDraf();
+
+        $usulan = setujuiUsulan($pejabat, buatUsulan(pengelolaGudang(), [
+            ['item_id' => Item::factory()->create()->item_id, 'amount_request' => 10],
+        ]));
+        $items = realisasiPayload($usulan, $supplier)['items'];
+        $items[] = ['item_id' => $tambahan->item_id, 'amount' => 5, 'unit_price' => 1000];
+        $procurement = buatRealisasi($pejabat, $usulan, $supplier, ['items' => $items]);
+
+        expect(barisDrafUntuk($tambahan))->toBeNull();
+
+        $payload = ubahPayload($procurement->load('details'));
+        $idTambahan = $procurement->details->firstWhere('item_id', $tambahan->item_id)->procurement_detail_id;
+        $payload['items'] = array_values(array_filter(
+            $payload['items'],
+            fn (array $baris) => $baris['procurement_detail_id'] !== $idTambahan,
+        ));
+
+        $this->actingAs($pejabat)
+            ->put("/pengadaan/{$procurement->procurement_id}", $payload)
+            ->assertSessionHasNoErrors();
+
+        expect(barisDrafUntuk($tambahan)?->is_auto)->toBeTrue();
+    });
+
+    it('tidak menyentuh baris manual atas barang yang sedang dalam proses', function () {
+        $gudang = pengelolaGudang();
+        $item = barangKurangDiDraf();
+        $lain = barangKurangDiDraf();
+
+        buatUsulan($gudang, [['item_id' => $item->item_id, 'amount_request' => 10]]);
+
+        $this->actingAs($gudang)->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [
+                ['item_id' => $item->item_id, 'amount_request' => 3],
+                ['item_id' => $lain->item_id, 'amount_request' => 40],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        ProcurementDraftScanner::perbaruiSeluruh();
+
+        expect(barisDrafUntuk($item)?->amount_request)->toBe(3)
+            ->and(barisDrafUntuk($item)->is_auto)->toBeFalse();
+    });
+
+    it('menampilkan barang yang dilewati beserta dokumennya di halaman draf', function () {
+        $gudang = pengelolaGudang();
+        $diusulkan = barangKurangDiDraf();
+        $dibeli = barangKurangDiDraf();
+
+        $usulan = buatUsulan($gudang, [['item_id' => $diusulkan->item_id, 'amount_request' => 10]]);
+        $procurement = buatRealisasiLangsung(pejabatPengadaan(), Supplier::factory()->create(), [barisLangsung($dibeli)]);
+
+        // Kedua barangnya sudah dalam proses, jadi drafnya ikut terhapus —
+        // bagian ini justru paling dibutuhkan saat draf tidak ada.
+        expect(ProcurementRequest::query()->draf()->exists())->toBeFalse();
+
+        $this->actingAs($gudang)
+            ->get('/usulan-pengadaan/draf')
+            ->assertOk()
+            ->assertSee('Sedang dalam Proses Pengadaan')
+            ->assertSee($diusulkan->item_code)
+            ->assertSee($dibeli->item_code)
+            ->assertSee("/usulan-pengadaan/{$usulan->procurement_request_id}", false)
+            ->assertSee("/pengadaan/{$procurement->procurement_id}", false);
+    });
+
+    it('tidak menampilkan bagiannya bila tidak ada barang yang dilewati', function () {
+        seedDraf();
+
+        $this->actingAs(pengelolaGudang())
+            ->get('/usulan-pengadaan/draf')
+            ->assertOk()
+            ->assertDontSee('Sedang dalam Proses Pengadaan');
     });
 });

@@ -8,7 +8,9 @@ use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\UpdateProcurementDraftRequest;
+use App\Models\Item;
 use App\Models\ItemApplicationDetail;
+use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\ProcurementRequestDetail;
 use App\Support\AuditLogger;
@@ -46,6 +48,7 @@ class ProcurementDraftController extends Controller
             'katalog' => KatalogBarang::untukPemilih(),
             'subkategori' => KatalogBarang::subkategori(),
             'baris' => $draft !== null ? $this->barisDraf($draft) : collect(),
+            'dalamProses' => $this->barangDalamProses(),
         ]);
     }
 
@@ -242,5 +245,33 @@ class ProcurementDraftController extends Controller
                     ->all(),
             ])
             ->values();
+    }
+
+    /**
+     * Barang di bawah minimum yang dilewati pemindaian karena pengadaannya
+     * sudah berjalan (ADR 0047). Ditampilkan supaya Gudang tidak mengira
+     * barangnya terlewat lalu menambahkannya manual ke draf.
+     *
+     * @return Collection<int, array{item: Item, dokumen: Collection<int, array<string, mixed>>}>
+     */
+    private function barangDalamProses(): Collection
+    {
+        $dokumen = ProcurementDraftScanner::dokumenDalamProses();
+
+        return Item::query()->aktif()->diBawahMinimum()
+            ->whereIn('item_id', $dokumen->keys())
+            ->orderBy('item_name')
+            ->get()
+            ->map(fn (Item $item) => [
+                'item' => $item,
+                'dokumen' => $dokumen->get($item->item_id)
+                    ->map(fn (ProcurementRequest|Procurement $asal) => [
+                        'judul' => $asal->judul(),
+                        'status' => $asal->status,
+                        'url' => $asal instanceof Procurement
+                            ? route('procurements.show', $asal)
+                            : route('procurement-requests.show', $asal),
+                    ]),
+            ]);
     }
 }
