@@ -26,10 +26,18 @@
             </nav>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
             <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $procurementRequest->status->badgeClass() }}">
                 {{ $procurementRequest->status->label() }}
             </span>
+
+            <a href="{{ route('procurement-requests.excel-detail', $procurementRequest) }}"
+                class="text-theme-sm inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2.5a.75.75 0 01.75.75v7.19l2.22-2.22a.75.75 0 111.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06l2.22 2.22V3.25A.75.75 0 0110 2.5zM3.5 13.75a.75.75 0 01.75.75v1.25h11.5V14.5a.75.75 0 011.5 0v1.5a1.25 1.25 0 01-1.25 1.25H4.0A1.25 1.25 0 012.75 16v-1.5a.75.75 0 01.75-.75z" />
+                </svg>
+                Unduh Excel
+            </a>
 
             @if ($procurementRequest->isDisetujuiMenungguRealisasi())
                 @can('kelola-pengadaan')

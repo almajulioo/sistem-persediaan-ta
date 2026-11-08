@@ -136,12 +136,25 @@ class ProcurementRequest extends Model
         return $query->where('status', '!=', ProcurementRequestStatus::Draf);
     }
 
+    /**
+     * Rentang tanggal disaring pada `created_at`, tanggal yang ditampilkan
+     * sebagai "Diajukan" di daftar dan detail usulan (ADR 0048).
+     */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
-        return $query->when(
-            ProcurementRequestStatus::tryFrom((string) ($filters['status'] ?? '')),
-            fn (Builder $query, ProcurementRequestStatus $status) => $query->where('status', $status),
-        );
+        return $query
+            ->when(
+                ProcurementRequestStatus::tryFrom((string) ($filters['status'] ?? '')),
+                fn (Builder $query, ProcurementRequestStatus $status) => $query->where('status', $status),
+            )
+            ->when(
+                trim((string) ($filters['from'] ?? '')),
+                fn (Builder $query, string $from) => $query->whereDate('created_at', '>=', $from),
+            )
+            ->when(
+                trim((string) ($filters['to'] ?? '')),
+                fn (Builder $query, string $to) => $query->whereDate('created_at', '<=', $to),
+            );
     }
 
     public function user(): BelongsTo

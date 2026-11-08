@@ -4,15 +4,27 @@
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Pengadaan</h2>
 
-        @can('kelola-gudang')
-            <a href="{{ route('procurement-requests.create') }}"
-                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-                <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+        {{-- Tautan ekspor membawa penyaring yang sedang aktif, supaya isi
+             berkas sama persis dengan yang terlihat di layar (ADR 0048). --}}
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="{{ route('procurement-requests.excel', array_filter($filters)) }}"
+                class="inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2.5a.75.75 0 01.75.75v7.19l2.22-2.22a.75.75 0 111.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06l2.22 2.22V3.25A.75.75 0 0110 2.5zM3.5 13.75a.75.75 0 01.75.75v1.25h11.5V14.5a.75.75 0 011.5 0v1.5a1.25 1.25 0 01-1.25 1.25H4.0A1.25 1.25 0 012.75 16v-1.5a.75.75 0 01.75-.75z" />
                 </svg>
-                Ajukan Usulan
+                Ekspor Excel
             </a>
-        @endcan
+
+            @can('kelola-gudang')
+                <a href="{{ route('procurement-requests.create') }}"
+                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                    <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+                    </svg>
+                    Ajukan Usulan
+                </a>
+            @endcan
+        </div>
     </div>
 
     <x-ui.flash />
@@ -55,17 +67,21 @@
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         {{-- Penyaring --}}
         <form method="GET" action="{{ route('procurement-requests.index') }}"
-            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-[minmax(0,20rem)_auto] sm:items-end dark:border-gray-800 sm:p-6">
+            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-3 dark:border-gray-800 sm:p-6">
             <x-form.select-field name="status" label="Status Usulan"
                 :options="\App\Enums\ProcurementRequestStatus::options()" :selected="$filters['status']"
                 placeholder="Semua status" />
 
-            <div class="flex items-center gap-3">
+            <x-form.text-field name="from" label="Tanggal Awal" type="date" :value="$filters['from']" />
+
+            <x-form.text-field name="to" label="Tanggal Akhir" type="date" :value="$filters['to']" />
+
+            <div class="flex items-center gap-3 sm:col-span-3">
                 <button type="submit"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Terapkan
                 </button>
-                @if ($filters['status'] !== '')
+                @if (collect($filters)->filter()->isNotEmpty())
                     <a href="{{ route('procurement-requests.index') }}"
                         class="text-theme-sm inline-flex items-center rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                         Reset

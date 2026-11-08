@@ -148,6 +148,10 @@ class ProcurementDraftController extends Controller
             $draft->forceFill([
                 'user_id' => $request->user()->user_id,
                 'status' => ProcurementRequestStatus::Diajukan,
+                // Draf belum resmi; usulannya baru lahir saat diajukan. Tanpa
+                // ini, draf yang lama menunggu tercatat diajukan pada hari
+                // drafnya dibuat, dan langsung terbaca menggantung (ADR 0049).
+                'created_at' => now(),
             ])->save();
         });
 

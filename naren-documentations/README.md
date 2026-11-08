@@ -37,7 +37,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0006](keputusan/0006-mutationtype-merangkap-alasan-manual.md) | `MutationType` merangkap alasan mutasi manual | Diterima |
 | [0007](keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) | Kolom audit tambahan dan referensi dokumen polimorfik | Diterima |
 | [0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md) | Penerimaan barang dikonfirmasi Pengelola Gudang | Diterima |
-| [0009](keputusan/0009-laporan-pdf-dan-csv.md) | Laporan PDF lewat dompdf dan CSV tanpa paket tambahan | Diterima |
+| [0009](keputusan/0009-laporan-pdf-dan-csv.md) | Laporan PDF lewat dompdf dan CSV tanpa paket tambahan | Sebagian digantikan oleh 0048 |
 | [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Diterima |
 | [0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) | Alasan selisih: enum baku berpasangan keterangan wajib | Diterima |
 | [0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) | Periode opname sebagai enum jenis + tahun | Diterima |
@@ -76,6 +76,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) | Kiriman ulang formulir usulan dan halaman draf yang usang | Sebagian digantikan oleh 0046 |
 | [0046](keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md) | Token kiriman untuk semua formulir pembuat dokumen | Diterima |
 | [0047](keputusan/0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md) | Barang yang sedang dalam proses pengadaan tidak diusulkan ulang oleh draf | Diterima |
+| [0048](keputusan/0048-ekspor-excel-usulan-pengadaan.md) | Ekspor Excel usulan pengadaan, per usulan dan per rentang tanggal diajukan | Sebagian digantikan oleh 0049 dan 0050 |
+| [0049](keputusan/0049-tanggal-usulan-dari-draf-adalah-saat-diajukan.md) | Tanggal usulan dari draf adalah saat diajukan, bukan saat draf dibuat | Diterima |
+| [0050](keputusan/0050-lembar-rekap-barang-pada-ekspor-usulan.md) | Lembar Rekap Barang pada ekspor daftar usulan | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

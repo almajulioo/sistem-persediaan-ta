@@ -145,6 +145,11 @@ Route::middleware('auth')->group(function () {
     Route::middleware('can:akses-pengadaan')->group(function () {
         Route::get('usulan-pengadaan', [ProcurementRequestController::class, 'index'])
             ->name('procurement-requests.index');
+        // Wajib terdaftar sebelum "usulan-pengadaan/{procurementRequest}/excel"
+        // di bawah: panjang ruasnya sama, jadi bila urutannya terbalik
+        // "laporan" tertangkap sebagai {procurementRequest}.
+        Route::get('usulan-pengadaan/laporan/excel', [ProcurementRequestController::class, 'exportExcel'])
+            ->name('procurement-requests.excel');
 
         Route::get('pengadaan', [ProcurementController::class, 'index'])
             ->name('procurements.index');
@@ -352,6 +357,8 @@ Route::middleware('auth')->group(function () {
 
         Route::get('usulan-pengadaan/{procurementRequest}', [ProcurementRequestController::class, 'show'])
             ->name('procurement-requests.show');
+        Route::get('usulan-pengadaan/{procurementRequest}/excel', [ProcurementRequestController::class, 'exportExcelDetail'])
+            ->name('procurement-requests.excel-detail');
 
         Route::get('pengadaan/{procurement}', [ProcurementController::class, 'show'])
             ->name('procurements.show');

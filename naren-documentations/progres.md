@@ -5,6 +5,126 @@ perubahan.
 
 ---
 
+## 8 November 2026 (lanjutan 7) — Lembar Rekap Barang pada ekspor usulan
+
+Narendra bertanya kenapa ekspor daftar usulan hanya satu lembar, padahal
+rencananya dua. Penyebabnya salah tafsir Claude: pertanyaan soal lembar
+Rekap Barang tidak terjawab, lalu "minimal saja" dibaca sebagai tidak
+perlu. ADR 0048 mencatatnya sebagai ditolak, dan ringkasan pekerjaan tidak
+menyebutkannya dengan jelas
+([ADR 0050](keputusan/0050-lembar-rekap-barang-pada-ekspor-usulan.md)).
+
+**Yang berubah.**
+
+- `LaporanUsulanPengadaan::daftar()` kini memuat lembar **Ringkasan**
+  (dulu bernama "Usulan Pengadaan") dan **Rekap Barang**.
+- `rekapBarang()` baru. Kolom **Belum Diputuskan** ditambahkan dari
+  rencana awal, supaya Disetujui tidak tampak rendah oleh usulan yang belum
+  diputuskan.
+- `buku()` dipecah menjadi `buku()` dan `lembar()`.
+- `exportExcel()` memuat `details.item`, bukan `withCount('details')`.
+
+**Verifikasi.** Dua test baru: dua lembar dan lembar yang terbuka, lalu
+isi rekap (gabungan lintas usulan, rentang tanggal, belum diputuskan,
+urutan). Uji mutasi dijalankan dua kali, dan keduanya membuat test rekap
+gagal:
+
+- hitungan Belum Diputuskan dibalik;
+- urutan dibalik.
+
+---
+
+## 8 November 2026 (lanjutan 6) — Tanggal usulan dari draf adalah saat diajukan
+
+Permintaan Narendra setelah ekspor Excel: tanggal usulan dari draf
+otomatis adalah saat diajukan, karena draf belum resmi dan belum diproses
+([ADR 0049](keputusan/0049-tanggal-usulan-dari-draf-adalah-saat-diajukan.md)).
+
+**Yang berubah.** `ProcurementDraftController::finalize()` mengisi
+`created_at = now()` bersama status dan pengaju. Tanpa migrasi.
+
+**Ikut terkoreksi.** Selain kolom "Diajukan", penyaring tanggal, urutan
+daftar, dan ekspor Excel, perubahan ini juga membetulkan notifikasi
+`UsulanMenggantung`. Ambang 7 harinya dihitung dari `created_at`,
+sehingga draf yang sudah lebih dari seminggu langsung dianggap
+menggantung begitu diajukan, dengan teks "diajukan 2 minggu yang lalu".
+
+**Verifikasi.** Dua test baru di `ProcurementDraftTest` › menuntaskan
+draf: tanggal diajukan, dan tidak langsung menggantung. Uji mutasi:
+barisnya dihapus, keduanya gagal.
+
+**Belum dikerjakan.** Usulan dari draf yang sudah diajukan sebelum
+perubahan ini tetap memakai tanggal lama. Tanggalnya bisa dipulihkan dari
+`audit_logs` bila basis data lapangan memerlukannya.
+
+---
+
+## 8 November 2026 (lanjutan 5) — Ekspor Excel usulan pengadaan
+
+Permintaan klien: ekspor Excel usulan pengadaan sebagai laporan ringkas,
+per usulan dan per rentang waktu
+([ADR 0048](keputusan/0048-ekspor-excel-usulan-pengadaan.md)).
+
+**Konsep dibahas dulu, tanpa kode.** Konsep awal lebih luas: kolom
+`submitted_at`, `decided_at`, `decided_by`, sheet rekap per barang, dan
+kolom realisasi. Konsep itu juga menunjukkan bahwa `created_at` usulan dari
+draf adalah waktu drafnya lahir. Narendra mempersempitnya:
+
+- rentang waktu berdasarkan tanggal diajukan;
+- tanpa kolom realisasi;
+- tanpa migrasi;
+- isi mengikuti tabel yang sekarang.
+
+**Yang berubah.**
+
+- `composer require phpoffice/phpspreadsheet:~5.0` (terpasang 5.11.0).
+- `App\Support\LaporanUsulanPengadaan`: `daftar()`, `rincian()`, `unduh()`.
+  Teks ditulis eksplisit sebagai string.
+- `ProcurementRequest::scopeFilter` mendapat `from`/`to` pada `created_at`.
+- `ProcurementRequestController`: `filters()` dipakai bersama layar dan
+  ekspor, tanggal yang tidak sah dibuang, serta aksi baru `exportExcel()`
+  dan `exportExcelDetail()` (draf → 404).
+- Dua rute di bawah `akses-pengadaan`. `laporan/excel` didaftarkan di grup
+  paling awal.
+- Daftar usulan: penyaring Tanggal Awal/Akhir dan tombol **Ekspor Excel**.
+  Detail usulan: tombol **Unduh Excel**.
+- `phpunit.xml`: `memory_limit` 512M (lihat temuan di bawah).
+- Tidak ada berkas Alma yang diubah.
+
+**Verifikasi.** 843 dari 843 test lulus, termasuk 12 test baru di
+`ProcurementRequestExportTest`. Test baru membaca balik berkas yang diunduh
+dengan `IOFactory`. Pint bersih untuk 5 berkas.
+
+Uji mutasi dijalankan dua kali:
+
+- `setCellValueExplicit(..., TYPE_STRING)` diganti `setCellValue()`: test
+  "teks ketikan pengguna" gagal.
+- Penyaring `from` dimatikan: dua test rentang tanggal gagal.
+
+Tampilan berkas di Excel sungguhan **belum dilihat**; yang diperiksa hanya
+isi sel lewat pembacaan balik.
+
+**Temuan sampingan.**
+
+1. **`vendor/` di mesin ini tidak sinkron dengan `composer.lock`.**
+   `phpoffice/phpword` milik Alma sudah ada di lock tetapi belum terpasang.
+   `composer require` memasangnya sekaligus.
+2. **Butir terbuka 15 ternyata akibat temuan 1, bukan bug alur Alma.**
+   `RequestWorkflowService` memanggil `RequestDocumentGenerator`, yang
+   memakai PhpWord. Tanpa paketnya, penyerahan gagal dan transaksinya
+   dibatalkan, sehingga stok pulpen tetap 10. Setelah paketnya terpasang,
+   test itu lulus.
+3. **Suite tidak lagi muat di 128M bawaan php.ini.** Suite berhenti
+   *fatal* di dompdf saat `ProcurementReportTest`, sebelum test baru
+   sempat berjalan. Untuk memastikan penyebabnya, suite dijalankan lagi
+   **tanpa kode perubahan ini** (vendor tetap). Hasilnya crash di titik
+   yang sama, jadi penyebabnya autoload yang membesar oleh paket baru,
+   bukan kode ekspornya. `phpunit.xml` kini menaikkan batasnya ke 512M.
+   Perlu diingat: `php -d memory_limit=... artisan test` tidak berpengaruh,
+   karena Pest berjalan di proses anak.
+
+---
+
 ## 8 November 2026 (lanjutan 4) — Barang dalam proses pengadaan tidak diusulkan ulang
 
 Laporan Narendra: barang habis yang sudah diajukan lewat draf muncul lagi di

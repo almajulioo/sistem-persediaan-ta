@@ -13,12 +13,14 @@ use App\Models\ProcurementRequest;
 use App\Support\AuditLogger;
 use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
+use App\Support\LaporanUsulanPengadaan;
 use App\Support\NotificationScanner;
 use App\Support\ProcurementDraftScanner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Usulan pengadaan — permintaan Pengelola Gudang kepada Pejabat Pengadaan.
@@ -34,11 +36,7 @@ class ProcurementRequestController extends Controller
 
     public function index(Request $request): View
     {
-        // Penyaring sumber dibuang sejak sumber pindah ke tiap barang
-        // (ADR 0044): satu usulan bisa memuat ketiga sumber sekaligus.
-        $filters = [
-            'status' => (string) $request->query('status', ''),
-        ];
+        $filters = $this->filters($request);
 
         return view('pages.procurement-requests.index', [
             'title' => 'Usulan Pengadaan',
@@ -133,6 +131,41 @@ class ProcurementRequestController extends Controller
         ]);
     }
 
+    /**
+     * Daftar usulan sesuai penyaring di layar, urut menaik supaya laporan
+     * terbaca sebagai kronologi (ADR 0048).
+     */
+    public function exportExcel(Request $request): StreamedResponse
+    {
+        $filters = $this->filters($request);
+
+        $usulan = ProcurementRequest::query()
+            ->bukanDraf()
+            ->filter($filters)
+            ->with(['user', 'details.item'])
+            ->oldest('created_at')
+            ->oldest('procurement_request_id')
+            ->get();
+
+        return LaporanUsulanPengadaan::unduh(
+            LaporanUsulanPengadaan::daftar($usulan, $filters, $request->user()),
+            'laporan-usulan-pengadaan-'.now()->format('Ymd-His').'.xlsx',
+        );
+    }
+
+    public function exportExcelDetail(Request $request, ProcurementRequest $procurementRequest): StreamedResponse
+    {
+        // Draf bukan dokumen usulan (ADR 0027), jadi tidak ada yang diekspor.
+        abort_if($procurementRequest->isDraf(), 404);
+
+        $kode = strtoupper(substr($procurementRequest->procurement_request_id, 0, 8));
+
+        return LaporanUsulanPengadaan::unduh(
+            LaporanUsulanPengadaan::rincian($procurementRequest->load(['user', 'details.item']), $request->user()),
+            "usulan-pengadaan-{$kode}.xlsx",
+        );
+    }
+
     public function approve(ApproveProcurementRequestRequest $request, ProcurementRequest $procurementRequest): RedirectResponse
     {
         if (! $procurementRequest->isDiajukan()) {
@@ -192,6 +225,36 @@ class ProcurementRequestController extends Controller
         return redirect()
             ->route('procurement-requests.show', $procurementRequest)
             ->with('status', "{$procurementRequest->judul()} ditolak.");
+    }
+
+    /**
+     * Penyaring yang dibaca sekali lalu dipakai bersama oleh layar dan ekspor
+     * Excel, supaya isi berkas sama persis dengan yang dilihat pengguna.
+     *
+     * Penyaring sumber dibuang sejak sumber pindah ke tiap barang (ADR 0044):
+     * satu usulan bisa memuat ketiga sumber sekaligus.
+     *
+     * @return array{status: string, from: string, to: string}
+     */
+    private function filters(Request $request): array
+    {
+        return [
+            'status' => (string) $request->query('status', ''),
+            'from' => $this->tanggal($request->query('from')),
+            'to' => $this->tanggal($request->query('to')),
+        ];
+    }
+
+    /**
+     * Tanggal Y-m-d yang sah, atau kosong — query string sembarangan tidak
+     * boleh sampai ke kalimat periode laporan yang mengurainya.
+     */
+    private function tanggal(mixed $nilai): string
+    {
+        $nilai = is_string($nilai) ? trim($nilai) : '';
+        $tanggal = \DateTimeImmutable::createFromFormat('!Y-m-d', $nilai);
+
+        return $tanggal !== false && $tanggal->format('Y-m-d') === $nilai ? $nilai : '';
     }
 
     /**

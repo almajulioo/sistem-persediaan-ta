@@ -473,6 +473,41 @@ describe('menuntaskan draf', function () {
             ->exists())->toBeTrue();
     });
 
+    it('mencatat tanggal diajukan saat draf diajukan, bukan saat draf dibuat', function () {
+        $this->travelTo('2026-03-01 08:00');
+        seedDraf();
+
+        $this->travelTo('2026-03-20 14:30');
+        $this->actingAs(pengelolaGudang())
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()]);
+        $this->travelBack();
+
+        $usulan = ProcurementRequest::query()->bukanDraf()->sole();
+
+        expect($usulan->created_at->format('Y-m-d H:i'))->toBe('2026-03-20 14:30');
+
+        $this->actingAs(pejabatPengadaan())
+            ->get('/usulan-pengadaan?from=2026-03-20&to=2026-03-20')
+            ->assertSee($usulan->judul());
+    });
+
+    it('tidak langsung menganggap usulan dari draf yang lama menunggu sebagai menggantung', function () {
+        $pejabat = pejabatPengadaan();
+
+        $this->travelTo('2026-03-01 08:00');
+        seedDraf();
+
+        $this->travelTo('2026-03-20 14:30');
+        $this->actingAs(pengelolaGudang())
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()]);
+        $this->travelBack();
+
+        $notifikasi = Notification::query()->where('user_id', $pejabat->user_id);
+
+        expect((clone $notifikasi)->where('type', NotificationType::UsulanMenungguPersetujuan)->exists())->toBeTrue()
+            ->and((clone $notifikasi)->where('type', NotificationType::UsulanMenggantung)->exists())->toBeFalse();
+    });
+
     it('menolak mengajukan bila tidak ada draf', function () {
         $this->actingAs(pengelolaGudang())
             ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()])

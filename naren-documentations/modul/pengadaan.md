@@ -191,7 +191,9 @@ jenis notifikasi baru. Rincian keputusan:
 
 | Metode | URL | Nama | Gate | Keterangan |
 |---|---|---|---|---|
-| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status (penyaring sumber dibuang, ADR 0044) |
+| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan tanggal diajukan (penyaring sumber dibuang, ADR 0044) |
+| GET | `/usulan-pengadaan/laporan/excel` | `procurement-requests.excel` | `akses-pengadaan` | Ekspor Excel daftar usulan sesuai penyaring (ADR 0048) |
+| GET | `/usulan-pengadaan/{procurementRequest}/excel` | `procurement-requests.excel-detail` | `akses-pengadaan` | Ekspor Excel satu usulan beserta rincian barangnya (ADR 0048) |
 | GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan manual, murni dari nol |
 | POST | `/usulan-pengadaan` | `procurement-requests.store` | `kelola-gudang` | |
 | GET | `/usulan-pengadaan/{procurementRequest}` | `procurement-requests.show` | `akses-pengadaan` | Detail + formulir keputusan bila masih Diajukan |
@@ -232,7 +234,7 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
 |---|---|---|---|
 | GET | `/usulan-pengadaan/draf` | `procurement-requests.draft.edit` | Menjalankan ulang pemindaian lalu menampilkan draf, atau keadaan kosong |
 | PUT | `/usulan-pengadaan/draf` | `procurement-requests.draft.update` | Mengganti seluruh rincian draf sekaligus |
-| POST | `/usulan-pengadaan/draf/ajukan` | `procurement-requests.draft.finalize` | Memindahkan status Draf → Diajukan |
+| POST | `/usulan-pengadaan/draf/ajukan` | `procurement-requests.draft.finalize` | Memindahkan status Draf → Diajukan; `created_at` diisi waktu pengajuan (ADR 0049) |
 | DELETE | `/usulan-pengadaan/draf` | `procurement-requests.draft.discard` | Membuang draf beserta rinciannya |
 
 **Aturan.**
@@ -968,6 +970,44 @@ melahirkan usulan kembar tanpa batas. Rincian keputusan:
 - `x-form.sekali-kirim` memuat ulang halaman bila dipulihkan dari
   back-forward cache setelah salah satu formulirnya terkirim, dan
   menonaktifkan tombol kirim setelah terkirim.
+
+## Ekspor Excel usulan
+
+Ditambahkan 8 November 2026 atas permintaan klien. Rincian keputusan:
+[ADR 0048](../keputusan/0048-ekspor-excel-usulan-pengadaan.md).
+
+**Dua pintu.**
+
+- **Ekspor Excel** di daftar usulan, dua lembar dengan kop yang sama
+  (judul, periode, status bila disaring, pencetak):
+  - **Ringkasan**: ringkasan per status, lalu satu baris per usulan: No,
+    Nomor Usulan, Tanggal Diajukan, Pengaju, Jumlah Barang, Status.
+  - **Rekap Barang** (ADR 0050): satu baris per barang dari semua usulan
+    yang sama: No, Kode Barang, Nama Barang, Satuan, Jumlah Usulan,
+    Diminta, Disetujui, Belum Diputuskan. Urutannya yang paling sering
+    diusulkan di atas.
+- **Unduh Excel** di detail usulan: kop, identitas usulan, lalu satu baris
+  per barang: No, Kode Barang, Nama Barang, Sumber, Permohonan, Keterangan,
+  Diminta, Disetujui, Satuan.
+
+**Aturan.**
+
+- Isinya sama dengan tabel di layar. Tidak ada kolom realisasi, rupiah,
+  atau stok, dan tidak ada migrasi.
+- Tanggal diajukan adalah `created_at`, sama dengan yang tampil di layar.
+  Untuk usulan dari draf otomatis, `finalize()` mengisinya dengan waktu
+  pengajuan, bukan waktu draf dibuat (ADR 0049).
+- Penyaring Tanggal Awal dan Tanggal Akhir di daftar usulan dipakai
+  bersama layar dan ekspor (`ProcurementRequest::scopeFilter`). Tautan
+  ekspor membawa penyaring yang aktif. Tanggal yang tidak sah dibuang.
+- Daftar diurutkan menaik (kronologi). Ringkasan dihitung dari usulan
+  yang tersaring. Draf tidak pernah ikut, dan ekspor satu draf
+  menghasilkan 404.
+- Berkas .xlsx dibuat `App\Support\LaporanUsulanPengadaan` lewat
+  `phpoffice/phpspreadsheet`. Teks selalu ditulis sebagai string, supaya
+  keterangan berawalan `=` tidak menjadi rumus dan kode `0012` tidak
+  menjadi `12`.
+- Aksi baca, jadi tidak dicatat di log aktivitas.
 
 ## Butir yang masih menunggu lapangan
 
