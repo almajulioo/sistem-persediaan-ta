@@ -8,10 +8,13 @@ use Illuminate\Validation\Rule;
 /**
  * Menyimpan perubahan Pengelola Gudang pada draf usulan otomatis.
  *
- * Berbeda dari StoreProcurementRequestRequest: tidak ada kolom `source`
- * (selalu PemantauanStok), dan `items` boleh kosong — mengirim nol baris
- * adalah cara mengosongkan draf sampai terhapus otomatis oleh
- * ProcurementDraftController::update(). Lihat ADR 0027.
+ * Berbeda dari StoreProcurementRequestRequest: `items` boleh kosong —
+ * mengirim nol baris adalah cara mengosongkan draf sampai terhapus otomatis
+ * oleh ProcurementDraftController::update(). Lihat ADR 0027.
+ *
+ * Sumber tiap baris tidak diterima dari kiriman: baris yang sudah ada
+ * mempertahankan sumbernya, baris baru selalu Manual, dan `note` hanya
+ * disimpan untuk baris Manual (ADR 0044).
  */
 class UpdateProcurementDraftRequest extends FormRequest
 {
@@ -30,6 +33,7 @@ class UpdateProcurementDraftRequest extends FormRequest
             'items' => ['present', 'array'],
             'items.*.item_id' => ['required', 'string', 'distinct', Rule::exists('items', 'item_id')],
             'items.*.amount_request' => ['required', 'integer', 'min:1', 'max:999999'],
+            'items.*.note' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -42,6 +46,7 @@ class UpdateProcurementDraftRequest extends FormRequest
             'items' => 'daftar barang',
             'items.*.item_id' => 'barang',
             'items.*.amount_request' => 'jumlah diminta',
+            'items.*.note' => 'keterangan',
         ];
     }
 

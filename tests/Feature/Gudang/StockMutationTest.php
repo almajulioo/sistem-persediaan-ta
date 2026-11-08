@@ -16,6 +16,7 @@ function gudang(array $attributes = []): User
 function mutationPayload(Item $item, array $overrides = []): array
 {
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'item_id' => $item->item_id,
         'mutation_type' => MutationType::BarangRusak->value,
         'amount' => 5,
@@ -276,5 +277,20 @@ describe('daftar dan penyaringan', function () {
             ->get('/mutasi?type='.MutationType::BarangRusak->value)
             ->assertSee('-10')
             ->assertDontSee('+150');
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak mencatat mutasi kedua saat formulir yang sama dikirim ulang', function () {
+        $actor = gudang();
+        $payload = mutationPayload(Item::factory()->create(['stock_current' => 50]));
+
+        $this->actingAs($actor)->post('/mutasi', $payload);
+        $this->actingAs($actor)->post('/mutasi', $payload)
+            ->assertRedirect(route('mutations.index'))
+            ->assertSessionHas('status', 'Mutasi ini sudah tercatat sebelumnya.');
+
+        expect(StockMutation::count())->toBe(1)
+            ->and(AuditLog::where('activity', 'like', 'Mencatat mutasi manual%')->count())->toBe(1);
     });
 });

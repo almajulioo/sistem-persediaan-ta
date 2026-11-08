@@ -13,6 +13,7 @@ use App\Http\Requests\Gudang\UpdateOpnameCountRequest;
 use App\Models\Item;
 use App\Models\StockOpname;
 use App\Support\AuditLogger;
+use App\Support\KirimanFormulir;
 use App\Support\OpnamePoster;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -74,7 +75,7 @@ class StockOpnameController extends Controller
             return back()->with('error', 'Belum ada barang aktif yang dapat dicacah.');
         }
 
-        $opname = DB::transaction(function () use ($request, $barang) {
+        [$opname, $ulang] = KirimanFormulir::sekali($request, function () use ($request, $barang) {
             $opname = StockOpname::create($request->validated() + [
                 'user_id' => $request->user()->user_id,
                 'status' => OpnameStatus::Draf,
@@ -92,6 +93,12 @@ class StockOpnameController extends Controller
 
             return $opname;
         });
+
+        if ($ulang) {
+            return $opname === null
+                ? redirect()->route('opname.index')
+                : redirect()->route('opname.show', $opname)->with('status', "{$opname->judul()} sudah dibuat sebelumnya.");
+        }
 
         AuditLogger::record(
             user: $request->user(),

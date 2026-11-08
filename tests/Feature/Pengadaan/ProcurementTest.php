@@ -44,6 +44,7 @@ function realisasiPayload(ProcurementRequest $usulan, Supplier $supplier, array 
     ])->all();
 
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'procurement_request_id' => $usulan->procurement_request_id,
         'supplier_id' => $supplier->supplier_id,
         'procurement_date' => now()->toDateString(),

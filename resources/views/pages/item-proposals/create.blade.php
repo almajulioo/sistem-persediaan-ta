@@ -10,6 +10,7 @@
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <form action="{{ route('item-proposals.store') }}" method="POST">
             @csrf
+            <x-form.token-kiriman />
 
             <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <x-form.text-field name="item_name" label="Nama Barang" required

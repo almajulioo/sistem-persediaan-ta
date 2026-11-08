@@ -193,6 +193,7 @@ describe('Kasubbag tidak bisa mengubah', function () {
     it('menolak Kasubbag mengunggah berkas ke realisasi yang ia nilai', function () {
         $this->actingAs($this->kasubbag)
             ->post("/pengadaan/{$this->procurement->procurement_id}/dokumen", [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
             ])
@@ -205,6 +206,7 @@ describe('Kasubbag tidak bisa mengubah', function () {
     it('tetap mengizinkan pelaksana mengunggah berkas', function () {
         $this->actingAs($this->petugas)
             ->post("/pengadaan/{$this->procurement->procurement_id}/dokumen", [
+                'submission_token' => tokenKiriman(),
                 'type' => 'spk_kontrak',
                 'file' => UploadedFile::fake()->create('spk.pdf', 10, 'application/pdf'),
             ])

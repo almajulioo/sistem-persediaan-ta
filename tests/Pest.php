@@ -47,3 +47,13 @@ function something()
 {
     // ..
 }
+
+/**
+ * Token kiriman formulir pembuat dokumen (App\Support\KirimanFormulir).
+ * Ditaruh di sini, bukan di berkas uji, supaya tetap ada saat satu berkas
+ * dijalankan sendiri.
+ */
+function tokenKiriman(): string
+{
+    return (string) Illuminate\Support\Str::uuid();
+}

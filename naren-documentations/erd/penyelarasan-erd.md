@@ -96,28 +96,21 @@ salah tempat.
 Rincian keputusan skema lengkap ada di
 [ADR 0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md).
 
-## Titik integrasi yang tersedia — bukan kewajiban
+## Titik integrasi yang dipakai: permohonan → draf usulan
 
-`procurement_requests` punya kolom `source` (enum `ProcurementRequestSource`)
-yang membedakan tiga asal-usul usulan pengadaan, dikonfirmasi narasumber
-lapangan (Kasubbag Umum dan TI):
+Bagian ini dulu menawarkan `procurement_requests.source = DariPermintaan`
+beserta `reference_type`/`reference_id` sebagai titik integrasi. Alma tidak
+memakainya: permohonan barang (30 Oktober 2026) meneruskan baris tambah stok
+yang disetujui ke draf usulan pengadaan, dan asal tiap barang ditunjuk balik
+oleh **`item_application_details.procurement_request_id`** di tabelnya
+sendiri.
 
-1. **`DariPermintaan`** — permintaan unit tidak bisa dipenuhi karena stok
-   kurang atau habis.
-2. **`PemantauanStok`** — dari notifikasi Stok Habis/Menipis.
-3. **`Manual`** — diajukan langsung Pengelola Gudang.
-
-Hanya jenis pertama yang menunjuk dokumen asal, lewat `reference_type`/
-`reference_id` polimorfik — pola yang sama dengan `stock_mutations.reference_*`
-([ADR 0007](../keputusan/0007-kolom-audit-dan-referensi-polimorfik.md)) —
-mengarah ke baris `requests` lewat alias morph map `'permintaan'` yang sudah
-terdaftar di `AppServiceProvider`.
-
-Ini **bukan foreign key basis data** dan **bukan kewajiban**: sub sistem
-Pengadaan berfungsi penuh tanpa sub sistem Permintaan ada, lewat dua sumber
-lainnya. Begitu Alma membangun alurnya, baris `requests` yang menandai stok
-kurang tinggal dipakai mengisi kolom ini; sebelum itu, kolomnya dibiarkan
-kosong.
+Sejak [ADR 0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md)
+(8 November 2026) sumber dicatat **per barang** pada
+`procurement_request_details.source` — `dari_permohonan`, `manual`, atau
+`pemantauan_stok` — dan ketiga kolom dokumen itu dibuang beserta sumber
+`DariPermintaan`. `ItemApplicationWorkflowService` (milik Alma) mengisi
+`source = dari_permohonan` pada baris yang ia tambahkan atau tumpuki.
 
 ## Penyimpangan dari ERD yang sudah diterapkan Naren
 
@@ -172,6 +165,10 @@ ERD pada naskah Naren diperbarui.
 | `user_notifications` | Hapus `resolved_at` beserta indeks `(user_id, resolved_at, read_at)`, diganti indeks `(user_id, read_at)` — notifikasi yang selesai kini dihapus, bukan ditandai. Tabelnya sendiri lahir di ADR 0013 | [0036](../keputusan/0036-lonceng-kotak-masuk-dan-notifikasi-selesai-dihapus.md) |
 | `procurement_receipts` | `bast_number` menjadi **nullable** — nomor BAST diisi saat BAST dicetak pertama kali, bukan saat penerimaan dikonfirmasi; BAST-nya kini serah terima internal Pelaksana Belanja → Petugas Persediaan | [0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md) |
 | `procurement_receipts` | `received_at` diberi `DEFAULT CURRENT_TIMESTAMP` eksplisit — membuang `ON UPDATE CURRENT_TIMESTAMP` yang dipasang MariaDB diam-diam, yang menggeser tanggal penerimaan setiap kali nomor BAST diisi | [0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md) |
+| `procurement_request_details` | Tambah `source` (NOT NULL, tanpa nilai bawaan; diisi ulang dari data lama) dan `note` (text, nullable — keterangan barang manual) | [0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md) |
+| `procurement_requests` | Hapus `source`, `reference_type`, `reference_id` — sumber pindah ke tiap barang | [0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md) |
+| `procurement_requests` | Tambah `submission_token` (uuid, nullable, **unique**) — token sekali pakai formulir usulan manual; kiriman ulang lewat tombol Kembali atau klik ganda ditolak basis data | [0045](../keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) |
+| `form_submissions` | Tabel baru — token kiriman semua formulir pembuat dokumen (`token` PK, `subject` polimorfik). `procurement_requests.submission_token` dipindahkan ke sini lalu dibuang | [0046](../keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

@@ -43,7 +43,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) | Periode opname sebagai enum jenis + tahun | Diterima |
 | [0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md) | Notifikasi memisahkan keadaan dari peristiwa | Sebagian digantikan oleh 0036 |
 | [0014](keputusan/0014-pemeriksaan-notifikasi-dipanggil-eksplisit.md) | Pemeriksaan notifikasi dipanggil eksplisit, bukan lewat hook di `StockLedger` | Diterima |
-| [0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) | Usulan pengadaan dan penerimaan barang: skema diperbaiki dan dipisah tegas dari sub sistem Permintaan | Diterima |
+| [0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) | Usulan pengadaan dan penerimaan barang: skema diperbaiki dan dipisah tegas dari sub sistem Permintaan | Sebagian digantikan oleh 0044 |
 | [0016](keputusan/0016-alur-pengadaan-tiga-dokumen.md) | Alur pengadaan tiga dokumen dan pemisahan tugas | Diterima |
 | [0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md) | Jumlah diterima dicatat terpisah dari jumlah dipesan | Diterima |
 | [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Diterima |
@@ -55,7 +55,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
 | [0025](keputusan/0025-realisasi-dapat-diubah-sebelum-penerimaan.md) | Realisasi dapat diubah selama belum dikonfirmasi diterima | Diterima |
 | [0026](keputusan/0026-agregat-tidak-menghitung-realisasi-batal.md) | Agregat mencacah pengadaan yang terjadi, bukan dokumen yang pernah dibuat | Diterima |
-| [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Diterima |
+| [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Sebagian digantikan oleh 0044 dan 0045 |
 | [0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md) | Status usulan "Disetujui" dipecah menjadi dua | Diterima |
 | [0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md) | Realisasi boleh melebihi usulan, dan boleh menambah barang | Diterima |
 | [0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) | Persetujuan realisasi pengadaan oleh Kasubbag Umum dan TI | Diterima |
@@ -72,6 +72,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
 | [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Diterima |
 | [0043](keputusan/0043-kategori-dan-sub-kategori-barang.md) | Kategori dan sub kategori barang (dikerjakan Alma) | Diterima |
+| [0044](keputusan/0044-sumber-usulan-pengadaan-per-barang.md) | Sumber usulan pengadaan dicatat per barang, keterangan opsional untuk barang manual | Diterima |
+| [0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) | Kiriman ulang formulir usulan dan halaman draf yang usang | Sebagian digantikan oleh 0046 |
+| [0046](keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md) | Token kiriman untuk semua formulir pembuat dokumen | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

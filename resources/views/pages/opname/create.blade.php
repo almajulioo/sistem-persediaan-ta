@@ -31,6 +31,7 @@
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <form method="POST" action="{{ route('opname.store') }}" novalidate>
             @csrf
+            <x-form.token-kiriman />
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <x-form.select-field name="period_type" label="Jenis Periode"

@@ -25,6 +25,7 @@ use App\Models\User;
 function payloadUsulanBarang(array $overrides = []): array
 {
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'item_name' => 'Spidol Whiteboard Warna Emas',
         'unit' => SatuanBarang::Buah->value,
         'purpose_note' => 'Untuk menandai berkas pemeriksaan pada rapat pleno; spidol yang ada hanya hitam dan merah.',
@@ -385,5 +386,20 @@ describe('daftar dan penyaringan usulan barang', function () {
             ->get("/usulan-barang/{$proposal->item_proposal_id}")
             ->assertOk()
             ->assertDontSee('Setujui &amp; Buat Barang', false);
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak membuat usulan barang kedua saat formulir yang sama dikirim ulang', function () {
+        $pengusul = pejabatPengadaan();
+        $payload = payloadUsulanBarang();
+
+        $this->actingAs($pengusul)->post('/usulan-barang', $payload);
+        $usulan = ItemProposal::sole();
+
+        $this->actingAs($pengusul)->post('/usulan-barang', $payload)
+            ->assertRedirect(route('item-proposals.show', $usulan));
+
+        expect(ItemProposal::count())->toBe(1);
     });
 });

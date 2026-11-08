@@ -59,6 +59,7 @@
                 get needsArah() { return this.bidirectional.includes(this.type) },
             }">
             @csrf
+            <x-form.token-kiriman />
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>

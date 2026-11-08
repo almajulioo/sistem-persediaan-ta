@@ -180,6 +180,7 @@ describe('mengisi nomor BAST', function () {
         $this->actingAs($this->petugas);
         isiNomorBast($procurement, '001/UP_TUP/445237/2026');
         $this->post("/pengadaan/{$procurement->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast-ttd.pdf', 20, 'application/pdf'),
         ]);
@@ -315,6 +316,7 @@ describe('kartu penerimaan', function () {
         $this->get("/pengadaan/{$procurement->procurement_id}")->assertSee('Ubah Nomor BAST');
 
         $this->post("/pengadaan/{$procurement->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast-ttd.pdf', 20, 'application/pdf'),
         ]);

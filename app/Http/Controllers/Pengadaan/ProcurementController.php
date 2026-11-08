@@ -16,6 +16,7 @@ use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
 use App\Support\AuditLogger;
+use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\Database\Eloquent\Builder;
@@ -124,7 +125,7 @@ class ProcurementController extends Controller
 
         $usulanId = $data['procurement_request_id'] ?? null;
 
-        $procurement = DB::transaction(function () use ($request, $data, $rincian, $usulanId) {
+        [$procurement, $ulang] = KirimanFormulir::sekali($request, function () use ($request, $data, $rincian, $usulanId) {
             $procurement = Procurement::create([
                 'procurement_request_id' => $usulanId,
                 'supplier_id' => $data['supplier_id'],
@@ -169,6 +170,12 @@ class ProcurementController extends Controller
 
             return $procurement;
         });
+
+        if ($ulang) {
+            return $procurement === null
+                ? redirect()->route('procurements.index')
+                : redirect()->route('procurements.show', $procurement)->with('status', "{$procurement->judul()} sudah dibuat sebelumnya.");
+        }
 
         AuditLogger::record(
             user: $request->user(),

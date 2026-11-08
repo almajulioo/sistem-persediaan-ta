@@ -112,7 +112,6 @@ class ProcurementDraftScanner
     {
         return ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
     }
@@ -124,6 +123,7 @@ class ProcurementDraftScanner
         if ($baris === null) {
             $draft->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::PemantauanStok,
                 'amount_request' => self::saranJumlah($item),
                 'is_auto' => true,
             ]);
@@ -183,7 +183,7 @@ class ProcurementDraftScanner
             dedupKey: NotificationType::DraftUsulanTersedia->dedupKey('aktif'),
             title: 'Draf usulan pengadaan tersedia',
             body: sprintf(
-                '%d barang di bawah stok minimum sudah terkumpul pada draf usulan. Tinjau, sesuaikan jumlahnya, lalu ajukan.',
+                '%d barang sudah terkumpul pada draf usulan. Tinjau, sesuaikan jumlahnya, lalu ajukan.',
                 $jumlah,
             ),
             actionUrl: route('procurement-requests.draft.edit', absolute: false),

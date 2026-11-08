@@ -5,6 +5,170 @@ perubahan.
 
 ---
 
+## 8 November 2026 (lanjutan 2) — Token kiriman untuk semua formulir
+
+Penjaga kiriman ulang diterapkan ke mutasi stok manual, stok opname, usulan
+barang baru, realisasi pengadaan, dan unggah berkas pengadaan
+([ADR 0046](keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md)).
+Satu mekanisme untuk keenam formulir: tabel baru `form_submissions` (migrasi
+`2026_11_08_000003`, memindahkan token usulan lalu membuang
+`procurement_requests.submission_token`), `App\Support\KirimanFormulir`, dan
+komponen `x-form.token-kiriman`.
+
+**Verifikasi.** 810 dari 811 test lulus (+5, satu per formulir; pembantu
+`tokenKiriman()` di `tests/Pest.php`, dan payload uji kini membawa token).
+Yang gagal tetap kegagalan lama `KomunikasiPermintaanTest`. Uji mutasi:
+mematikan penjagaan menggagalkan 7 test. Pint bersih. Migrasi di MySQL lokal
+dan SQLite uji. Peramban: kelima halaman bertoken tanpa galat JS; opname
+terkirim lalu Kembali memuat ulang formulir kosong.
+
+---
+
+## 8 November 2026 (lanjutan) — Usulan kembar lewat tombol Kembali
+
+Laporan Narendra: setelah "Usulan #… berhasil diajukan", tombol Kembali
+peramban menampilkan formulir yang sama lengkap dengan daftar barangnya, dan
+mengirimnya lagi membuat usulan baru — tanpa batas (empat kembaran dalam satu
+percobaan, di basis data lokal). Keputusannya di
+[ADR 0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md).
+
+**Penyebab.** Peramban memulihkan halaman dari back-forward cache beserta
+keadaan Alpine-nya, dan server tidak dapat membedakan kiriman ulang dari
+usulan baru. Halaman draf punya celah sejenis: aksinya bekerja pada draf apa
+pun yang ada sekarang, sehingga halaman usang dapat membuat draf baru
+(simpan) atau mengajukan/membuang draf yang belum pernah dilihat (tab kedua).
+
+**Yang berubah.**
+
+- Migrasi `2026_11_08_000002`: `procurement_requests.submission_token` (uuid,
+  nullable, unik). Formulir manual membawa token baru tiap kali tampil;
+  token terpakai diarahkan ke usulan yang ada tanpa log, dan kiriman
+  bersamaan ditangkap `UniqueConstraintViolationException`.
+- Tiga formulir halaman draf membawa `draft_id`; `ProcurementDraftController`
+  hanya bekerja pada draf itu (`drafBerganti()` untuk yang tidak cocok), dan
+  `update()` tidak lagi membuat draf.
+- Komponen baru `x-form.sekali-kirim`: memuat ulang halaman bila dipulihkan
+  dari bfcache setelah terkirim, menonaktifkan tombol kirim setelahnya.
+
+**Verifikasi.** 805 dari 806 test lulus (+4 `ProcurementRequestTest`, +4
+`ProcurementDraftTest`; pemanggilan rute draf di `ProcurementDraftTest`,
+`ActivityLogTest`, dan `PermohonanTest` milik Alma kini membawa `draft_id`).
+Yang gagal tetap satu-satunya kegagalan lama di `KomunikasiPermintaanTest`.
+Klik ganda bersamaan diuji dengan menyisipkan usulan "pemenang" tepat setelah
+pemeriksaan awal token lewat `DB::listen`, sehingga hanya indeks unik yang
+dapat menolaknya. Uji mutasi: tidak menyimpan token menggagalkan 2 test;
+`finalize()` kembali ke "draf apa pun" menggagalkan 1. Pint bersih untuk 9
+berkas PHP. Migrasi dijalankan di MySQL lokal dan SQLite uji. Uji peramban
+(Edge headless, server kedua port 8123): ajukan → Kembali → halaman dimuat
+ulang (jenis navigasi `reload`), daftar kosong, token baru; mengirim ulang
+token lama langsung diarahkan ke usulan yang ada; draf diajukan → Kembali →
+halaman draf menampilkan keadaan terbaru. Basis data uji: tiap putaran hanya
+menambah satu usulan manual dan satu dari draf.
+
+**Temuan di luar cakupan.**
+
+- **`php artisan serve` di Windows sesekali memotong halaman besar** saat
+  dimuat peramban — selalu di panjang yang sama (~141 ribu karakter dari
+  ~272 ribu), sehingga skrip di akhir halaman hilang dan Alpine melempar
+  `… is not defined`. Terjadi 1–3 dari 20 muat pada formulir usulan **dan**
+  pada `/permohonan/create` milik Alma yang tidak disentuh; curl 30 dari 30
+  utuh. Masalah server dev bawaan PHP, bukan kode; tidak terjadi di server
+  web sungguhan. Halaman ini besar karena katalog 1.801 barang ikut dikirim
+  sebagai JSON.
+- Formulir pembuat dokumen lain tanpa penjaga keunikan apa pun masih terbuka
+  terhadap pola yang sama: mutasi stok manual (paling berbahaya), realisasi
+  tanpa usulan, usulan barang baru, unggah berkas pengadaan, stok opname.
+- Kode usulan yang tampak sama pada dokumen berbeda (`judul()`, 8 karakter
+  awal UUID berurut waktu, berganti ~tiap 65 detik) — basis data uji
+  menunjukkan tiga usulan berbeda sama-sama "Usulan #01A1B954". Belum
+  diubah; perlu keputusan.
+- Keempat usulan kembar di basis data lokal Narendra tidak dihapus.
+
+---
+
+## 8 November 2026 — Sumber usulan pengadaan per barang
+
+Permintaan Narendra: buang penyaring "Sumber" di daftar usulan pengadaan,
+pindahkan sumber ke tiap barang dengan tiga nilai (permohonan pengguna,
+manual, pemantauan stok otomatis), dan beri barang manual keterangan alasan
+yang opsional tanpa terasa repetitif. Keputusannya di
+[ADR 0044](keputusan/0044-sumber-usulan-pengadaan-per-barang.md), menggantikan
+sebagian ADR 0015 dan ADR 0027.
+
+**Masalah yang ditemukan.** Sumber per dokumen sudah salah sejak permohonan
+Alma masuk ke draf yang sama: draf mewarisi sumber siapa pun yang membuatnya
+lebih dulu. Halaman draf menebak sumber per barang dari `is_auto`, padahal
+menyimpan draf menandai seluruh baris `is_auto = false` — setiap barang
+pemantauan stok langsung terbaca "Manual" begitu satu angka diubah.
+
+**Yang berubah.**
+
+- **Skema** (migrasi `2026_11_08_000001`): `procurement_request_details`
+  mendapat `source` (NOT NULL, tanpa bawaan) dan `note`;
+  `procurement_requests.source`, `reference_type`, `reference_id` dibuang.
+  Data lama diisi ulang dengan enam aturan berurutan (lihat ADR).
+- `ProcurementRequestSource` tinggal `DariPermohonan`, `Manual`,
+  `PemantauanStok` ("Pemantauan Stok Otomatis"), dengan `warna()`/`icon()`
+  dan `bolehBerketerangan()`. `ProcurementRequest::jumlahPerSumber()` baru.
+- Sumber ditetapkan server, tidak pernah dari kiriman: pemindaian →
+  pemantauan stok, persetujuan permohonan → permohonan (juga mengambil alih
+  baris yang ada), formulir manual dan barang baru di draf → manual, baris
+  draf yang disunting mempertahankan sumbernya. `note` hanya disimpan untuk
+  baris manual.
+- **Daftar usulan**: penyaring dan kolom Sumber dibuang; banner draf
+  menampilkan jumlah per sumber.
+- **Detail usulan**: kolom Sumber (`x-pengadaan.sumber-barang`) dengan tautan
+  permohonan dan keterangan manual, garis kiri berwarna sumber, chip penyaring
+  bila bercampur.
+- **Formulir manual dan draf** kini satu komponen `x-pengadaan.editor-barang`:
+  pemilih barang `x-request.pemilih-barang` milik Alma (menggantikan daftar
+  yang merender seluruh 1.801 barang), stepper jumlah per baris, keterangan
+  yang menempel antar-barang, saran keterangan sekali klik, "Pakai untuk N
+  barang tanpa keterangan", sunting keterangan di tempat, penyaring sumber,
+  dan Enter yang menambah barang alih-alih mengirim formulir. Di draf,
+  "Ajukan Usulan Ini" nonaktif selama ada perubahan belum disimpan. Formulir
+  manual kini memulihkan daftarnya dari `old()` bila validasi gagal dan
+  menampilkan ringkasan galat.
+- Ikon baru `activity`, `check`, `message-square`, `pencil`.
+- Kalimat notifikasi `DraftUsulanTersedia` tidak lagi menyebut "di bawah stok
+  minimum".
+
+**Menyentuh berkas Alma — perlu dikabarkan.**
+`ItemApplicationWorkflowService::addToProcurementDraft()` mengisi `source`
+per baris; `PermohonanTest` disesuaikan (sumber diperiksa per baris, satu
+fixture, dan pemeriksaan penyaring `?source=dari_permohonan` diganti
+pemeriksaan label di detail usulan). `x-request.pemilih-barang` tidak diubah,
+hanya dipakai.
+
+**Verifikasi.** 797 dari 798 test lulus (`ProcurementRequestTest` +5 baru
+menggantikan dua test lama penolakan `source`, `ProcurementDraftTest` +6). Satu
+yang gagal, `KomunikasiPermintaanTest` › BAST › "hanya memuat barang yang
+benar-benar diserahkan" (stok pulpen 10, bukan 7), **sudah gagal pada pohon
+bersih sebelum sesi ini** (`git stash -u`) — milik alur Permintaan Alma, tidak
+disentuh. Uji mutasi: mengembalikan controller draf agar selalu menulis
+`Manual` menggagalkan 4 test baru. Pint bersih untuk 15 berkas PHP yang diubah.
+Migrasi dijalankan pada MySQL lokal (bukan `fresh`): tiga baris draf lama
+terpetakan sesuai aturan (tertaut permohonan → permohonan, `is_auto` →
+pemantauan stok, sisanya → manual). `migrate:fresh --seed` lalu
+`migrate:rollback --step=1` dan `migrate` ulang berhasil di SQLite terpisah.
+Uji peramban (Edge headless lewat DevTools Protocol dari Node 24 tanpa
+pustaka, server kedua di port 8123 atas SQLite itu, data dua baris pemantauan
+stok dan dua permohonan — satu menumpuk ke baris pemantauan stok): tambah
+barang lewat pemilih dan Enter, keterangan menempel ke barang berikutnya,
+saran dan "Pakai untuk 1 barang tanpa keterangan", sunting di tempat,
+penyaring 3 dari 7 baris, simpan, ajukan; Pejabat Pengadaan menyetujui
+dengan penyaring aktif dan ketujuh barang tetap tersetujui; formulir manual
+mewariskan keterangan; 390 px mode terang tanpa gulir horizontal.
+
+**Cacat yang ditemukan uji peramban.** `x-show="row.source === @js(...)"`
+pada `<x-ui.pill>` lolos mentah ke Alpine sebagai `SyntaxError` — direktif
+Blade tidak dikompilasi di atribut **komponen**. Pest tidak menangkapnya
+karena label pill tetap ter-render. Diganti `'{{ ... }}'`, dan test draf kini
+memeriksa `assertDontSee('@js(')`. Ditemukan dengan mengompilasi setiap
+atribut Alpine di halaman lewat `new Function`.
+
+---
+
 ## 3 November 2026 — Kategori dan sub kategori barang (dikerjakan Alma)
 
 Entri ini ditulis **Alma**, yang mengubah modul Master Barang milik Narendra.

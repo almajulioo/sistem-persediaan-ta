@@ -12,6 +12,7 @@ use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Notification;
 use App\Models\ProcurementRequest;
+use App\Models\ProcurementRequestDetail;
 use App\Models\StockOpname;
 use App\Models\User;
 use App\Support\OpnamePoster;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Artisan;
 function mutasiManual(User $actor, Item $item, MutationType $type, int $amount): void
 {
     test()->actingAs($actor)->post('/mutasi', [
+        'submission_token' => tokenKiriman(),
         'item_id' => $item->item_id,
         'mutation_type' => $type->value,
         'amount' => $amount,
@@ -63,6 +65,15 @@ function postingOpnameMenurunkanStok(User $petugas, Item $item, int $stokFisik):
  * Seed draf langsung lewat scanner, tanpa lapisan HTTP — dipakai uji yang
  * fokus pada aksi controller draf, bukan pada pemicu reaktifnya sendiri.
  */
+/**
+ * Id draf yang sedang ada, seperti yang dibawa halaman draf di `draft_id`
+ * (ADR 0045). String kosong bila tidak ada draf.
+ */
+function idDrafUsulan(): string
+{
+    return (string) ProcurementRequest::query()->draf()->value('procurement_request_id');
+}
+
 function seedDraf(): Item
 {
     $item = Item::factory()->habis()->create();
@@ -97,6 +108,7 @@ describe('hak akses draf', function () {
 
         $this->actingAs(pengelolaGudang())
             ->put('/usulan-pengadaan/draf', [
+                'draft_id' => idDrafUsulan(),
                 'items' => [['item_id' => $item->item_id, 'amount_request' => 5]],
             ])
             ->assertRedirect('/usulan-pengadaan/draf');
@@ -123,7 +135,8 @@ describe('rekonsiliasi draf', function () {
         expect($draft->details)->toHaveCount(1)
             ->and($draft->details->first()->item_id)->toBe($item->item_id)
             ->and($draft->details->first()->amount_request)->toBe(45)
-            ->and($draft->details->first()->is_auto)->toBeTrue();
+            ->and($draft->details->first()->is_auto)->toBeTrue()
+            ->and($draft->details->first()->source)->toBe(ProcurementRequestSource::PemantauanStok);
     });
 
     it('menggabungkan barang kedua yang jatuh di bawah minimum ke draf yang sama', function () {
@@ -157,6 +170,7 @@ describe('rekonsiliasi draf', function () {
         $item = seedDraf();
 
         $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
             'items' => [['item_id' => $item->item_id, 'amount_request' => 7]],
         ]);
 
@@ -172,6 +186,7 @@ describe('rekonsiliasi draf', function () {
         $itemManual = Item::factory()->create(['stock_current' => 100, 'stock_min' => 10, 'stock_max' => 0]);
 
         $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
             'items' => [
                 ['item_id' => $itemOtomatis->item_id, 'amount_request' => 10],
                 ['item_id' => $itemManual->item_id, 'amount_request' => 3],
@@ -188,7 +203,7 @@ describe('rekonsiliasi draf', function () {
         $item = seedDraf();
         $draftLamaId = ProcurementRequest::query()->draf()->firstOrFail()->procurement_request_id;
 
-        $this->actingAs(pengelolaGudang())->delete('/usulan-pengadaan/draf');
+        $this->actingAs(pengelolaGudang())->delete('/usulan-pengadaan/draf', ['draft_id' => idDrafUsulan()]);
 
         ProcurementDraftScanner::perbaruiSeluruh();
 
@@ -199,7 +214,7 @@ describe('rekonsiliasi draf', function () {
     it('membuat draf baru setelah draf dikosongkan lewat update, bukan hanya dibuang', function () {
         $item = seedDraf();
 
-        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', ['items' => []]);
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', ['draft_id' => idDrafUsulan(), 'items' => []]);
 
         expect(ProcurementRequest::query()->draf()->doesntExist())->toBeTrue();
 
@@ -236,6 +251,177 @@ describe('rekonsiliasi draf', function () {
     });
 });
 
+describe('sumber per barang di draf', function () {
+    it('mempertahankan sumber pemantauan stok setelah jumlahnya disunting', function () {
+        $item = seedDraf();
+
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [['item_id' => $item->item_id, 'amount_request' => 7]],
+        ]);
+
+        $detail = ProcurementRequest::query()->draf()->with('details')->firstOrFail()->details->sole();
+
+        expect($detail->is_auto)->toBeFalse()
+            ->and($detail->source)->toBe(ProcurementRequestSource::PemantauanStok);
+    });
+
+    it('mencatat barang tambahan sebagai Manual beserta keterangannya', function () {
+        $itemOtomatis = seedDraf();
+        $itemManual = Item::factory()->create(['stock_current' => 100, 'stock_min' => 10, 'stock_max' => 0]);
+
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [
+                ['item_id' => $itemOtomatis->item_id, 'amount_request' => 10],
+                ['item_id' => $itemManual->item_id, 'amount_request' => 3, 'note' => 'Persiapan rapat kerja'],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $details = ProcurementRequest::query()->draf()->with('details')->firstOrFail()->details->keyBy('item_id');
+
+        expect($details[$itemManual->item_id]->source)->toBe(ProcurementRequestSource::Manual)
+            ->and($details[$itemManual->item_id]->note)->toBe('Persiapan rapat kerja')
+            ->and($details[$itemOtomatis->item_id]->source)->toBe(ProcurementRequestSource::PemantauanStok);
+    });
+
+    it('memperbarui dan mengosongkan keterangan barang manual', function () {
+        seedDraf();
+        $item = Item::factory()->create(['stock_current' => 100, 'stock_min' => 10, 'stock_max' => 0]);
+
+        $kirim = fn (?string $note) => $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [['item_id' => $item->item_id, 'amount_request' => 3, 'note' => $note]],
+        ]);
+
+        $kirim('Alasan awal');
+        $kirim('Alasan yang dibetulkan');
+        expect(ProcurementRequestDetail::where('item_id', $item->item_id)->sole()->note)->toBe('Alasan yang dibetulkan');
+
+        $kirim('');
+        expect(ProcurementRequestDetail::where('item_id', $item->item_id)->sole()->note)->toBeNull();
+    });
+
+    it('mengabaikan keterangan dan sumber kiriman pada baris yang bukan manual', function () {
+        $item = seedDraf();
+
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [[
+                'item_id' => $item->item_id,
+                'amount_request' => 7,
+                'source' => ProcurementRequestSource::Manual->value,
+                'note' => 'Tidak boleh tersimpan',
+            ]],
+        ]);
+
+        $detail = ProcurementRequestDetail::where('item_id', $item->item_id)->sole();
+
+        expect($detail->source)->toBe(ProcurementRequestSource::PemantauanStok)
+            ->and($detail->note)->toBeNull();
+    });
+
+    it('menampilkan sumber tiap barang di halaman draf', function () {
+        seedDraf();
+
+        // Direktif di atribut komponen Blade tidak dikompilasi dan lolos
+        // mentah ke Alpine sebagai ekspresi yang rusak.
+        $this->actingAs(pengelolaGudang())
+            ->get('/usulan-pengadaan/draf')
+            ->assertOk()
+            ->assertSee(ProcurementRequestSource::PemantauanStok->label())
+            ->assertDontSee('@js(', false);
+    });
+
+    it('membawa sumber tiap barang ke usulan yang diajukan', function () {
+        $itemOtomatis = seedDraf();
+        $itemManual = Item::factory()->create(['stock_current' => 100, 'stock_min' => 10, 'stock_max' => 0]);
+
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => idDrafUsulan(),
+            'items' => [
+                ['item_id' => $itemOtomatis->item_id, 'amount_request' => 10],
+                ['item_id' => $itemManual->item_id, 'amount_request' => 3, 'note' => 'Kebutuhan kegiatan'],
+            ],
+        ]);
+        $this->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()]);
+
+        $usulan = ProcurementRequest::query()->bukanDraf()->sole();
+
+        expect(collect($usulan->jumlahPerSumber())->map(fn ($baris) => [$baris['sumber'], $baris['jumlah']])->all())
+            ->toBe([[ProcurementRequestSource::Manual, 1], [ProcurementRequestSource::PemantauanStok, 1]]);
+
+        $this->get("/usulan-pengadaan/{$usulan->procurement_request_id}")
+            ->assertOk()
+            ->assertSee(ProcurementRequestSource::PemantauanStok->label())
+            ->assertSee('Kebutuhan kegiatan')
+            ->assertSee('Saring sumber', false);
+    });
+});
+
+describe('halaman draf yang usang', function () {
+    it('tidak membuat draf baru saat halaman draf yang sudah diajukan disimpan ulang', function () {
+        $item = seedDraf();
+        $idLama = idDrafUsulan();
+
+        $this->actingAs(pengelolaGudang())->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => $idLama]);
+
+        $this->actingAs(pengelolaGudang())->put('/usulan-pengadaan/draf', [
+            'draft_id' => $idLama,
+            'items' => [['item_id' => $item->item_id, 'amount_request' => 99]],
+        ])->assertRedirect("/usulan-pengadaan/{$idLama}");
+
+        expect(ProcurementRequest::query()->draf()->exists())->toBeFalse()
+            ->and(ProcurementRequest::count())->toBe(1)
+            ->and(ProcurementRequestDetail::sole()->amount_request)->not->toBe(99);
+    });
+
+    it('mengarahkan pengajuan ulang draf yang sudah diajukan ke usulannya', function () {
+        seedDraf();
+        $idLama = idDrafUsulan();
+        $judul = ProcurementRequest::findOrFail($idLama)->judul();
+
+        $this->actingAs(pengelolaGudang())->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => $idLama]);
+
+        $this->actingAs(pengelolaGudang())
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => $idLama])
+            ->assertRedirect("/usulan-pengadaan/{$idLama}")
+            ->assertSessionHas('status', "{$judul} sudah diajukan sebelumnya.");
+
+        expect(AuditLog::where('activity', 'like', 'Mengajukan usulan pengadaan%')->count())->toBe(1);
+    });
+
+    it('tidak mengajukan atau membuang draf baru dari halaman draf lama', function () {
+        seedDraf();
+        $idLama = idDrafUsulan();
+
+        $this->actingAs(pengelolaGudang())->delete('/usulan-pengadaan/draf', ['draft_id' => $idLama]);
+        ProcurementDraftScanner::perbaruiSeluruh();
+        $idBaru = idDrafUsulan();
+
+        expect($idBaru)->not->toBe($idLama)->not->toBe('');
+
+        $this->actingAs(pengelolaGudang())
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => $idLama])
+            ->assertRedirect('/usulan-pengadaan/draf')
+            ->assertSessionHas('error');
+
+        $this->actingAs(pengelolaGudang())
+            ->delete('/usulan-pengadaan/draf', ['draft_id' => $idLama])
+            ->assertRedirect('/usulan-pengadaan/draf');
+
+        expect(ProcurementRequest::findOrFail($idBaru)->isDraf())->toBeTrue();
+    });
+
+    it('membawa id draf yang ditampilkan di ketiga formulir halaman draf', function () {
+        seedDraf();
+
+        $html = $this->actingAs(pengelolaGudang())->get('/usulan-pengadaan/draf')->getContent();
+
+        expect(substr_count($html, 'name="draft_id" value="'.idDrafUsulan().'"'))->toBe(3);
+    });
+});
+
 describe('menuntaskan draf', function () {
     it('mengajukan draf: memindahkan status, mengisi pengaju, mencatat audit, dan memberi tahu Pejabat Pengadaan', function () {
         $item = seedDraf();
@@ -245,7 +431,7 @@ describe('menuntaskan draf', function () {
         $draft = ProcurementRequest::query()->draf()->firstOrFail();
 
         $this->actingAs($petugas)
-            ->post('/usulan-pengadaan/draf/ajukan')
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()])
             ->assertRedirect("/usulan-pengadaan/{$draft->procurement_request_id}");
 
         $draft->refresh();
@@ -265,7 +451,7 @@ describe('menuntaskan draf', function () {
 
     it('menolak mengajukan bila tidak ada draf', function () {
         $this->actingAs(pengelolaGudang())
-            ->post('/usulan-pengadaan/draf/ajukan')
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()])
             ->assertSessionHas('error');
 
         expect(ProcurementRequest::count())->toBe(0);
@@ -274,12 +460,11 @@ describe('menuntaskan draf', function () {
     it('menolak mengajukan draf yang kosong', function () {
         $draft = ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
 
         $this->actingAs(pengelolaGudang())
-            ->post('/usulan-pengadaan/draf/ajukan')
+            ->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()])
             ->assertSessionHas('error');
 
         expect($draft->refresh()->status)->toBe(ProcurementRequestStatus::Draf);
@@ -291,7 +476,7 @@ describe('menuntaskan draf', function () {
         $draftId = ProcurementRequest::query()->draf()->firstOrFail()->procurement_request_id;
 
         $this->actingAs($petugas)
-            ->delete('/usulan-pengadaan/draf')
+            ->delete('/usulan-pengadaan/draf', ['draft_id' => idDrafUsulan()])
             ->assertRedirect('/usulan-pengadaan');
 
         expect(ProcurementRequest::whereKey($draftId)->doesntExist())->toBeTrue()
@@ -302,7 +487,7 @@ describe('menuntaskan draf', function () {
 
     it('menolak membuang bila tidak ada draf', function () {
         $this->actingAs(pengelolaGudang())
-            ->delete('/usulan-pengadaan/draf')
+            ->delete('/usulan-pengadaan/draf', ['draft_id' => idDrafUsulan()])
             ->assertSessionHas('error');
     });
 });
@@ -324,7 +509,7 @@ describe('notifikasi draf tersedia', function () {
         $gudang = pengelolaGudang();
         $item = seedDraf();
 
-        $this->actingAs($gudang)->delete('/usulan-pengadaan/draf');
+        $this->actingAs($gudang)->delete('/usulan-pengadaan/draf', ['draft_id' => idDrafUsulan()]);
 
         expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeFalse();
     });
@@ -333,7 +518,7 @@ describe('notifikasi draf tersedia', function () {
         $gudang = pengelolaGudang();
         $item = seedDraf();
 
-        $this->actingAs($gudang)->post('/usulan-pengadaan/draf/ajukan');
+        $this->actingAs($gudang)->post('/usulan-pengadaan/draf/ajukan', ['draft_id' => idDrafUsulan()]);
 
         expect(Notification::query()->where('user_id', $gudang->user_id)->where('type', NotificationType::DraftUsulanTersedia)->exists())->toBeFalse();
     });

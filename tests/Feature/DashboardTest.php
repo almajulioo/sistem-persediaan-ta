@@ -78,7 +78,6 @@ function usulanDasbor(ProcurementRequestStatus $status): ProcurementRequest
 {
     return ProcurementRequest::create([
         'user_id' => penggunaDasbor(UserRole::PengelolaGudang)->user_id,
-        'source' => ProcurementRequestSource::Manual,
         'status' => $status,
     ]);
 }
@@ -219,11 +218,15 @@ describe('perlu ditindaklanjuti', function () {
 
         $draf = ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
         foreach (Item::factory()->habis()->count(3)->create() as $item) {
-            $draf->details()->create(['item_id' => $item->item_id, 'amount_request' => 5, 'is_auto' => true]);
+            $draf->details()->create([
+                'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::PemantauanStok,
+                'amount_request' => 5,
+                'is_auto' => true,
+            ]);
         }
 
         StockOpname::create([
@@ -382,7 +385,6 @@ describe('alur pengadaan', function () {
     it('menghitung tiap tahap tanpa draf, dengan penolakan terpisah', function () {
         ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
         usulanDasbor(ProcurementRequestStatus::Diajukan);

@@ -10,6 +10,7 @@ use App\Http\Requests\Gudang\StoreMutationRequest;
 use App\Models\Item;
 use App\Models\StockMutation;
 use App\Support\AuditLogger;
+use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use App\Support\ProcurementDraftScanner;
 use App\Support\StockLedger;
@@ -67,18 +68,22 @@ class StockMutationController extends Controller
         $type = $request->mutationType();
 
         try {
-            $mutation = StockLedger::record(
+            [$mutation, $ulang] = KirimanFormulir::sekali($request, fn () => StockLedger::record(
                 item: $item,
                 type: $type,
                 amount: $request->signedAmount(),
                 recordedBy: $request->user(),
                 notes: $request->input('notes'),
                 date: $request->date('mutation_date'),
-            );
+            ));
         } catch (InsufficientStockException $e) {
             // Diterjemahkan menjadi galat validasi supaya pengguna melihat pesan
             // yang jelas di kolom jumlah, bukan halaman 500.
             throw ValidationException::withMessages(['amount' => $e->getMessage()]);
+        }
+
+        if ($ulang) {
+            return redirect()->route('mutations.index')->with('status', 'Mutasi ini sudah tercatat sebelumnya.');
         }
 
         // Subjeknya barang, bukan baris mutasinya: mutasi tidak punya layar

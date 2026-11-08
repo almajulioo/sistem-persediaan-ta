@@ -29,6 +29,7 @@ use Illuminate\Support\Str;
 function payloadLangsung(Supplier $supplier, array $items, array $overrides = []): array
 {
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'supplier_id' => $supplier->supplier_id,
         'procurement_date' => now()->toDateString(),
         'basis_reason' => AlasanPengadaan::KebutuhanMendesak->value,
@@ -440,5 +441,21 @@ describe('rekap dan penyaring dasar pengadaan', function () {
 
         expect($isi)->toContain('Dasar')
             ->and($isi)->toContain('Langsung');
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak membuat realisasi kedua saat formulir yang sama dikirim ulang', function () {
+        $pejabat = pejabatPengadaan();
+        $payload = payloadLangsung(Supplier::factory()->create(), [barisLangsung(Item::factory()->create())]);
+        $sebelum = Procurement::count();
+
+        $pertama = $this->actingAs($pejabat)->post('/pengadaan', $payload);
+
+        $this->actingAs($pejabat)->post('/pengadaan', $payload)
+            ->assertRedirect($pertama->headers->get('Location'))
+            ->assertSessionHas('status');
+
+        expect(Procurement::count())->toBe($sebelum + 1);
     });
 });

@@ -11,6 +11,7 @@ use App\Http\Requests\Gudang\RejectItemProposalRequest;
 use App\Http\Requests\Gudang\StoreItemProposalRequest;
 use App\Models\ItemProposal;
 use App\Support\AuditLogger;
+use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -72,10 +73,16 @@ class ItemProposalController extends Controller
 
     public function store(StoreItemProposalRequest $request): RedirectResponse
     {
-        $proposal = ItemProposal::create($request->validated() + [
+        [$proposal, $ulang] = KirimanFormulir::sekali($request, fn () => ItemProposal::create($request->validated() + [
             'proposed_by' => $request->user()->user_id,
             'status' => ItemProposalStatus::Diajukan,
-        ]);
+        ]));
+
+        if ($ulang) {
+            return $proposal === null
+                ? redirect()->route('item-proposals.index')
+                : redirect()->route('item-proposals.show', $proposal)->with('status', "Usulan barang \"{$proposal->item_name}\" sudah diajukan sebelumnya.");
+        }
 
         AuditLogger::record(
             user: $request->user(),

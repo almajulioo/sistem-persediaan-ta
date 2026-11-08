@@ -123,8 +123,8 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
 | Tabel | Isi |
 |---|---|
 | `suppliers` | Data induk penyedia; identitasnya dicetak di BAST |
-| `procurement_requests` | Usulan pengadaan; `source` membedakan tiga asal-usul |
-| `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
+| `procurement_requests` | Usulan pengadaan: pengaju dan status. Asal-usulnya dicatat per barang (ADR 0044) |
+| `procurement_request_details` | Rincian barang usulan; `source` asal barangnya (permohonan pengguna, manual, pemantauan stok), `note` keterangan opsional barang manual, `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
 | `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia, atau berdiri sendiri dengan `basis_reason`/`basis_note` bila tanpa usulan (ADR 0031). `reviewed_at`/`reviewed_by`/`review_note` menampung keputusan **terakhir** Kasubbag Umum dan TI — persetujuan maupun penolakan, karena statusnya yang membedakan |
 | `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_received` datang, `unit_price` harga satuan |
 | `procurement_receipts` | Peristiwa penerimaan: siapa, kapan; nomor BAST menyusul saat cetak pertama (ADR 0042) |
@@ -191,7 +191,7 @@ jenis notifikasi baru. Rincian keputusan:
 
 | Metode | URL | Nama | Gate | Keterangan |
 |---|---|---|---|---|
-| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan sumber |
+| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status (penyaring sumber dibuang, ADR 0044) |
 | GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan manual, murni dari nol |
 | POST | `/usulan-pengadaan` | `procurement-requests.store` | `kelola-gudang` | |
 | GET | `/usulan-pengadaan/{procurementRequest}` | `procurement-requests.show` | `akses-pengadaan` | Detail + formulir keputusan bila masih Diajukan |
@@ -207,13 +207,12 @@ jenis notifikasi baru. Rincian keputusan:
 - Usulan yang sudah diputuskan (`DisetujuiMenungguRealisasi`/`DisetujuiSelesai`/`Ditolak`)
   tidak dapat diputuskan ulang; rute `approve`/`reject` menolaknya dengan
   pesan, bukan 500.
-- Formulir manual ini hanya menerima `source = Manual` sejak
-  [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) —
-  `PemantauanStok` sekarang seluruhnya lahir lewat draf otomatis (lihat
-  [Draf usulan pengadaan otomatis](#draf-usulan-pengadaan-otomatis) di bawah),
-  bukan lagi lewat formulir ini dengan satu barang terisi. Sumber
-  `DariPermintaan` sengaja belum bisa dipilih sama sekali lewat formulir —
-  integrasi ke sub sistem Permintaan belum ada titik masuknya.
+- Seluruh barang formulir manual bersumber `Manual`, ditetapkan controller
+  dan tidak diterima dari kiriman. `PemantauanStok` seluruhnya lahir lewat
+  draf otomatis (lihat
+  [Draf usulan pengadaan otomatis](#draf-usulan-pengadaan-otomatis) di bawah)
+  dan `DariPermohonan` lewat persetujuan permohonan. Lihat
+  [Sumber per barang](#sumber-per-barang).
 
 **Notifikasi baru** (lihat [modul/notifikasi.md](notifikasi.md)):
 `UsulanMenungguPersetujuan` dan `UsulanMenggantung` (keadaan, saling
@@ -247,6 +246,8 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
   pemindaian, dibuang begitu barangnya pulih. Begitu Pengelola Gudang
   menyimpan draf lewat `draft.update`, seluruh baris yang dikirim ditandai
   `is_auto = false` dan sejak itu kebal dari perubahan otomatis.
+  **Sumbernya tidak ikut berubah** (ADR 0044) — `is_auto` hanya menjawab
+  "masih dikelola pemindaian?", bukan "dari mana asalnya?".
 - Draf yang kehabisan seluruh barisnya (baik karena pulih maupun dikosongkan
   manual) **dihapus**, bukan dibiarkan sebagai baris kosong.
 - Draf tidak pernah muncul di tabel `/usulan-pengadaan`, hitungan
@@ -867,6 +868,69 @@ Naikkan, misalnya, ke `upload_max_filesize=12M` dan `post_max_size=64M`, di
 laptop maupun server.
 
 ---
+
+## Sumber per barang
+
+Ditambahkan 8 November 2026. Rincian keputusan:
+[ADR 0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md).
+
+Satu draf menampung barang dari tiga jalur sekaligus, jadi sumber dicatat
+per baris pada `procurement_request_details.source`, bukan per dokumen:
+
+| Sumber | Label | Ditetapkan oleh | Alasannya ada di |
+|---|---|---|---|
+| `dari_permohonan` | Permohonan Pengguna | `ItemApplicationWorkflowService` saat permohonan disetujui — juga mengambil alih baris yang sudah ada | Tautan nomor permohonan, pemohon, dan jumlahnya |
+| `manual` | Manual | Formulir usulan manual; barang baru yang ditambahkan di halaman draf | `note`, opsional, maks. 500 karakter |
+| `pemantauan_stok` | Pemantauan Stok Otomatis | `ProcurementDraftScanner` | Stok di bawah minimum |
+
+**Aturan.**
+
+- Sumber **tidak pernah diterima dari kiriman**. Baris draf yang sudah ada
+  mempertahankan sumbernya walau jumlahnya disunting.
+- `note` hanya disimpan untuk baris `Manual`
+  (`ProcurementRequestSource::bolehBerketerangan()`); kiriman `note` pada
+  baris lain diabaikan. Keterangan yang sudah ada tetap tampil walau barisnya
+  kemudian diambil alih permohonan.
+- `ProcurementRequest::jumlahPerSumber()` memberi hitungan per sumber untuk
+  chip ringkasan di detail usulan, halaman draf, dan banner draf.
+
+**Tampilan.**
+
+- Formulir manual dan draf memakai satu komponen,
+  `x-pengadaan.editor-barang`: panel Tambah Barang (pemilih barang
+  `x-request.pemilih-barang`, stepper jumlah, keterangan) dan daftar barang
+  dengan stepper per baris. Keterangan **menempel** setelah barang
+  ditambahkan, keterangan yang sudah dipakai muncul sebagai saran sekali
+  klik, "Pakai untuk N barang tanpa keterangan" mengisi baris manual yang
+  masih kosong, dan keterangan tiap baris dapat disunting di tempat. Enter di
+  kolom jumlah atau keterangan menambahkan barang, bukan mengirim formulir.
+- Detail usulan punya kolom Sumber (`x-pengadaan.sumber-barang`), garis kiri
+  berwarna sumber, dan chip penyaring bila usulannya bercampur. Baris yang
+  disembunyikan penyaring tetap terkirim saat disetujui.
+- Draf: "Ajukan Usulan Ini" nonaktif selama ada perubahan yang belum
+  disimpan.
+
+## Kiriman ulang dan halaman draf yang usang
+
+Ditambahkan 8 November 2026 setelah laporan bug: tombol Kembali setelah
+mengajukan usulan memulihkan formulir lengkap, dan mengirimnya lagi
+melahirkan usulan kembar tanpa batas. Rincian keputusan:
+[ADR 0045](../keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md).
+
+**Aturan.**
+
+- Formulir usulan manual, realisasi, dan unggah berkas membawa token dari
+  `x-form.token-kiriman` yang baru tiap kali tampil. Token yang sudah dipakai
+  tidak membuat dokumen, tidak dicatat di log, dan diarahkan ke dokumen yang
+  sudah ada. Dicatat di `form_submissions` lewat
+  `App\Support\KirimanFormulir` (ADR 0046).
+- Simpan, ajukan, dan buang draf membawa `draft_id` halaman pengirim dan
+  hanya berlaku pada draf itu. Draf yang sudah diajukan mengarahkan ke
+  usulannya; draf yang dibuang atau sudah berganti kembali ke halaman draf
+  dengan pesan. `update()` tidak lagi membuat draf baru.
+- `x-form.sekali-kirim` memuat ulang halaman bila dipulihkan dari
+  back-forward cache setelah salah satu formulirnya terkirim, dan
+  menonaktifkan tombol kirim setelah terkirim.
 
 ## Butir yang masih menunggu lapangan
 

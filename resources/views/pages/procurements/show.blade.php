@@ -475,6 +475,7 @@
                     enctype="multipart/form-data"
                     class="grid grid-cols-1 gap-4 border-t border-gray-100 p-5 sm:grid-cols-2 dark:border-gray-800 sm:p-6">
                     @csrf
+                    <x-form.token-kiriman />
 
                     <x-form.select-field name="type" label="Jenis Dokumen" required
                         :options="\App\Enums\ProcurementDocumentType::options()" placeholder="Pilih jenis dokumen" />

@@ -9,9 +9,10 @@ use App\Enums\ProcurementRequestStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\ApproveProcurementRequestRequest;
 use App\Http\Requests\Pengadaan\StoreProcurementRequestRequest;
-use App\Models\Item;
 use App\Models\ProcurementRequest;
 use App\Support\AuditLogger;
+use App\Support\KatalogBarang;
+use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,9 +33,10 @@ class ProcurementRequestController extends Controller
 
     public function index(Request $request): View
     {
+        // Penyaring sumber dibuang sejak sumber pindah ke tiap barang
+        // (ADR 0044): satu usulan bisa memuat ketiga sumber sekaligus.
         $filters = [
             'status' => (string) $request->query('status', ''),
-            'source' => (string) $request->query('source', ''),
         ];
 
         return view('pages.procurement-requests.index', [
@@ -56,19 +58,36 @@ class ProcurementRequestController extends Controller
             ],
             // Draf otomatis (ADR 0027) ditampilkan lewat banner tersendiri,
             // bukan sebagai baris di tabel usulan sungguhan.
-            'draftBanner' => ProcurementRequest::query()->draf()->withCount('details')->first(),
+            'draftBanner' => ProcurementRequest::query()->draf()->with('details')->first(),
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
         // Jalur pintas per barang dari notifikasi Stok Habis/Menipis sudah
         // digantikan draf otomatis (ADR 0027) — formulir ini sekarang murni
         // manual.
+        $katalog = KatalogBarang::untukPemilih();
+        $perId = $katalog->keyBy('item_id');
+
+        // Daftar dipulihkan dari kiriman sebelumnya bila validasi gagal,
+        // supaya keterangan yang sudah diketik tidak hilang.
+        $baris = collect($request->old('items', []))
+            ->filter(fn ($row) => is_array($row) && $perId->has($row['item_id'] ?? ''))
+            ->map(fn (array $row) => [
+                ...$perId->get($row['item_id']),
+                'amount_request' => max((int) ($row['amount_request'] ?? 1), 1),
+                'source' => ProcurementRequestSource::Manual->value,
+                'note' => (string) ($row['note'] ?? ''),
+                'permohonan' => [],
+            ])
+            ->values();
+
         return view('pages.procurement-requests.create', [
             'title' => 'Ajukan Usulan Pengadaan',
-            'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit', 'stock_current']),
-            'source' => ProcurementRequestSource::Manual->value,
+            'katalog' => $katalog,
+            'subkategori' => KatalogBarang::subkategori(),
+            'baris' => $baris,
         ]);
     }
 
@@ -76,22 +95,11 @@ class ProcurementRequestController extends Controller
     {
         $data = $request->validated();
 
-        $procurementRequest = DB::transaction(function () use ($request, $data) {
-            $procurementRequest = ProcurementRequest::create([
-                'user_id' => $request->user()->user_id,
-                'source' => $data['source'],
-                'status' => ProcurementRequestStatus::Diajukan,
-            ]);
+        [$procurementRequest, $ulang] = KirimanFormulir::sekali($request, fn () => $this->simpanUsulan($request, $data));
 
-            $procurementRequest->details()->createMany(
-                array_map(fn (array $item) => [
-                    'item_id' => $item['item_id'],
-                    'amount_request' => $item['amount_request'],
-                ], $data['items']),
-            );
-
-            return $procurementRequest;
-        });
+        if ($ulang) {
+            return $this->sudahDiajukan($procurementRequest);
+        }
 
         AuditLogger::record(
             user: $request->user(),
@@ -175,5 +183,45 @@ class ProcurementRequestController extends Controller
         return redirect()
             ->route('procurement-requests.show', $procurementRequest)
             ->with('status', "{$procurementRequest->judul()} ditolak.");
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function simpanUsulan(StoreProcurementRequestRequest $request, array $data): ProcurementRequest
+    {
+        $procurementRequest = ProcurementRequest::create([
+            'user_id' => $request->user()->user_id,
+            'status' => ProcurementRequestStatus::Diajukan,
+        ]);
+
+        // `is_auto` hanya bermakna di draf; diisi false supaya baris ini
+        // tidak terbaca milik pemindaian stok.
+        $procurementRequest->details()->createMany(
+            array_map(fn (array $item) => [
+                'item_id' => $item['item_id'],
+                'source' => ProcurementRequestSource::Manual,
+                'note' => $item['note'] ?? null,
+                'amount_request' => $item['amount_request'],
+                'is_auto' => false,
+            ], $data['items']),
+        );
+
+        return $procurementRequest;
+    }
+
+    /**
+     * Kiriman ulang formulir yang sudah pernah terkirim, misalnya lewat tombol
+     * Kembali peramban: tidak membuat usulan baru, tidak dicatat di log.
+     */
+    private function sudahDiajukan(?ProcurementRequest $procurementRequest): RedirectResponse
+    {
+        if ($procurementRequest === null) {
+            return redirect()->route('procurement-requests.index');
+        }
+
+        return redirect()
+            ->route('procurement-requests.show', $procurementRequest)
+            ->with('status', "{$procurementRequest->judul()} sudah diajukan sebelumnya.");
     }
 }

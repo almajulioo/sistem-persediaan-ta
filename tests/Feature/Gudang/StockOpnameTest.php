@@ -17,6 +17,7 @@ function petugasGudang(array $attributes = []): User
 function opnamePayload(array $overrides = []): array
 {
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'period_type' => PeriodeOpname::TriwulanIII->value,
         'period_year' => now()->year,
         'opname_date' => now()->format('Y-m-d'),
@@ -272,5 +273,21 @@ describe('daftar dan penyaringan', function () {
             ->assertSee('Belum ada stok opname')
             ->assertDontSee($urlLama)
             ->assertDontSee($urlBaru);
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak membuat draf opname kedua saat formulir yang sama dikirim ulang', function () {
+        Item::factory()->create();
+        $actor = petugasGudang();
+        $payload = opnamePayload();
+
+        $this->actingAs($actor)->post('/opname', $payload);
+        $opname = StockOpname::sole();
+
+        $this->actingAs($actor)->post('/opname', $payload)
+            ->assertRedirect(route('opname.show', $opname));
+
+        expect(StockOpname::count())->toBe(1);
     });
 });

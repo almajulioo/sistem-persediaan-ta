@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Menyetujui meneruskan setiap baris ke jalur yang sudah ada, bukan membuat
  * jalur baru: baris tambah stok masuk ke draf usulan pengadaan (ADR 0027)
- * sebagai baris manual, dan baris barang baru menjadi usulan barang baru yang
+ * bersumber permohonan pengguna, dan baris barang baru menjadi usulan barang baru yang
  * tetap diputuskan lewat satu jalur `items.store` (ADR 0032/0033).
  */
 class ItemApplicationWorkflowService
@@ -160,21 +160,25 @@ class ItemApplicationWorkflowService
 
         $draft ??= ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::DariPermohonan,
             'status' => ProcurementRequestStatus::Draf,
         ]);
 
         foreach ($details as $detail) {
             $line = $draft->details()->where('item_id', $detail->item_id)->first();
 
+            // Sumber disimpan per barang (ADR 0044). Baris yang sudah ada ikut
+            // menjadi permohonan: kebutuhan pengguna yang tertaut dokumen
+            // adalah alasan terkuat, dan barisnya lepas dari pemindaian.
             if ($line === null) {
                 $draft->details()->create([
                     'item_id' => $detail->item_id,
+                    'source' => ProcurementRequestSource::DariPermohonan,
                     'amount_request' => $detail->quantity,
                     'is_auto' => false,
                 ]);
             } else {
                 $line->update([
+                    'source' => ProcurementRequestSource::DariPermohonan,
                     'amount_request' => (int) $line->amount_request + $detail->quantity,
                     'is_auto' => false,
                 ]);

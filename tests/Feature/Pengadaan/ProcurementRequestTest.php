@@ -1,28 +1,33 @@
 <?php
 
 use App\Enums\NotificationType;
+use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Notification;
 use App\Models\ProcurementRequest;
+use App\Models\ProcurementRequestDetail;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 // Nama pembantu sengaja unik: `pengelolaGudang()` sudah dipakai
 // ItemManagementTest, `pejabatPengadaan()` sudah dipakai SupplierManagementTest.
-function usulanPayload(array $items, string $source = 'manual'): array
+function usulanPayload(array $items, ?string $token = null): array
 {
-    return ['source' => $source, 'items' => $items];
+    return ['submission_token' => $token ?? (string) Str::uuid(), 'items' => $items];
 }
 
 /**
  * Ajukan usulan lewat alur aplikasi. Id diambil dari tujuan redirect, bukan
  * `latest('created_at')`, karena dua usulan bisa lahir pada detik yang sama.
  */
-function buatUsulan(User $actor, array $items, string $source = 'manual'): ProcurementRequest
+function buatUsulan(User $actor, array $items): ProcurementRequest
 {
-    $response = test()->actingAs($actor)->post('/usulan-pengadaan', usulanPayload($items, $source));
+    $response = test()->actingAs($actor)->post('/usulan-pengadaan', usulanPayload($items));
 
     $id = (string) str($response->headers->get('Location'))->match('#/usulan-pengadaan/([^/]+)#');
 
@@ -145,24 +150,147 @@ describe('mengajukan usulan', function () {
             ->assertSessionHasErrors('items.0.amount_request');
     });
 
-    it('menolak sumber dari_permintaan karena belum ada integrasinya', function () {
+    it('menolak keterangan lebih dari 500 karakter', function () {
         $item = Item::factory()->create();
 
         $this->actingAs(pengelolaGudang())
             ->post('/usulan-pengadaan', usulanPayload([
-                ['item_id' => $item->item_id, 'amount_request' => 10],
-            ], 'dari_permintaan'))
-            ->assertSessionHasErrors('source');
+                ['item_id' => $item->item_id, 'amount_request' => 10, 'note' => str_repeat('a', 501)],
+            ]))
+            ->assertSessionHasErrors('items.0.note');
+    });
+});
+
+describe('kiriman ulang formulir', function () {
+    it('tidak membuat usulan kembar saat formulir yang sama dikirim ulang lewat tombol Kembali', function () {
+        $pengaju = pengelolaGudang();
+        $item = Item::factory()->create();
+        $payload = usulanPayload([['item_id' => $item->item_id, 'amount_request' => 10]]);
+
+        $pertama = $this->actingAs($pengaju)->post('/usulan-pengadaan', $payload);
+        $usulan = ProcurementRequest::sole();
+        $pertama->assertRedirect("/usulan-pengadaan/{$usulan->procurement_request_id}");
+
+        foreach (range(1, 3) as $ulang) {
+            $this->actingAs($pengaju)->post('/usulan-pengadaan', $payload)
+                ->assertRedirect("/usulan-pengadaan/{$usulan->procurement_request_id}")
+                ->assertSessionHas('status', "{$usulan->judul()} sudah diajukan sebelumnya.");
+        }
+
+        expect(ProcurementRequest::count())->toBe(1)
+            ->and(ProcurementRequestDetail::count())->toBe(1)
+            ->and(AuditLog::where('activity', 'like', 'Mengajukan usulan pengadaan%')->count())->toBe(1);
     });
 
-    it('menolak sumber pemantauan_stok karena jalur itu sekarang lewat draf otomatis', function () {
+    it('mengarahkan kiriman kedua yang tiba bersamaan ke usulan pemenangnya', function () {
+        $pengaju = pengelolaGudang();
+        $item = Item::factory()->create();
+        $payload = usulanPayload([['item_id' => $item->item_id, 'amount_request' => 10]]);
+
+        // Kiriman "pemenang" disisipkan tepat setelah pemeriksaan awal token,
+        // seperti klik ganda yang tiba bersamaan: hanya indeks unik yang
+        // dapat menolak kiriman kedua.
+        $pemenang = null;
+        DB::listen(function (QueryExecuted $query) use (&$pemenang, $pengaju, $payload) {
+            if ($pemenang !== null || ! str_starts_with(strtolower($query->sql), 'select') || ! str_contains($query->sql, 'form_submissions')) {
+                return;
+            }
+
+            $pemenang = ProcurementRequest::create([
+                'user_id' => $pengaju->user_id,
+                'status' => ProcurementRequestStatus::Diajukan,
+            ]);
+            DB::table('form_submissions')->insert([
+                'token' => $payload['submission_token'],
+                'subject_type' => $pemenang->getMorphClass(),
+                'subject_id' => $pemenang->procurement_request_id,
+                'created_at' => now(),
+            ]);
+        });
+
+        $this->actingAs($pengaju)->post('/usulan-pengadaan', $payload)
+            ->assertRedirect("/usulan-pengadaan/{$pemenang->procurement_request_id}")
+            ->assertSessionHas('status');
+
+        expect(ProcurementRequest::count())->toBe(1)
+            ->and(ProcurementRequestDetail::count())->toBe(0);
+    });
+
+    it('menolak kiriman tanpa token formulir', function () {
         $item = Item::factory()->create();
 
         $this->actingAs(pengelolaGudang())
-            ->post('/usulan-pengadaan', usulanPayload([
-                ['item_id' => $item->item_id, 'amount_request' => 10],
-            ], 'pemantauan_stok'))
-            ->assertSessionHasErrors('source');
+            ->post('/usulan-pengadaan', ['items' => [['item_id' => $item->item_id, 'amount_request' => 10]]])
+            ->assertSessionHasErrors('submission_token');
+
+        expect(ProcurementRequest::count())->toBe(0);
+    });
+
+    it('memberi formulir token baru setiap kali ditampilkan', function () {
+        $token = fn () => (string) str($this->actingAs(pengelolaGudang())->get('/usulan-pengadaan/create')->getContent())
+            ->match('/name="submission_token" value="([^"]+)"/');
+
+        $pertama = $token();
+
+        expect(Str::isUuid($pertama))->toBeTrue()
+            ->and($token())->not->toBe($pertama);
+    });
+});
+
+describe('sumber per barang', function () {
+    it('mencatat setiap barang formulir sebagai Manual beserta keterangannya yang opsional', function () {
+        $itemA = Item::factory()->create();
+        $itemB = Item::factory()->create();
+
+        $usulan = buatUsulan(pengelolaGudang(), [
+            ['item_id' => $itemA->item_id, 'amount_request' => 10, 'note' => 'Persiapan rapat kerja triwulan IV'],
+            ['item_id' => $itemB->item_id, 'amount_request' => 5, 'note' => ''],
+        ]);
+
+        $detailA = $usulan->details->firstWhere('item_id', $itemA->item_id);
+        $detailB = $usulan->details->firstWhere('item_id', $itemB->item_id);
+
+        expect($detailA->source)->toBe(ProcurementRequestSource::Manual)
+            ->and($detailA->note)->toBe('Persiapan rapat kerja triwulan IV')
+            ->and($detailA->is_auto)->toBeFalse()
+            ->and($detailB->source)->toBe(ProcurementRequestSource::Manual)
+            ->and($detailB->note)->toBeNull();
+    });
+
+    it('mengabaikan sumber yang diselundupkan lewat kiriman', function () {
+        $item = Item::factory()->create();
+
+        $this->actingAs(pengelolaGudang())->post('/usulan-pengadaan', [
+            'submission_token' => (string) Str::uuid(),
+            'source' => ProcurementRequestSource::PemantauanStok->value,
+            'items' => [[
+                'item_id' => $item->item_id,
+                'amount_request' => 10,
+                'source' => ProcurementRequestSource::DariPermohonan->value,
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        expect(ProcurementRequestDetail::sole()->source)->toBe(ProcurementRequestSource::Manual);
+    });
+
+    it('menampilkan sumber dan keterangan tiap barang di detail usulan', function () {
+        $item = Item::factory()->create();
+        $usulan = buatUsulan(pengelolaGudang(), [
+            ['item_id' => $item->item_id, 'amount_request' => 10, 'note' => 'Stok cadangan akhir tahun'],
+        ]);
+
+        $this->actingAs(pejabatPengadaan())
+            ->get("/usulan-pengadaan/{$usulan->procurement_request_id}")
+            ->assertOk()
+            ->assertSeeInOrder(['Sumber', ProcurementRequestSource::Manual->label(), 'Stok cadangan akhir tahun']);
+    });
+
+    it('tidak lagi menyaring daftar usulan menurut sumber', function () {
+        $this->actingAs(pengelolaGudang())
+            ->get('/usulan-pengadaan')
+            ->assertOk()
+            ->assertSee('Status Usulan')
+            ->assertDontSee('Sumber Usulan');
     });
 });
 

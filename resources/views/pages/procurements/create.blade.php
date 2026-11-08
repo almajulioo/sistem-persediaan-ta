@@ -46,6 +46,7 @@
         x-data="realisasiForm()">
         <form action="{{ route('procurements.store') }}" method="POST">
             @csrf
+            <x-form.token-kiriman />
             @if ($procurementRequest)
                 <input type="hidden" name="procurement_request_id" value="{{ $procurementRequest->procurement_request_id }}">
             @endif
