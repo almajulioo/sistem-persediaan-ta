@@ -10,12 +10,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Pengadaan\CancelProcurementRequest;
 use App\Http\Requests\Pengadaan\StoreProcurementRequest;
 use App\Http\Requests\Pengadaan\UpdateProcurementRequest;
-use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
 use App\Support\AuditLogger;
+use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -114,7 +114,8 @@ class ProcurementController extends Controller
             // Untuk pemilih "barang tambahan" — Pejabat Pengadaan boleh
             // merealisasikan barang di luar usulan (ADR 0029), dan pada
             // realisasi langsung seluruh barisnya justru dari pemilih ini.
-            'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit']),
+            'katalog' => KatalogBarang::untukPemilih(),
+            'subkategori' => KatalogBarang::subkategori(),
         ]);
     }
 
@@ -238,7 +239,8 @@ class ProcurementController extends Controller
             'title' => "Ubah {$procurement->judul()}",
             'procurement' => $procurement->load(['supplier', 'procurementRequest.details', 'details.item']),
             'suppliers' => Supplier::aktif()->orderBy('supplier_name')->get(['supplier_id', 'supplier_name']),
-            'items' => Item::aktif()->orderBy('item_code')->get(['item_id', 'item_code', 'item_name', 'unit']),
+            'katalog' => KatalogBarang::untukPemilih(),
+            'subkategori' => KatalogBarang::subkategori(),
         ]);
     }
 

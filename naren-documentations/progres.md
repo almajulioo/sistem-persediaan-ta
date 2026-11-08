@@ -5,6 +5,60 @@ perubahan.
 
 ---
 
+## 8 November 2026 (lanjutan 3) — Pemilih barang berkategori di semua formulir
+
+Permintaan Narendra: setiap formulir yang memilih barang memakai pencarian
+kategori → sub kategori seperti usulan pengadaan dan permintaan barang
+([ADR 0043](keputusan/0043-kategori-dan-sub-kategori-barang.md)).
+
+**Pemetaan.** Formulir Alma (permintaan, permintaan umum, permohonan) dan
+usulan pengadaan/draf sudah memakai `x-request.pemilih-barang`; mode Ubah
+Kuantitas permintaan memang tanpa pemilih. Tiga formulir Narendra belum:
+**Catat Mutasi Manual** (`<select>` biasa berisi seluruh katalog), serta
+**Buat** dan **Ubah Realisasi** (dropdown lama, cari teks saja). Lembar cacah
+opname dan penyaring teks di halaman daftar bukan pemilih barang, tidak
+disentuh.
+
+**Yang berubah.**
+
+- `StockMutationController::create()`, `ProcurementController::create()`
+  dan `edit()` mengirim `KatalogBarang::untukPemilih()` + `subkategori()`
+  sebagai `katalog`/`subkategori`, menggantikan `items`.
+- `mutations/create`: pemilih + `input[name=item_id]` tersembunyi. Tautan
+  `?item=` dari halaman barang dan `old('item_id')` tetap memilihkan barang;
+  "Stok saat ini" tetap tampil, kini dari baris katalog.
+- `procurements/create` dan `edit`: barang yang sudah ada di realisasi (dari
+  usulan maupun tambahan) **tetap tampil tetapi tidak dapat dipilih**,
+  berlabel "Sudah di daftar". Dropdown lama menyembunyikannya; pemilih baru
+  mengindeks katalog sekali saat dimuat sehingga daftarnya tidak dapat
+  disusutkan, dan barang yang mendadak hilang dari hasil pencarian justru
+  membingungkan. "Usulkan barang baru" pindah ke slot hasil kosong pemilih.
+- Komponen milik Alma **tidak diubah** — hanya dipakai lewat prop `pilih`,
+  `nonaktif`, dan slot `badge`/`kosong` yang sudah ada.
+
+**Verifikasi.** 817 dari 818 test lulus (+7: formulir mutasi untuk Pengelola
+Gudang dan Admin, `?item=`, pemulihan setelah galat; pemilih di realisasi
+langsung dan ubah realisasi; pemulihan barang tambahan setelah galat di
+kedua formulir realisasi). Yang gagal tetap kegagalan lama
+`KomunikasiPermintaanTest`. Pint bersih untuk 5 berkas PHP. Uji peramban
+(Edge headless lewat CDP, server kedua port 8123 atas SQLite hasil
+`migrate:fresh --seed`): ketiga halaman tanpa galat JS baru dan semua
+atribut Alpine terkompilasi; mutasi Hibah Masuk terkirim lewat pemilih
+(ATK › ALAT TULIS); realisasi langsung dibuat, lalu diubah dengan barang
+ARTK tambahan, barang lama berlabel "Sudah di daftar"; 390 px tanpa gulir
+horizontal.
+
+**Temuan sampingan.**
+
+- Sempat dikira `@js()` memecah argumennya pada koma seperti `@json()`.
+  Ternyata tidak: `CompilesJs` meneruskan seluruh ekspresi ke `Js::from()`,
+  hanya `CompilesJson` yang memakai `explode(',')`. `@js()` berkoma aman.
+- Pemotongan halaman oleh `php artisan serve` muncul sekali lagi (1 dari
+  ±12 muat); 8 muat ulang berikutnya utuh. Galat `classList` skrip tema di
+  `<head>` masih ada di setiap halaman, tidak disentuh.
+
+---
+
 ## 8 November 2026 (lanjutan 2) — Token kiriman untuk semua formulir
 
 Penjaga kiriman ulang diterapkan ke mutasi stok manual, stok opname, usulan

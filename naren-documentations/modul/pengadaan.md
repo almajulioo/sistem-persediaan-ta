@@ -339,6 +339,14 @@ sudah disetujui:
   Pejabat Pengadaan juga boleh menambahkan baris **di luar** usulan, yang
   mengirim `item_id` langsung; jumlah pesan pun tidak lagi dibatasi terhadap
   `amount_granted`.
+- Pemilih barang tambahan di formulir buat dan ubah realisasi memakai
+  `x-request.pemilih-barang` (cari teks, saring kategori lalu sub kategori,
+  [ADR 0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md)) sejak
+  8 November 2026. Barang yang sudah ada di realisasi — dari usulan maupun
+  tambahan — tetap tampil tetapi **tidak dapat dipilih**, berlabel "Sudah di
+  daftar"; pemilih mengindeks katalog sekali saat dimuat, dan barang yang
+  hilang begitu saja dari hasil pencarian membingungkan. Pencarian tanpa
+  hasil menawarkan "Usulkan barang baru".
 - `ProcurementReceiptPoster::post()` mengikuti pola `OpnamePoster`: transaksi
   terkunci, `StockLedger::record(type: Masuk, amount: amount_received)` per
   barang (baris bernilai nol tidak menghasilkan mutasi), referensi menunjuk

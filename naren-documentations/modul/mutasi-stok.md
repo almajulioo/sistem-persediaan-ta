@@ -63,6 +63,13 @@ Lihat [ADR 0006](../keputusan/0006-mutationtype-merangkap-alasan-manual.md).
 - Keterangan **wajib** diisi — menjadi bukti pertanggungjawaban saat pemeriksaan.
 - Tanggal mutasi tidak boleh melebihi hari ini.
 - Barang yang diarsipkan tidak dapat dipilih.
+- Barang dipilih lewat `x-request.pemilih-barang` — cari teks, saring
+  kategori lalu sub kategori
+  ([ADR 0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md)) —
+  sama dengan formulir pengadaan dan permintaan (sejak 8 November 2026;
+  sebelumnya `<select>` berisi seluruh katalog). Tautan `?item=` dari
+  halaman barang memilihkan barangnya, dan pilihan bertahan setelah galat
+  validasi.
 - Koreksi Pencatatan memerlukan pilihan arah (menambah atau mengurangi).
 - Stok tidak mencukupi menghasilkan galat validasi pada kolom jumlah, bukan
   halaman 500, dan tidak menyisakan baris apa pun.

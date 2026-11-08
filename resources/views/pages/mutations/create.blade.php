@@ -10,14 +10,11 @@
         ->map(fn ($type) => $type->value)
         ->values();
 
-    // Stok tiap barang untuk ditampilkan sebagai konteks saat barang dipilih.
-    $stocks = $items->mapWithKeys(fn ($item) => [
-        $item->item_id => [
-            'code' => $item->item_code,
-            'stock' => $item->stock_current,
-            'unit' => $item->unit->label(),
-        ],
-    ]);
+    // Barang terpilih dipulihkan dari old() setelah galat validasi, atau dari
+    // ?item= saat datang dari halaman barang.
+    $barangAwal = old('item_id', $selectedItem?->item_id ?? '');
+    $jenisAwal = old('mutation_type', '');
+    $satuan = \App\Enums\SatuanBarang::options();
 @endphp
 
 @section('content')
@@ -49,32 +46,25 @@
     @endif
 
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
-        <form method="POST" action="{{ route('mutations.store') }}" novalidate
-            x-data="{
-                itemId: @js(old('item_id', $selectedItem?->item_id ?? '')),
-                type: @js(old('mutation_type', '')),
-                stocks: @js($stocks),
-                bidirectional: @js($bidirectional),
-                get current() { return this.stocks[this.itemId] ?? null },
-                get needsArah() { return this.bidirectional.includes(this.type) },
-            }">
+        <form method="POST" action="{{ route('mutations.store') }}" novalidate x-data="mutasiForm()">
             @csrf
             <x-form.token-kiriman />
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div>
-                    <x-form.select-field name="item_id" label="Barang"
-                        :options="$items->mapWithKeys(fn ($item) => [$item->item_id => $item->item_code . ' — ' . $item->item_name])->all()"
-                        :selected="$selectedItem?->item_id" required placeholder="Pilih barang"
-                        x-model="itemId" />
+                    <x-request.pemilih-barang :subkategori="$subkategori" />
+                    <input type="hidden" name="item_id" :value="selectedItem ? selectedItem.item_id : ''">
 
-                    <template x-if="current">
+                    <template x-if="selectedItem">
                         <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">
                             Stok saat ini:
                             <span class="font-medium text-gray-700 dark:text-gray-300"
-                                x-text="current.stock + ' ' + current.unit"></span>
+                                x-text="`${selectedItem.stock_current} ${satuan[selectedItem.unit] ?? ''}`"></span>
                         </p>
                     </template>
+                    @error('item_id')
+                        <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <x-form.select-field name="mutation_type" label="Jenis Mutasi"
@@ -120,4 +110,20 @@
             </div>
         </form>
     </div>
+
+    <script>
+        function mutasiForm() {
+            const items = @json($katalog);
+            const awal = @js($barangAwal);
+
+            return {
+                items,
+                selectedItem: items.find(item => item.item_id === awal) ?? null,
+                satuan: @js($satuan),
+                type: @js($jenisAwal),
+                bidirectional: @js($bidirectional),
+                get needsArah() { return this.bidirectional.includes(this.type) },
+            };
+        }
+    </script>
 @endsection

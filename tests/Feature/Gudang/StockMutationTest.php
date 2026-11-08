@@ -4,6 +4,7 @@ use App\Enums\MutationType;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemSubcategory;
 use App\Models\StockMutation;
 use App\Models\User;
 use App\Support\StockLedger;
@@ -54,6 +55,52 @@ describe('hak akses', function () {
             ->assertForbidden();
 
         expect(StockMutation::count())->toBe(0);
+    });
+});
+
+describe('formulir mutasi manual', function () {
+    it('memakai pemilih barang berkategori dan bersub kategori', function () {
+        $alatTulis = ItemSubcategory::factory()->atk()->create(['subcategory_name' => 'ALAT TULIS']);
+        $pulpen = Item::factory()->create(['subcategory_id' => $alatTulis]);
+        $arsip = Item::factory()->arsip()->create();
+
+        $response = $this->actingAs(gudang())->get('/mutasi/create')
+            ->assertOk()
+            ->assertSee('pemilihBarang(', escape: false)
+            ->assertSee('Pilih ATK atau ARTK untuk menyaring sampai sub kategorinya.');
+
+        $katalog = collect($response->viewData('katalog'));
+        $subkategori = collect($response->viewData('subkategori'))->pluck('id');
+
+        expect($katalog->firstWhere('item_id', $pulpen->item_id)['subcategory_name'])->toBe('ALAT TULIS')
+            ->and($katalog->pluck('item_id'))->not->toContain($arsip->item_id)
+            ->and($subkategori)->toContain($alatTulis->subcategory_id)
+            ->and($subkategori)->not->toContain($arsip->subcategory_id);
+    });
+
+    it('mengizinkan Admin membuka formulir', function () {
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->get('/mutasi/create')
+            ->assertOk();
+    });
+
+    it('memilihkan barang yang dibawa dari halaman barang', function () {
+        $item = Item::factory()->create();
+
+        $this->actingAs(gudang())->get("/mutasi/create?item={$item->item_id}")
+            ->assertOk()
+            ->assertSee("const awal = '{$item->item_id}'", escape: false);
+    });
+
+    it('mempertahankan barang terpilih setelah galat validasi', function () {
+        $item = Item::factory()->create(['stock_current' => 50]);
+
+        $this->actingAs(gudang())
+            ->from('/mutasi/create')
+            ->post('/mutasi', mutationPayload($item, ['notes' => '']))
+            ->assertRedirect('/mutasi/create');
+
+        $this->get('/mutasi/create')->assertSee("const awal = '{$item->item_id}'", escape: false);
     });
 });
 

@@ -10,6 +10,7 @@ use App\Http\Requests\Gudang\StoreMutationRequest;
 use App\Models\Item;
 use App\Models\StockMutation;
 use App\Support\AuditLogger;
+use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use App\Support\ProcurementDraftScanner;
@@ -57,7 +58,8 @@ class StockMutationController extends Controller
     {
         return view('pages.mutations.create', [
             'title' => 'Catat Mutasi Manual',
-            'items' => Item::aktif()->orderBy('item_code')->get(),
+            'katalog' => KatalogBarang::untukPemilih(),
+            'subkategori' => KatalogBarang::subkategori(),
             'selectedItem' => Item::aktif()->find($request->query('item')),
         ]);
     }

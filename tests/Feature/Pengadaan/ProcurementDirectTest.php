@@ -7,6 +7,7 @@ use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemSubcategory;
 use App\Models\Notification;
 use App\Models\Procurement;
 use App\Models\StockMutation;
@@ -229,6 +230,33 @@ describe('membuat realisasi langsung', function () {
             ->assertOk()
             ->assertSee('href="'.route('item-proposals.create').'"', false)
             ->assertSee('Usulkan barang baru');
+    });
+
+    it('memakai pemilih barang berkategori dan bersub kategori', function () {
+        $alatTulis = ItemSubcategory::factory()->atk()->create(['subcategory_name' => 'ALAT TULIS']);
+        $pulpen = Item::factory()->create(['subcategory_id' => $alatTulis]);
+
+        $response = $this->actingAs(pejabatPengadaan())
+            ->get('/pengadaan/create')
+            ->assertOk()
+            ->assertSee('pemilihBarang(', escape: false)
+            ->assertSee('Pilih ATK atau ARTK untuk menyaring sampai sub kategorinya.');
+
+        expect(collect($response->viewData('katalog'))->firstWhere('item_id', $pulpen->item_id)['subcategory_name'])->toBe('ALAT TULIS')
+            ->and(collect($response->viewData('subkategori'))->pluck('id'))->toContain($alatTulis->subcategory_id);
+    });
+
+    it('mempertahankan barang yang sudah ditambahkan setelah galat validasi', function () {
+        $item = Item::factory()->create();
+
+        $this->actingAs(pejabatPengadaan())
+            ->from('/pengadaan/create')
+            ->post('/pengadaan', payloadLangsung(Supplier::factory()->create(), [barisLangsung($item)], ['basis_note' => '']))
+            ->assertSessionHasErrors('basis_note');
+
+        // Baris yang dipulihkan memuat kode barang, beda dengan baris katalog.
+        $this->get('/pengadaan/create')
+            ->assertSee('"item_name":'.json_encode("{$item->item_code} — {$item->item_name}", JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), escape: false);
     });
 
     it('tidak menyebut usulan asal di dialog pembatalan realisasi langsung', function () {
