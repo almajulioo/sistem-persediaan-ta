@@ -58,9 +58,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0027](keputusan/0027-draf-usulan-pengadaan-otomatis.md) | Draf usulan pengadaan otomatis, satu dokumen terkelola sistem | Sebagian digantikan oleh 0044, 0045, dan 0047 |
 | [0028](keputusan/0028-status-usulan-disetujui-dipecah-dua.md) | Status usulan "Disetujui" dipecah menjadi dua | Diterima |
 | [0029](keputusan/0029-realisasi-boleh-melebihi-usulan-dan-barang-tambahan.md) | Realisasi boleh melebihi usulan, dan boleh menambah barang | Diterima |
-| [0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) | Persetujuan realisasi pengadaan oleh Kasubbag Umum dan TI | Diterima |
+| [0030](keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md) | Persetujuan realisasi pengadaan oleh Kasubbag Umum dan TI | Sebagian digantikan oleh 0054 |
 | [0031](keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) | Realisasi pengadaan tanpa usulan, berbekal dasar pengadaan | Diterima |
-| [0032](keputusan/0032-usulan-barang-baru.md) | Usulan barang baru: pintu depan katalog | Diterima |
+| [0032](keputusan/0032-usulan-barang-baru.md) | Usulan barang baru: pintu depan katalog | Sebagian digantikan oleh 0053 |
 | [0033](keputusan/0033-usulan-barang-baru-tabel-bersama-dengan-permintaan.md) | `item_proposals` resmi jadi tabel bersama dengan sub sistem Permintaan | Diterima |
 | [0034](keputusan/0034-log-aktivitas-terstruktur.md) | Log aktivitas: kolom terstruktur mendampingi kalimat audit | Diterima |
 | [0035](keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md) | Tahap belanja pada realisasi pengadaan, berbukti foto belanja | Diterima |
@@ -68,7 +68,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0037](keputusan/0037-kuota-lonceng-pengingat-ulang-dan-peristiwa-berulang.md) | Lonceng: kuota per bagian, pengingat ulang keadaan, dan peristiwa berulang | Diterima |
 | [0038](keputusan/0038-profil-pengguna-dan-foto-profil.md) | Profil pengguna: swalayan terbatas dan foto profil | Sebagian digantikan oleh 0039 |
 | [0039](keputusan/0039-pemotong-foto-profil-interaktif.md) | Pemotong foto profil interaktif, tanpa pustaka | Diterima |
-| [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Diterima |
+| [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Sebagian digantikan oleh 0053 |
 | [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
 | [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Sebagian digantikan oleh 0051 dan 0052 |
 | [0043](keputusan/0043-kategori-dan-sub-kategori-barang.md) | Kategori dan sub kategori barang (dikerjakan Alma) | Diterima |
@@ -81,6 +81,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0050](keputusan/0050-lembar-rekap-barang-pada-ekspor-usulan.md) | Lembar Rekap Barang pada ekspor daftar usulan | Diterima |
 | [0051](keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) | BAST pengadaan digital dengan TTE QR; stok masuk setelah kedua pihak bertanda tangan | Sebagian digantikan oleh 0052 |
 | [0052](keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md) | Catatan TTE BAST di kaki halaman 1, tanpa waktu di bawah QR | Diterima |
+| [0053](keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md) | Usulan barang baru diputuskan dari rincian permohonan; halaman Usulan Barang Baru dihapus | Diterima |
+| [0054](keputusan/0054-grup-menu-persetujuan-dihapus.md) | Grup menu Persetujuan dihapus | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

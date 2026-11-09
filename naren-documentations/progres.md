@@ -5,6 +5,95 @@ perubahan.
 
 ---
 
+## 9 November 2026 — Halaman Usulan Barang Baru dan menu Persetujuan dihapus
+
+Dua permintaan Narendra, keduanya membuang tampilan yang tumpang tindih.
+
+**1. Halaman Usulan Barang Baru dihapus**
+([ADR 0053](keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)).
+Alasannya: fungsinya sudah ada di Permohonan. Ternyata halaman itu masih
+langkah kedua permohonan barang baru, yaitu tempat mendaftarkan atau menolak
+usulan. Letak barunya ditanyakan, dan Narendra memilih **rincian permohonan**.
+
+- Rute `item-proposals.index/create/store/show`, tiga view, dan
+  `StoreItemProposalRequest` dihapus. Entri menu di grup Pengadaan dan
+  Manajemen Gudang ikut dihapus. Yang tersisa: `item-proposals.reject` dan
+  `items.create?item_proposal_id=`.
+- Kolom Tindak Lanjut di rincian permohonan memuat:
+  - status usulan;
+  - kode barang bila sudah terdaftar;
+  - alasan penolakan;
+  - tombol **Daftarkan** / **Tolak** bagi `kelola-gudang`. Satu modal tolak
+    dipakai untuk semua baris dan diisi lewat event. Modal dibuka ulang bila
+    validasi gagal.
+- `ItemProposal::tautan()` (+ relasi `applicationDetail()`) menjadi satu
+  definisi tujuan. Urutannya: permohonan asal → barang → daftar permohonan.
+  Dipakai oleh pengalihan setelah daftar/tolak, tombol Batal formulir barang,
+  tiga notifikasi usulan barang, dan log aktivitas.
+- Temuan sampingan yang ikut diperbaiki: notifikasi `UsulanBarangDisetujui`
+  dulu menaut ke halaman barang (butuh `akses-gudang`), sehingga pengusulnya
+  mendapat 403.
+- Dasbor: ubin dan baris antrean "Usulan barang baru" dihapus. Pengingatnya
+  tetap lewat notifikasi keadaan.
+- Formulir realisasi: "Usulkan barang baru" → "Ajukan permohonan barang baru".
+- `ItemProposalSeeder` kini membuat contoh lewat satu permohonan disetujui
+  (`PMH-…-CNTH`) dengan tiga usulan (Diajukan, Disetujui, Ditolak).
+
+**2. Grup menu Persetujuan dihapus**
+([ADR 0054](keputusan/0054-grup-menu-persetujuan-dihapus.md)). Isinya satu
+tautan "Realisasi Pengadaan" ber-penyaring, padahal Kasubbag sudah punya
+Pengadaan › Realisasi Pengadaan sejak ADR 0041. Jalan pintas ber-penyaring
+tetap ada di baris antrean dasbor "Realisasi menunggu persetujuan".
+`MenuHelper::getApprovalItems()` dihapus. Dukungan kunci `query` di sidebar
+dibiarkan, walau kini tidak ada item yang memakainya.
+
+**Berkas Alma yang disentuh** (sempit, perlu dikabari):
+
+- `resources/views/pages/request/applications/show.blade.php`: sel Tindak
+  Lanjut, modal tolak usulan, kalimat modal setujui;
+- `resources/views/pages/request/index.blade.php`: tautan "Selesaikan usulan
+  barang" ke rute yang sudah hilang dibuang.
+
+Tanpa perubahan skema.
+
+**Berkas lain.**
+
+- `routes/web.php`, `MenuHelper`, `ItemProposalController` (tinggal
+  `reject`), `ItemController`, `ItemProposal`, `AuditLog`,
+  `NotificationScanner`, `DashboardController`;
+- view `items/_form`, `procurements/create` dan `edit`;
+- `ItemProposalSeeder`;
+- tes: `ItemProposalTest` (ditulis ulang: usulan dibuat lewat permohonan),
+  `DashboardTest`, `RoleAccessTest`, `PengawasanKasubbagTest`,
+  `ProcurementDirectTest`.
+
+**Diperiksa.**
+
+- `php artisan test`: **894 lulus**.
+- Pint bersih untuk berkas yang disentuh. Pengecualiannya `MenuHelper.php`,
+  yang sudah gagal sebelum sesi ini karena format bagian menu Permintaan,
+  dan sengaja tidak dirapikan.
+- `migrate:fresh --seed` di MariaDB, pada database cadangan sementara supaya
+  data lokal tidak terhapus. Database itu dihapus sesudahnya.
+- Uji peramban (Edge headless lewat CDP, server kedua port 8123), sebagai
+  `gudang` atas permohonan contoh:
+  - 104 ekspresi Alpine terkompilasi;
+  - dialog Tolak terisi nama dan aksi baris yang diklik, dan Batal
+    menutupnya;
+  - Daftarkan membuka formulir barang yang terisi, dengan Batal ke
+    permohonan;
+  - penolakan sungguhan kembali ke permohonan, dengan pesan dan alasan
+    tampil di baris.
+
+  Satu-satunya galat JS adalah skrip tema di `<head>` (open item 23, sudah
+  ada sebelumnya).
+
+**Cacat yang ditemukan di tengah jalan.** `@php($x = …)` sebaris di view yang
+juga memuat blok `@php … @endphp` membuat Blade menelan isi di antaranya
+("unexpected end of file"). Diganti bentuk blok.
+
+---
+
 ## 9 November 2026 — Catatan TTE BAST pindah ke kaki halaman 1
 
 Permintaan Narendra pada PDF BAST pengadaan

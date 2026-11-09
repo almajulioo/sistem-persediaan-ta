@@ -6,7 +6,8 @@
     $action       : string           — URL tujuan submit
     $itemProposal : ?App\Models\ItemProposal — terisi bila barangnya lahir dari
                     usulan barang baru (ADR 0032); menyimpan formulir ini
-                    sekaligus menyetujui usulan itu
+                    sekaligus menyetujui usulan itu, dan Batal kembali ke
+                    permohonan asalnya (ADR 0053)
     $subcategoryOptions : array — ItemSubcategory::options()
 --}}
 @php($itemProposal = $itemProposal ?? null)
@@ -110,7 +111,7 @@
     </div>
 
     <div class="mt-8 flex items-center justify-end gap-3 border-t border-gray-100 pt-6 dark:border-gray-800">
-        <a href="{{ route('items.index') }}"
+        <a href="{{ $itemProposal?->tautan() ?? route('items.index') }}"
             class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
             Batal
         </a>

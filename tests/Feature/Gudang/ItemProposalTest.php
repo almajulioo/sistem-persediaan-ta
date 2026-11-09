@@ -6,6 +6,7 @@ use App\Enums\SatuanBarang;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemApplication;
 use App\Models\ItemProposal;
 use App\Models\ItemSubcategory;
 use App\Models\Notification;
@@ -13,35 +14,49 @@ use App\Models\StockMutation;
 use App\Models\User;
 
 /**
- * Usulan barang baru — pintu depan katalog (ADR 0032).
+ * Usulan barang baru — pintu depan katalog (ADR 0032), yang sejak ADR 0053
+ * hanya lahir dari permohonan barang baru dan diputuskan dari rincian
+ * permohonan itu.
  *
  * Helper di berkas Pest bersifat global lintas berkas, jadi namanya dibedakan
  * dari helper modul lain.
  */
 
 /**
- * @return array<string, mixed>
+ * Usulan barang baru lewat jalur satu-satunya: permohonan barang baru yang
+ * disetujui Pengelola Gudang.
  */
-function payloadUsulanBarang(array $overrides = []): array
+function usulanBarangDariPermohonan(?User $pemohon = null, string $nama = 'Spidol Whiteboard Warna Emas'): ItemProposal
 {
-    return array_merge([
-        'submission_token' => tokenKiriman(),
-        'item_name' => 'Spidol Whiteboard Warna Emas',
-        'unit' => SatuanBarang::Buah->value,
-        'purpose_note' => 'Untuk menandai berkas pemeriksaan pada rapat pleno; spidol yang ada hanya hitam dan merah.',
-    ], $overrides);
+    $pemohon ??= User::factory()->role(UserRole::Pengguna)->create();
+
+    $response = test()->actingAs($pemohon)->post(route('item-applications.store'), [
+        'purpose' => 'Kebutuhan rapat pleno triwulan IV',
+        'items' => [[
+            'type' => 'barang_baru',
+            'item_name' => $nama,
+            'unit' => SatuanBarang::Buah->value,
+            'note' => 'Untuk menandai berkas pemeriksaan; spidol yang ada hanya hitam dan merah.',
+            'quantity' => 5,
+        ]],
+    ]);
+    $response->assertSessionHasNoErrors()->assertRedirect();
+
+    // Id dibaca dari header Location, bukan `latest('created_at')` yang tidak
+    // pasti untuk baris yang lahir pada detik yang sama.
+    $id = (string) str($response->headers->get('Location'))->match('#/permohonan/([^/?]+)#');
+    $permohonan = ItemApplication::findOrFail($id);
+
+    test()->actingAs(pengelolaGudang())
+        ->patch(route('item-applications.approve', $permohonan))
+        ->assertSessionHasNoErrors();
+
+    return $permohonan->details()->whereNotNull('item_proposal_id')->sole()->itemProposal;
 }
 
-function buatUsulanBarang(?User $pengusul = null, array $overrides = []): ItemProposal
+function permohonanUsulanBarang(ItemProposal $proposal): ItemApplication
 {
-    $response = test()->actingAs($pengusul ?? pejabatPengadaan())
-        ->post('/usulan-barang', payloadUsulanBarang($overrides));
-
-    $response->assertRedirect();
-
-    $id = (string) str($response->headers->get('Location'))->match('#/usulan-barang/([^/]+)#');
-
-    return ItemProposal::findOrFail($id);
+    return $proposal->applicationDetail->application;
 }
 
 /**
@@ -64,106 +79,134 @@ function payloadBarangDariUsulan(ItemProposal $proposal, array $overrides = []):
     ], $overrides);
 }
 
-describe('hak akses usulan barang', function () {
-    it('mengarahkan tamu ke halaman masuk', function () {
-        $this->get('/usulan-barang')->assertRedirect('/login');
-        $this->get('/usulan-barang/create')->assertRedirect('/login');
+describe('halaman usulan barang baru dihapus', function () {
+    it('tidak lagi menyediakan daftar, formulir, maupun rincian usulan barang', function () {
+        $proposal = usulanBarangDariPermohonan();
+        $admin = User::factory()->role(UserRole::Admin)->create();
+
+        $this->actingAs($admin)->get('/usulan-barang')->assertNotFound();
+        $this->actingAs($admin)->get('/usulan-barang/create')->assertNotFound();
+        $this->actingAs($admin)->get("/usulan-barang/{$proposal->item_proposal_id}")->assertNotFound();
+        $this->actingAs(pejabatPengadaan())->post('/usulan-barang', [])->assertNotFound();
     });
 
-    it('mengizinkan Pejabat Pengadaan membuka formulir usulan', function () {
-        $this->actingAs(pejabatPengadaan())
-            ->get('/usulan-barang/create')
+    it('tidak menampilkan Usulan Barang Baru di menu maupun dasbor', function (UserRole $role) {
+        $this->actingAs(User::factory()->role($role)->create())
+            ->get('/dasbor')
             ->assertOk()
-            ->assertSee('Usulkan Barang Baru');
+            ->assertDontSee('href="/usulan-barang"', false)
+            ->assertDontSee('Usulan Barang Baru')
+            ->assertDontSee('Usulan barang baru');
+    })->with([
+        'Admin' => [UserRole::Admin],
+        'Pengelola Gudang' => [UserRole::PengelolaGudang],
+        'Pejabat Pengadaan' => [UserRole::PejabatPengadaan],
+        'Kasubbag' => [UserRole::KasubbagUmumTi],
+    ]);
+});
+
+describe('hak akses keputusan usulan barang', function () {
+    it('mengarahkan tamu ke halaman masuk', function () {
+        $proposal = usulanBarangDariPermohonan();
+        auth()->logout();
+
+        $this->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", ['decision_note' => 'x'])
+            ->assertRedirect('/login');
+        $this->get("/barang/create?item_proposal_id={$proposal->item_proposal_id}")
+            ->assertRedirect('/login');
     });
 
-    it('menolak Pengelola Gudang membuka formulir usulan', function () {
-        $this->actingAs(pengelolaGudang())
-            ->get('/usulan-barang/create')
-            ->assertForbidden();
-    });
+    it('menolak peran selain Pengelola Gudang memutuskan usulan', function (UserRole $role) {
+        $proposal = usulanBarangDariPermohonan();
 
-    // Menangkap jebakan middleware: `role:` akan menolak Admin, sedangkan gate
-    // meloloskannya lewat Gate::before.
-    it('mengizinkan Admin membuka formulir usulan', function () {
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
-            ->get('/usulan-barang/create')
-            ->assertOk();
-    });
-
-    it('mengizinkan kedua peran pengadaan membaca daftar usulan barang', function () {
-        $this->actingAs(pengelolaGudang())->get('/usulan-barang')->assertOk();
-        $this->actingAs(pejabatPengadaan())->get('/usulan-barang')->assertOk();
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())->get('/usulan-barang')->assertOk();
-    });
-
-    it('menolak peran sub sistem permintaan membaca daftar usulan barang', function () {
-        $this->actingAs(User::factory()->role(UserRole::KepalaUnit)->create())
-            ->get('/usulan-barang')
-            ->assertForbidden();
-    });
-
-    it('menolak Pejabat Pengadaan memutuskan usulannya sendiri', function () {
-        $proposal = buatUsulanBarang();
-
-        $this->actingAs(pejabatPengadaan())
+        $this->actingAs(User::factory()->role($role)->create())
             ->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", ['decision_note' => 'Tidak perlu.'])
             ->assertForbidden();
 
         expect($proposal->fresh()->isDiajukan())->toBeTrue();
+    })->with([
+        'Pejabat Pengadaan' => [UserRole::PejabatPengadaan],
+        'Kasubbag' => [UserRole::KasubbagUmumTi],
+        'Pengguna' => [UserRole::Pengguna],
+    ]);
+
+    it('menampilkan tombol keputusan di rincian permohonan bagi Pengelola Gudang dan Admin', function (UserRole $role) {
+        $proposal = usulanBarangDariPermohonan();
+
+        $this->actingAs(User::factory()->role($role)->create())
+            ->get(route('item-applications.show', permohonanUsulanBarang($proposal)))
+            ->assertOk()
+            ->assertSee(route('items.create', ['item_proposal_id' => $proposal->item_proposal_id]), false)
+            // URL tolaknya dikodekan @js, jadi dicari lewat nama event-nya.
+            ->assertSee('buka-tolak-usulan-barang', false)
+            ->assertSee('Daftarkan');
+    })->with([
+        'Pengelola Gudang' => [UserRole::PengelolaGudang],
+        'Admin' => [UserRole::Admin],
+    ]);
+
+    it('menyembunyikan tombol keputusan dari pemohon dan pengawas', function (UserRole $role) {
+        $pemohon = User::factory()->role($role)->create();
+        $proposal = usulanBarangDariPermohonan($pemohon);
+
+        $this->actingAs($pemohon)
+            ->get(route('item-applications.show', permohonanUsulanBarang($proposal)))
+            ->assertOk()
+            ->assertSee('Usulan barang baru · Diajukan')
+            ->assertDontSee(route('items.create', ['item_proposal_id' => $proposal->item_proposal_id]), false)
+            ->assertDontSee('buka-tolak-usulan-barang', false);
+    })->with([
+        'Pengguna' => [UserRole::Pengguna],
+        'Pejabat Pengadaan' => [UserRole::PejabatPengadaan],
+        'Kasubbag' => [UserRole::KasubbagUmumTi],
+    ]);
+
+    // Menangkap jebakan middleware: `role:` akan menolak Admin, sedangkan gate
+    // meloloskannya lewat Gate::before.
+    it('mengizinkan Admin membuka formulir barang dari usulan', function () {
+        $proposal = usulanBarangDariPermohonan();
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->get("/barang/create?item_proposal_id={$proposal->item_proposal_id}")
+            ->assertOk();
     });
 });
 
-describe('mengusulkan barang baru', function () {
-    it('menyimpan usulan, mencatat audit, dan menagih Pengelola Gudang', function () {
+describe('usulan lahir dari permohonan', function () {
+    it('menagih Pengelola Gudang dengan tautan ke permohonannya', function () {
         $gudang = pengelolaGudang();
-        $pengusul = pejabatPengadaan();
-
-        $proposal = buatUsulanBarang($pengusul);
-
-        expect($proposal->item_name)->toBe('Spidol Whiteboard Warna Emas')
-            ->and($proposal->unit)->toBe(SatuanBarang::Buah)
-            ->and($proposal->status)->toBe(ItemProposalStatus::Diajukan)
-            ->and($proposal->proposed_by)->toBe($pengusul->user_id)
-            ->and($proposal->item_id)->toBeNull()
-            ->and($proposal->decided_at)->toBeNull();
-
-        expect(AuditLog::where('activity', 'like', '%Mengusulkan barang baru%')->exists())->toBeTrue();
+        $proposal = usulanBarangDariPermohonan();
 
         $notifikasi = Notification::where('user_id', $gudang->user_id)
             ->where('type', NotificationType::UsulanBarangMenungguKeputusan)
             ->first();
 
         expect($notifikasi)->not->toBeNull()
-            ->and($notifikasi->body)->toContain('Spidol Whiteboard Warna Emas');
+            ->and($notifikasi->body)->toContain('Spidol Whiteboard Warna Emas')
+            ->and($notifikasi->action_url)->toBe(route('item-applications.show', permohonanUsulanBarang($proposal), false));
     });
 
-    it('mewajibkan nama, satuan, dan kegunaan', function () {
-        $this->actingAs(pejabatPengadaan())
-            ->post('/usulan-barang', ['item_name' => '', 'unit' => '', 'purpose_note' => ''])
-            ->assertSessionHasErrors(['item_name', 'unit', 'purpose_note']);
+    it('menautkan log aktivitas usulan barang ke permohonannya', function () {
+        $proposal = usulanBarangDariPermohonan();
 
-        expect(ItemProposal::count())->toBe(0);
-    });
+        $this->actingAs(pengelolaGudang())->post('/barang', payloadBarangDariUsulan($proposal));
 
-    it('menolak satuan di luar daftar', function () {
-        $this->actingAs(pejabatPengadaan())
-            ->post('/usulan-barang', payloadUsulanBarang(['unit' => 'ember']))
-            ->assertSessionHasErrors('unit');
+        $log = AuditLog::where('subject_type', 'usulan_barang')->sole();
 
-        expect(ItemProposal::count())->toBe(0);
+        expect($log->tautanSubjek())->toBe(route('item-applications.show', permohonanUsulanBarang($proposal)));
     });
 });
 
 describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
-    it('mengisi formulir barang dari usulan', function () {
-        $proposal = buatUsulanBarang();
+    it('mengisi formulir barang dari usulan dan kembali ke permohonan saat batal', function () {
+        $proposal = usulanBarangDariPermohonan();
 
         $this->actingAs(pengelolaGudang())
             ->get("/barang/create?item_proposal_id={$proposal->item_proposal_id}")
             ->assertOk()
             ->assertSee('Spidol Whiteboard Warna Emas')
-            ->assertSee('Mendaftarkan barang dari usulan', false);
+            ->assertSee('Mendaftarkan barang dari usulan', false)
+            ->assertSee('href="'.route('item-applications.show', permohonanUsulanBarang($proposal)).'"', false);
     });
 
     /**
@@ -171,14 +214,14 @@ describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
      * ada jalur pembuatan barang kedua, dan tidak ada persetujuan yang berdiri
      * tanpa baris `items`.
      */
-    it('mendaftarkan barang berstok nol dan menutup usulannya sekaligus', function () {
+    it('mendaftarkan barang berstok nol, menutup usulannya, lalu kembali ke permohonan', function () {
         $gudang = pengelolaGudang();
-        $pengusul = pejabatPengadaan();
-        $proposal = buatUsulanBarang($pengusul);
+        $proposal = usulanBarangDariPermohonan();
+        $permohonan = permohonanUsulanBarang($proposal);
 
         $this->actingAs($gudang)
             ->post('/barang', payloadBarangDariUsulan($proposal))
-            ->assertRedirect("/usulan-barang/{$proposal->item_proposal_id}");
+            ->assertRedirect(route('item-applications.show', $permohonan));
 
         $item = Item::where('item_code', 'ATK-900')->first();
         $proposal->refresh();
@@ -195,25 +238,35 @@ describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
         expect(StockMutation::where('item_id', $item->item_id)->count())->toBe(0);
 
         expect(AuditLog::where('activity', 'like', '%Menyetujui usulan barang%')->exists())->toBeTrue();
+
+        $this->actingAs($gudang)
+            ->get(route('item-applications.show', $permohonan))
+            ->assertSee('Usulan barang baru · Disetujui')
+            ->assertSee('ATK-900')
+            ->assertDontSee('buka-tolak-usulan-barang', false);
     });
 
-    it('memberi tahu pengusul bahwa barangnya sudah terdaftar', function () {
-        $pengusul = pejabatPengadaan();
-        $proposal = buatUsulanBarang($pengusul);
+    it('memberi tahu pemohon bahwa barangnya sudah terdaftar, menaut ke permohonannya', function () {
+        $pemohon = User::factory()->role(UserRole::Pengguna)->create();
+        $proposal = usulanBarangDariPermohonan($pemohon);
 
         $this->actingAs(pengelolaGudang())->post('/barang', payloadBarangDariUsulan($proposal));
 
-        $notifikasi = Notification::where('user_id', $pengusul->user_id)
+        $notifikasi = Notification::where('user_id', $pemohon->user_id)
             ->where('type', NotificationType::UsulanBarangDisetujui)
             ->first();
 
+        // Bukan ke halaman barang: pemohon tidak punya `akses-gudang`.
         expect($notifikasi)->not->toBeNull()
-            ->and($notifikasi->body)->toContain('ATK-900');
+            ->and($notifikasi->body)->toContain('ATK-900')
+            ->and($notifikasi->action_url)->toBe(route('item-applications.show', permohonanUsulanBarang($proposal), false));
+
+        $this->actingAs($pemohon)->get($notifikasi->action_url)->assertOk();
     });
 
     it('menutup tagihan keputusan begitu usulannya diputuskan', function () {
         $gudang = pengelolaGudang();
-        $proposal = buatUsulanBarang();
+        $proposal = usulanBarangDariPermohonan();
 
         $sebelum = Notification::where('user_id', $gudang->user_id)
             ->where('type', NotificationType::UsulanBarangMenungguKeputusan)
@@ -229,7 +282,7 @@ describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
 
     it('menolak formulir barang yang menunjuk usulan yang sudah diputuskan', function () {
         $gudang = pengelolaGudang();
-        $proposal = buatUsulanBarang();
+        $proposal = usulanBarangDariPermohonan();
 
         $this->actingAs($gudang)->post('/barang', payloadBarangDariUsulan($proposal));
 
@@ -241,29 +294,38 @@ describe('menyetujui usulan dengan mendaftarkan barangnya', function () {
         expect(Item::where('item_code', 'ATK-901')->exists())->toBeFalse();
     });
 
-    it('mengalihkan formulir barang bila usulannya sudah diputuskan', function () {
+    it('mengalihkan formulir barang ke permohonan bila usulannya sudah diputuskan', function () {
         $gudang = pengelolaGudang();
-        $proposal = buatUsulanBarang();
+        $proposal = usulanBarangDariPermohonan();
 
         $this->actingAs($gudang)->post('/barang', payloadBarangDariUsulan($proposal));
 
         $this->actingAs($gudang)
             ->get("/barang/create?item_proposal_id={$proposal->item_proposal_id}")
-            ->assertRedirect("/usulan-barang/{$proposal->item_proposal_id}");
+            ->assertRedirect(route('item-applications.show', permohonanUsulanBarang($proposal)))
+            ->assertSessionHas('error');
+    });
+
+    it('mengalihkan ke daftar permohonan bila usulannya tidak ditemukan', function () {
+        $this->actingAs(pengelolaGudang())
+            ->get('/barang/create?item_proposal_id='.\Illuminate\Support\Str::uuid())
+            ->assertRedirect(route('item-applications.index'))
+            ->assertSessionHas('error');
     });
 });
 
 describe('menolak usulan barang', function () {
-    it('menyimpan penolakan beserta keterangannya dan memberi tahu pengusul', function () {
+    it('menyimpan penolakan, kembali ke permohonan, dan memberi tahu pemohon', function () {
         $gudang = pengelolaGudang();
-        $pengusul = pejabatPengadaan();
-        $proposal = buatUsulanBarang($pengusul);
+        $pemohon = User::factory()->role(UserRole::Pengguna)->create();
+        $proposal = usulanBarangDariPermohonan($pemohon);
+        $permohonan = permohonanUsulanBarang($proposal);
 
         $this->actingAs($gudang)
             ->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", [
                 'decision_note' => 'Barangnya sudah terdaftar sebagai ATK-014 Spidol Permanen Emas.',
             ])
-            ->assertRedirect("/usulan-barang/{$proposal->item_proposal_id}");
+            ->assertRedirect(route('item-applications.show', $permohonan));
 
         $proposal->refresh();
 
@@ -272,27 +334,48 @@ describe('menolak usulan barang', function () {
             ->and($proposal->decided_by)->toBe($gudang->user_id)
             ->and($proposal->decision_note)->toContain('ATK-014');
 
-        $notifikasi = Notification::where('user_id', $pengusul->user_id)
+        $notifikasi = Notification::where('user_id', $pemohon->user_id)
             ->where('type', NotificationType::UsulanBarangDitolak)
             ->first();
 
         expect($notifikasi)->not->toBeNull()
-            ->and($notifikasi->body)->toContain('ATK-014');
+            ->and($notifikasi->body)->toContain('ATK-014')
+            ->and($notifikasi->action_url)->toBe(route('item-applications.show', $permohonan, false));
+
+        // Alasannya tetap terbaca di permohonan setelah notifikasinya terhapus.
+        $this->actingAs($pemohon)
+            ->get(route('item-applications.show', $permohonan))
+            ->assertOk()
+            ->assertSee('Usulan barang baru · Ditolak')
+            ->assertSee('ATK-014 Spidol Permanen Emas');
     });
 
-    it('mewajibkan keterangan penolakan', function () {
-        $proposal = buatUsulanBarang();
+    it('mewajibkan keterangan penolakan dan membuka ulang dialognya', function () {
+        $gudang = pengelolaGudang();
+        $proposal = usulanBarangDariPermohonan();
+        $permohonan = permohonanUsulanBarang($proposal);
 
-        $this->actingAs(pengelolaGudang())
-            ->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", ['decision_note' => ''])
+        $this->actingAs($gudang)
+            ->from(route('item-applications.show', $permohonan))
+            ->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", [
+                'item_proposal_id' => $proposal->item_proposal_id,
+                'decision_note' => '',
+            ])
+            ->assertRedirect(route('item-applications.show', $permohonan))
             ->assertSessionHasErrors('decision_note');
 
         expect($proposal->fresh()->isDiajukan())->toBeTrue();
+
+        // Dialognya lahir terbuka dan sudah menunjuk usulan yang gagal.
+        $this->actingAs($gudang)
+            ->get(route('item-applications.show', $permohonan))
+            ->assertSee('open: true', false)
+            ->assertSee('Jelaskan alasan penolakannya.');
     });
 
     it('menolak keputusan ganda dengan pesan, bukan galat 500', function () {
         $gudang = pengelolaGudang();
-        $proposal = buatUsulanBarang();
+        $proposal = usulanBarangDariPermohonan();
 
         $this->actingAs($gudang)->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", [
             'decision_note' => 'Sudah ada sebagai ATK-014.',
@@ -302,6 +385,7 @@ describe('menolak usulan barang', function () {
             ->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", [
                 'decision_note' => 'Keputusan kedua.',
             ])
+            ->assertRedirect(route('item-applications.show', permohonanUsulanBarang($proposal)))
             ->assertSessionHas('error');
 
         expect($proposal->fresh()->decision_note)->toContain('ATK-014');
@@ -309,7 +393,7 @@ describe('menolak usulan barang', function () {
 
     it('menutup tagihan keputusan setelah ditolak', function () {
         $gudang = pengelolaGudang();
-        $proposal = buatUsulanBarang();
+        $proposal = usulanBarangDariPermohonan();
 
         $this->actingAs($gudang)->patch("/usulan-barang/{$proposal->item_proposal_id}/tolak", [
             'decision_note' => 'Sudah ada sebagai ATK-014.',
@@ -326,80 +410,24 @@ describe('menolak usulan barang', function () {
 describe('jahitan ke realisasi pengadaan langsung', function () {
     /**
      * Skenario asli yang diminta Kasubbag Umum dan TI, ujung ke ujung:
-     * barang belum ada di master, diusulkan, didaftarkan, lalu langsung
+     * barang belum ada di master, dimohonkan, didaftarkan, lalu langsung
      * diadakan tanpa usulan pengadaan.
      */
     it('mengizinkan barang hasil usulan dipakai pada realisasi langsung', function () {
-        $pengusul = pejabatPengadaan();
-        $proposal = buatUsulanBarang($pengusul);
+        $pejabat = pejabatPengadaan();
+        $proposal = usulanBarangDariPermohonan($pejabat);
 
         $this->actingAs(pengelolaGudang())->post('/barang', payloadBarangDariUsulan($proposal));
 
         $item = $proposal->fresh()->item;
 
         $procurement = buatRealisasiLangsung(
-            $pengusul,
+            $pejabat,
             \App\Models\Supplier::factory()->create(),
             [barisLangsung($item, 24, 12000)],
         );
 
         expect($procurement->tanpaUsulan())->toBeTrue()
             ->and($procurement->details->first()->item_id)->toBe($item->item_id);
-    });
-});
-
-describe('daftar dan penyaringan usulan barang', function () {
-    it('menyaring berdasarkan status dan kata kunci', function () {
-        $gudang = pengelolaGudang();
-        $ditolak = buatUsulanBarang(null, ['item_name' => 'Tinta Printer Warna Emas']);
-        $menunggu = buatUsulanBarang(null, ['item_name' => 'Papan Tulis Kaca']);
-
-        $this->actingAs($gudang)->patch("/usulan-barang/{$ditolak->item_proposal_id}/tolak", [
-            'decision_note' => 'Sudah ada sebagai ATK-020.',
-        ]);
-
-        // Dibuktikan dengan kunci barisnya, bukan nama barangnya: pesan flash
-        // dari penolakan tadi masih ikut terbawa ke permintaan berikutnya dan
-        // memuat nama itu, sehingga assertDontSee atas nama akan meleset.
-        $this->actingAs($gudang)
-            ->get('/usulan-barang?status='.ItemProposalStatus::Diajukan->value)
-            ->assertOk()
-            ->assertSee($menunggu->item_proposal_id)
-            ->assertDontSee($ditolak->item_proposal_id);
-
-        $this->actingAs($gudang)
-            ->get('/usulan-barang?q=Tinta')
-            ->assertOk()
-            ->assertSee($ditolak->item_proposal_id)
-            ->assertDontSee($menunggu->item_proposal_id);
-    });
-
-    it('menampilkan tombol keputusan hanya kepada Pengelola Gudang', function () {
-        $proposal = buatUsulanBarang();
-
-        $this->actingAs(pengelolaGudang())
-            ->get("/usulan-barang/{$proposal->item_proposal_id}")
-            ->assertOk()
-            ->assertSee('Setujui &amp; Buat Barang', false);
-
-        $this->actingAs(pejabatPengadaan())
-            ->get("/usulan-barang/{$proposal->item_proposal_id}")
-            ->assertOk()
-            ->assertDontSee('Setujui &amp; Buat Barang', false);
-    });
-});
-
-describe('kiriman ulang', function () {
-    it('tidak membuat usulan barang kedua saat formulir yang sama dikirim ulang', function () {
-        $pengusul = pejabatPengadaan();
-        $payload = payloadUsulanBarang();
-
-        $this->actingAs($pengusul)->post('/usulan-barang', $payload);
-        $usulan = ItemProposal::sole();
-
-        $this->actingAs($pengusul)->post('/usulan-barang', $payload)
-            ->assertRedirect(route('item-proposals.show', $usulan));
-
-        expect(ItemProposal::count())->toBe(1);
     });
 });

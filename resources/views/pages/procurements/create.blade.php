@@ -150,9 +150,9 @@
                                 x-text="sudahDipakai(item) ? 'Sudah di daftar' : `Stok ${item.stock_current}`"></span>
                         </x-slot:badge>
                         <x-slot:kosong>
-                            <a href="{{ route('item-proposals.create') }}" target="_blank" rel="noopener"
+                            <a href="{{ route('item-applications.create') }}" target="_blank" rel="noopener"
                                 class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-                                Usulkan barang baru
+                                Ajukan permohonan barang baru
                             </a>
                         </x-slot:kosong>
                     </x-request.pemilih-barang>

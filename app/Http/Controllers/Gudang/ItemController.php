@@ -83,11 +83,11 @@ class ItemController extends Controller
      *
      * Tanpa query — tombol "Tambah Barang" biasa.
      *
-     * Dengan `?item_proposal_id=` — tombol "Setujui & Buat Barang" pada halaman
-     * usulan barang: nama dan satuannya terisi dari usulan, sementara kode
-     * barang serta batas minimum/maksimum tetap diisi Pengelola Gudang karena
-     * hanya dia yang mengenal penamaan bakunya. Menyimpannya sekaligus menutup
-     * usulan itu. Lihat ADR 0032.
+     * Dengan `?item_proposal_id=` — tombol "Daftarkan" pada baris barang baru
+     * di rincian permohonan (ADR 0053): nama dan satuannya terisi dari usulan,
+     * sementara kode barang serta batas minimum/maksimum tetap diisi Pengelola
+     * Gudang karena hanya dia yang mengenal penamaan bakunya. Menyimpannya
+     * sekaligus menutup usulan itu. Lihat ADR 0032.
      */
     public function create(Request $request): View|RedirectResponse
     {
@@ -98,13 +98,13 @@ class ItemController extends Controller
 
             if ($proposal === null) {
                 return redirect()
-                    ->route('item-proposals.index')
+                    ->route('item-applications.index')
                     ->with('error', 'Usulan barang tidak ditemukan.');
             }
 
             if ($proposal->sudahDiputuskan()) {
                 return redirect()
-                    ->route('item-proposals.show', $proposal)
+                    ->to($proposal->tautan())
                     ->with('error', "Usulan barang \"{$proposal->item_name}\" sudah diputuskan sebelumnya.");
             }
         }
@@ -192,7 +192,7 @@ class ItemController extends Controller
             NotificationScanner::catatUsulanBarangDiputuskan($proposal->fresh(['proposedBy', 'item']), $actor);
 
             return redirect()
-                ->route('item-proposals.show', $proposal)
+                ->to($proposal->tautan())
                 ->with('status', "Usulan barang \"{$proposal->item_name}\" disetujui dan terdaftar sebagai {$item->item_code}.");
         }
 

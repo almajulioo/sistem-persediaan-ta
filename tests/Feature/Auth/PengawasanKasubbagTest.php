@@ -109,7 +109,6 @@ describe('Kasubbag membaca', function () {
             '/penyedia',
             "/penyedia/{$this->supplier->supplier_id}",
             '/usulan-pengadaan',
-            '/usulan-barang',
             '/pengadaan',
             "/pengadaan/{$this->procurement->procurement_id}",
         ];
@@ -140,7 +139,6 @@ describe('Kasubbag tidak bisa mengubah', function () {
             "/penyedia/{$this->supplier->supplier_id}/edit",
             '/usulan-pengadaan/create',
             '/usulan-pengadaan/draf',
-            '/usulan-barang/create',
             '/pengadaan/create',
             "/pengadaan/{$this->procurement->procurement_id}/edit",
             "/pengadaan/{$this->procurement->procurement_id}/penerimaan/create",
@@ -292,7 +290,7 @@ describe('menu samping', function () {
             ->assertSee('href="/mutasi"', false)
             ->assertSee('href="/opname"', false)
             ->assertSee('href="/penyedia"', false)
-            ->assertSee('href="/pengadaan?status=menunggu_persetujuan"', false)
+            ->assertSee('href="/pengadaan"', false)
             ->assertDontSee('href="/pengguna"', false)
             ->assertDontSee('href="/log-aktivitas"', false);
     });
@@ -300,7 +298,7 @@ describe('menu samping', function () {
     it('tidak menampilkan tautan pengadaan dua kali', function (UserRole $role) {
         $html = $this->actingAs(penggunaPengawasan($role))->get('/dasbor')->getContent();
 
-        foreach (['href="/usulan-pengadaan"', 'href="/usulan-barang"', 'href="/pengadaan"'] as $tautan) {
+        foreach (['href="/usulan-pengadaan"', 'href="/pengadaan"'] as $tautan) {
             expect(substr_count($html, $tautan))->toBe(1);
         }
     })->with([

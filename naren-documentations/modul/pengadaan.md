@@ -58,7 +58,7 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Tahap | Pelaku | Tercatat di |
 |---|---|---|
 | Mengusulkan | Pengelola Gudang | `procurement_requests.user_id` |
-| Mengusulkan barang baru | Pejabat Pengadaan | `item_proposals.proposed_by` |
+| Memohon barang baru (lewat Permohonan) | siapa pun | `item_proposals.proposed_by` |
 | Menyetujui / menolak usulan barang baru | Pengelola Gudang | `item_proposals.decided_by` |
 | Menyetujui / menolak usulan | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
@@ -119,9 +119,10 @@ TTE pada BAST, karena tanda tangan mengikat identitas pribadi salah satu pihak
    realisasi langsung — kalau tidak, persetujuan atas dasar yang wajar dapat
    ditukar setelah terbit (ADR 0031).
 10. **Barang wajib sudah terdaftar di master barang sebelum dapat diadakan.**
-   Barang yang belum ada diusulkan lebih dulu lewat Usulan Barang Baru, dan
-   Pengelola Gudang yang mendaftarkannya
-   ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)).
+   Barang yang belum ada dimohonkan lebih dulu lewat Permohonan, dan
+   Pengelola Gudang yang mendaftarkannya dari rincian permohonan itu
+   ([ADR 0032](../keputusan/0032-usulan-barang-baru.md),
+   [ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)).
 11. **Barang baru dapat diterima setelah realisasinya ditandai sudah
    dibelanjakan**, dan penandaan itu wajib disertai minimal satu foto belanja.
    Perubahan realisasi setelah dibelanjakan mengulang persetujuan, tetapi tidak
@@ -619,10 +620,13 @@ Sejak ADR 0035 ada status keenam, `ProsesBelanja`, di antara persetujuan dan
 - Agregat memperlakukan `Ditolak` sama dengan `Dibatalkan`: ditampilkan, tidak
   pernah dihitung (`ProcurementStatus::takPernahJadiTransaksi()`). Invarian rekap
   menjadi `total = menunggu_persetujuan + menunggu + diterima`.
-- Tempat kerjanya adalah grup menu **Persetujuan** berisi tautan ke
-  `/pengadaan?status=menunggu_persetujuan`, bukan layar tersendiri. Keputusannya
-  diambil dari halaman detail realisasi, pola yang sama dengan cara Pejabat
-  Pengadaan memutuskan usulan.
+- Tidak ada layar tersendiri. Keputusannya diambil dari halaman detail
+  realisasi, pola yang sama dengan cara Pejabat Pengadaan memutuskan usulan.
+  Grup menu **Persetujuan** yang dulu menaut ke
+  `/pengadaan?status=menunggu_persetujuan` dihapus 9 November 2026
+  ([ADR 0054](../keputusan/0054-grup-menu-persetujuan-dihapus.md)): Kasubbag
+  memakai Pengadaan › Realisasi Pengadaan, atau baris antrean dasbor
+  "Realisasi menunggu persetujuan" yang membawa penyaring yang sama.
 
 ## Mengubah realisasi
 
@@ -793,6 +797,15 @@ Ditambahkan 16 September 2026, menjawab permintaan kedua Kasubbag Umum dan TI:
 Pejabat Pengadaan perlu dapat mengadakan barang yang belum ada di master barang.
 Rincian keputusan: [ADR 0032](../keputusan/0032-usulan-barang-baru.md).
 
+**Sejak 9 November 2026 tidak ada lagi halaman Usulan Barang Baru**
+([ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)).
+Usulan hanya lahir dari Permohonan (fitur Alma): siapa pun memohon barang baru,
+Pengelola Gudang menyetujui permohonannya, dan setiap baris barang baru menjadi
+satu `item_proposals`. Daftarkan dan Tolak ada di kolom Tindak Lanjut rincian
+permohonan itu. `ItemProposal::tautan()` menentukan ke mana pengalihan,
+tombol Batal, notifikasi, dan log aktivitas menaut: permohonan asal → barang →
+daftar permohonan.
+
 Barangnya **harus** menjadi baris `items` lebih dulu — stok tidak bisa diposting
 ke sebuah nama bebas. Sementara kode barang dan batas stok adalah wewenang
 Pengelola Gudang, dan langkahnya yang paling bernilai justru **pemeriksaan
@@ -800,20 +813,21 @@ duplikat**: satu barang fisik dengan dua baris di master membuat batas minimum,
 stok opname, dan kartu persediaannya berhenti bisa dipercaya.
 
 ```
-Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
-       │                        │                                    │
-  Usulan barang ──▶ Setujui & Buat Barang ──▶ items (stok 0) ──▶ Realisasi
-       │                        │
-       └──────── Tolak (alasan wajib) ─────────┘
+Pemohon (siapa pun)      Pengelola Gudang (rincian permohonan)        Pejabat Pengadaan
+       │                        │                                            │
+  Permohonan ──▶ Setujui ──▶ usulan ──▶ Daftarkan ──▶ items (stok 0) ──▶ Realisasi
+                                  │
+                                  └──▶ Tolak (alasan wajib)
 ```
 
 | Metode | URL | Nama | Gate |
 |---|---|---|---|
-| GET | `usulan-barang` | `item-proposals.index` | `akses-pengadaan` |
-| GET | `usulan-barang/create` | `item-proposals.create` | `kelola-pengadaan` |
-| POST | `usulan-barang` | `item-proposals.store` | `kelola-pengadaan` |
 | PATCH | `usulan-barang/{itemProposal}/tolak` | `item-proposals.reject` | `kelola-gudang` |
-| GET | `usulan-barang/{itemProposal}` | `item-proposals.show` | `akses-pengadaan` |
+| GET | `barang/create?item_proposal_id=…` | `items.create` | `kelola-gudang` |
+| POST | `barang` (dengan `item_proposal_id`) | `items.store` | `kelola-gudang` |
+
+Rute `item-proposals.index`, `.create`, `.store`, dan `.show` dihapus
+(ADR 0053).
 
 **Aturan.**
 
@@ -821,8 +835,11 @@ Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
   tombolnya menuju `items.create?item_proposal_id=…`, dan
   `ItemController::store()` yang menutup usulannya — di dalam transaksi yang
   sama, sehingga tidak mungkin ada usulan `Disetujui` tanpa barang.
-- Pengusul mengisi nama bebas, satuan, dan kegunaan yang **wajib**. Kode barang
-  serta batas minimum/maksimum tetap diisi Pengelola Gudang.
+- Pemohon mengisi nama bebas, satuan, dan kegunaan yang **wajib** di
+  formulir permohonan. Kode barang serta batas minimum/maksimum tetap diisi
+  Pengelola Gudang.
+- Alasan penolakan tampil di baris permohonannya, jadi tetap terbaca setelah
+  notifikasinya terhapus.
 - Penolakan wajib berketerangan. Penolakan tersering adalah "barangnya sudah ada,
   pakai ATK-014", dan tanpa keterangan itu pengusul akan mengusulkan hal yang
   sama lagi.
@@ -838,18 +855,21 @@ Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
 | Tipe | Sifat | Penerima |
 |---|---|---|
 | `UsulanBarangMenungguKeputusan` | keadaan | Pengelola Gudang dan Admin |
-| `UsulanBarangDisetujui` | peristiwa | pengusul |
-| `UsulanBarangDitolak` | peristiwa | pengusul, memuat keterangan penolakan |
+| `UsulanBarangDisetujui` | peristiwa | pengusul (pemohon) |
+| `UsulanBarangDitolak` | peristiwa | pengusul (pemohon), memuat keterangan penolakan |
+
+Ketiganya menaut ke rincian permohonan. `UsulanBarangDisetujui` dulu menaut ke
+halaman barang, yang butuh `akses-gudang` dan berujung 403 bagi pengusulnya.
 
 **Konsekuensi yang perlu diingat.** Barang hasil usulan lahir berstok nol,
 sehingga `StokHabis` langsung berlaku dan draf usulan otomatis menyedotnya.
 Bukan kerusakan — stoknya memang habis — dan keduanya melepas sendiri begitu
 barangnya diterima gudang.
 
-**Batas kerja.** Tabel `item_proposals` sengaja netral peran supaya sub sistem
-permintaan barang dapat memakainya kelak tanpa perubahan skema, tetapi yang
-dibangun sekarang hanya pintu Pengadaan dan layar keputusan Gudang. Tidak ada
-berkas sub sistem permintaan yang disentuh.
+**Batas kerja.** Tabel `item_proposals` sengaja netral peran, dan sejak
+ADR 0033 memang dipakai bersama sub sistem permintaan barang. Sejak ADR 0053
+pintunya tinggal Permohonan, dan layar keputusannya ada di halaman Alma
+(`request/applications/show.blade.php`), yang disunting sempit untuk itu.
 
 ## Tahap belanja dan foto belanja
 

@@ -223,13 +223,14 @@ describe('membuat realisasi langsung', function () {
         expect(Procurement::count())->toBe(0);
     });
 
-    it('menawarkan usulan barang baru dari pencarian barang yang tidak ditemukan', function () {
+    it('menawarkan permohonan barang baru dari pencarian barang yang tidak ditemukan', function () {
         // Pengganti kalimat penjelasan yang dulu selalu tampil di bawah daftar.
+        // Barang baru dimohonkan lewat Permohonan sejak ADR 0053.
         $this->actingAs(pejabatPengadaan())
             ->get('/pengadaan/create')
             ->assertOk()
-            ->assertSee('href="'.route('item-proposals.create').'"', false)
-            ->assertSee('Usulkan barang baru');
+            ->assertSee('href="'.route('item-applications.create').'"', false)
+            ->assertSee('Ajukan permohonan barang baru');
     });
 
     it('memakai pemilih barang berkategori dan bersub kategori', function () {

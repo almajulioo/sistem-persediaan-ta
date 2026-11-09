@@ -30,7 +30,6 @@ dengan middleware rutenya.
 | Stok Opname | `opname.index` | `akses-gudang` |
 | Usulan Pengadaan | `procurement-requests.index` | `akses-pengadaan` |
 | Realisasi Pengadaan | `procurements.index` | `akses-pengadaan` |
-| Usulan Barang Baru | `item-proposals.index` | `akses-pengadaan` |
 | Penyedia Barang | `suppliers.index` | `akses-penyedia` |
 | Manajemen Pengguna | `users.index` | `kelola-pengguna` |
 | Log Aktivitas | `activity-logs.index` | `kelola-pengguna` |
@@ -49,7 +48,6 @@ ditindaklanjuti."
 | Belum dibelanjakan | `proses_belanja` | sda. | `kelola-pengadaan` |
 | BAST menunggu TTE Anda | `Procurement::scopeMenungguTte()` untuk pihak pemakai | `procurements.index?tte=pihak_pertama` / `pihak_kedua` | `tte-bast` — hanya Pejabat Pengadaan dan Pengelola Gudang; Admin dan Kasubbag tidak menandatangani ([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)) |
 | Barang menunggu penerimaan | `menunggu_penerimaan` | sda. | `kelola-gudang` |
-| Usulan barang baru | `item_proposals` `diajukan` | `item-proposals.index?status=diajukan` | `kelola-gudang` |
 | Draf usulan pengadaan | **jumlah barang** di draf | `procurement-requests.draft.edit` | `kelola-gudang` |
 | Opname belum selesai | `stock_opnames` `draf` | `opname.index?status=draf` | `kelola-gudang` |
 | Permintaan menunggu persetujuan | `requests` `submitted` | `request.index?status=submitted` | Admin; Kepala Unit (unitnya saja) |

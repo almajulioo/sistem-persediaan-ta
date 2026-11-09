@@ -59,23 +59,20 @@ it('menyaring menu samping sesuai peran', function () {
         ->assertDontSee('Stock Opname');
 });
 
-it('menampilkan grup menu Persetujuan hanya untuk pemberi persetujuan', function () {
-    $this->actingAs(User::factory()->role(UserRole::KasubbagUmumTi)->create())
+// Grup menu Persetujuan dihapus (ADR 0054): realisasi yang menunggu
+// persetujuan dibuka dari Pengadaan > Realisasi Pengadaan, dan dasbor tetap
+// menautkan penyaringnya lewat route() yang absolut. Dicocokkan dengan
+// `href="/…` relatif khas sidebar.
+it('tidak lagi menampilkan grup menu Persetujuan', function (UserRole $role) {
+    $this->actingAs(User::factory()->role($role)->create())
         ->get('/dasbor')
         ->assertOk()
-        ->assertSee('Persetujuan')
-        // Tautannya membawa penyaring status, bukan daftar realisasi polos.
-        // Dicocokkan dengan `href="/…` relatif khas sidebar: dasbor juga
-        // menautkan penyaring yang sama (alur pengadaan), tetapi lewat route()
-        // yang absolut, dan Pengelola Gudang memang boleh melihatnya di sana.
-        ->assertSee('href="/pengadaan?status=menunggu_persetujuan"', false)
-        ->assertDontSee('Manajemen Pengguna');
-
-    $this->actingAs(User::factory()->role(UserRole::PengelolaGudang)->create())
-        ->get('/dasbor')
-        ->assertOk()
+        ->assertSee('href="/pengadaan"', false)
         ->assertDontSee('href="/pengadaan?status=menunggu_persetujuan"', false);
-});
+})->with([
+    'Kasubbag' => [UserRole::KasubbagUmumTi],
+    'Admin' => [UserRole::Admin],
+]);
 
 it('menampilkan menu administrasi hanya untuk Admin', function () {
     $this->actingAs(User::factory()->role(UserRole::Admin)->create())

@@ -79,7 +79,11 @@ Tiga baris realisasi milik
 — Menunggu Persetujuan, Disetujui, dan Ditolak — baru dicatat di katalog ini
 pada 16 September 2026; tipenya sendiri sudah hidup sejak ADR 0030 dibangun.
 Dua baris Usulan Barang Baru berasal dari
-[ADR 0032](../keputusan/0032-usulan-barang-baru.md). Realisasi Belum
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md). Sejak
+[ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)
+ketiga notifikasi usulan barang menaut ke rincian permohonan asalnya
+(`ItemProposal::tautan()`), karena halaman usulan barang sudah tidak ada dan
+pengusul tidak punya akses ke halaman barang. Realisasi Belum
 Dibelanjakan berasal dari
 [ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md), yang
 sekaligus menggeser Realisasi Menunggu Penerimaan: kini ia baru terbit setelah

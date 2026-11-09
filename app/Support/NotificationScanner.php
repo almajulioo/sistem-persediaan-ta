@@ -870,7 +870,7 @@ class NotificationScanner
                 $proposal->item_name,
                 $proposal->unit->label(),
             ),
-            actionUrl: route('item-proposals.show', $proposal, false),
+            actionUrl: $proposal->tautan(false),
             subject: $proposal,
         );
     }
@@ -885,7 +885,8 @@ class NotificationScanner
         $penerima = self::pengawasGudang();
 
         ItemProposal::query()
-            ->with('proposedBy')
+            // `applicationDetail` dan `item` untuk ItemProposal::tautan().
+            ->with(['proposedBy', 'applicationDetail', 'item'])
             ->chunk(100, function ($usulan) use ($penerima) {
                 foreach ($usulan as $proposal) {
                     self::periksaUsulanBarang($proposal, $penerima);
@@ -924,9 +925,10 @@ class NotificationScanner
                     $proposal->item_name,
                     $proposal->item?->item_code ?? 'barang baru',
                 ),
-                actionUrl: $proposal->item === null
-                    ? route('item-proposals.show', $proposal, false)
-                    : route('items.show', $proposal->item, false),
+                // Ke permohonannya, bukan ke halaman barang: pemohon umumnya
+                // tidak punya `akses-gudang`, sedangkan permohonannya sendiri
+                // selalu boleh ia buka dan memuat kode barang yang terdaftar.
+                actionUrl: $proposal->tautan(false),
                 subject: $proposal,
             );
 
@@ -945,7 +947,7 @@ class NotificationScanner
                     $proposal->item_name,
                     $proposal->decision_note ?? 'tidak dicatat',
                 ),
-                actionUrl: route('item-proposals.show', $proposal, false),
+                actionUrl: $proposal->tautan(false),
                 subject: $proposal,
             );
         }

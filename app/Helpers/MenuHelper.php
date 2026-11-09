@@ -2,7 +2,6 @@
 
 namespace App\Helpers;
 
-use App\Enums\ProcurementStatus;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Models\User;
@@ -63,14 +62,15 @@ class MenuHelper
             ],
             // Kasubbag Umum dan TI melihat kedua grup ini baca-saja sebagai
             // pengawas subbagiannya (ADR 0041); tombol ubahnya disembunyikan di
-            // tiap halaman dan rutenya tetap tertutup baginya.
+            // tiap halaman dan rutenya tetap tertutup baginya. Realisasi yang
+            // menunggu persetujuannya dibuka dari Realisasi Pengadaan di sini,
+            // tanpa grup menu tersendiri (ADR 0054).
             [
                 'icon' => 'pages',
                 'name' => 'Pengadaan',
                 'roles' => [UserRole::Admin, UserRole::PejabatPengadaan, UserRole::KasubbagUmumTi],
                 'subItems' => [
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan'],
-                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang'],
                     ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan'],
                     ['name' => 'Penyedia Barang', 'path' => '/penyedia'],
                 ],
@@ -79,45 +79,17 @@ class MenuHelper
                 'icon' => 'tables',
                 'name' => 'Manajemen Gudang',
                 'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KasubbagUmumTi],
-                // Tiga sub-item pengadaan hanya untuk Pengelola Gudang, yang
+                // Dua sub-item pengadaan hanya untuk Pengelola Gudang, yang
                 // tidak melihat grup Pengadaan. Admin dan Kasubbag sudah
                 // mendapatkannya di sana, jadi tidak perlu muncul dua kali.
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
                     ['name' => 'Sub Kategori Barang', 'path' => '/sub-kategori-barang'],
-                    ['name' => 'Usulan Barang Baru', 'path' => '/usulan-barang', 'roles' => [UserRole::PengelolaGudang]],
                     ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
                     ['name' => 'Stok Opname', 'path' => '/opname'],
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan', 'roles' => [UserRole::PengelolaGudang]],
                     ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan', 'roles' => [UserRole::PengelolaGudang]],
                 ],
-            ],
-        ];
-    }
-
-    /**
-     * Menu persetujuan, tempat kerja Kasubbag Umum dan TI.
-     *
-     * Kunci `query` sengaja dipisah dari `path`: `isActive()` mencocokkan path
-     * saja, sehingga query string yang ikut menempel di `path` akan membuat
-     * penandaan menu aktif meleset. Sidebar menggabungkan keduanya saat
-     * merender `href`.
-     *
-     * Grup ini dirancang menampung tautan persetujuan dari sub sistem
-     * permintaan barang kelak — cukup satu item tambahan, tanpa perlu layar
-     * atau data bersama yang baru. Lihat ADR 0030.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    public static function getApprovalItems(): array
-    {
-        return [
-            [
-                'icon' => 'task',
-                'name' => 'Realisasi Pengadaan',
-                'path' => '/pengadaan',
-                'query' => '?status='.ProcurementStatus::MenungguPersetujuan->value,
-                'roles' => [UserRole::Admin, UserRole::KasubbagUmumTi],
             ],
         ];
     }
@@ -192,7 +164,6 @@ class MenuHelper
 
         $groups = [
             ['title' => 'Menu', 'items' => self::getMainNavItems()],
-            ['title' => 'Persetujuan', 'items' => self::getApprovalItems()],
             ['title' => 'Administrasi', 'items' => self::getAdminItems()],
             ['title' => 'Akun', 'items' => self::getOthersItems()],
         ];

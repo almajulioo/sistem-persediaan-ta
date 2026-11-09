@@ -248,13 +248,6 @@
                                                 Kembalikan Status
                                             </button>
                                         @endif
-
-                                        @if ($hasItemProposals && ($isAdmin || $isPengelolaGudang))
-                                            <a href="{{ route('item-proposals.index') }}"
-                                                class="text-theme-xs text-warning-600 underline decoration-warning-300 underline-offset-2 hover:text-warning-700 dark:text-warning-400 dark:decoration-warning-500/50 dark:hover:text-warning-300">
-                                                Selesaikan usulan barang
-                                            </a>
-                                        @endif
                                     </div>
                                 </td>
                             </tr>
