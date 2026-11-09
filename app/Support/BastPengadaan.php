@@ -374,9 +374,10 @@ class BastPengadaan
 
             if ($ttd !== null && $denganTte) {
                 $adaTte = true;
+                // Waktu TTE tidak dicetak (ADR 0052); halaman verifikasi
+                // yang dibuka QR menampilkannya.
                 $tte = [
                     'qr' => KodeQr::dataUri(self::urlVerifikasi($ttd)),
-                    'waktu' => $ttd->signed_at,
                 ];
             }
 

@@ -15,6 +15,8 @@ Menggantikan sebagian:
 - [ADR 0042](0042-bast-pengadaan-format-resmi-bpk.md): nomor BAST diisi sebelum
   TTE dan terkunci olehnya, serta referensi mutasi kembali ke nomor BAST.
 
+Sebagian digantikan oleh [ADR 0052](0052-catatan-tte-bast-di-kaki-halaman-pertama.md) — 9 November 2026: waktu TTE tidak lagi dicetak di bawah QR, dan catatan TTE pindah ke kaki halaman 1.
+
 ## Konteks
 
 Sampai ADR ini, stok bertambah begitu Pengelola Gudang menekan "Konfirmasi

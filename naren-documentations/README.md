@@ -70,7 +70,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0039](keputusan/0039-pemotong-foto-profil-interaktif.md) | Pemotong foto profil interaktif, tanpa pustaka | Diterima |
 | [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Diterima |
 | [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
-| [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Sebagian digantikan oleh 0051 |
+| [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Sebagian digantikan oleh 0051 dan 0052 |
 | [0043](keputusan/0043-kategori-dan-sub-kategori-barang.md) | Kategori dan sub kategori barang (dikerjakan Alma) | Diterima |
 | [0044](keputusan/0044-sumber-usulan-pengadaan-per-barang.md) | Sumber usulan pengadaan dicatat per barang, keterangan opsional untuk barang manual | Diterima |
 | [0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) | Kiriman ulang formulir usulan dan halaman draf yang usang | Sebagian digantikan oleh 0046 |
@@ -79,7 +79,8 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0048](keputusan/0048-ekspor-excel-usulan-pengadaan.md) | Ekspor Excel usulan pengadaan, per usulan dan per rentang tanggal diajukan | Sebagian digantikan oleh 0049 dan 0050 |
 | [0049](keputusan/0049-tanggal-usulan-dari-draf-adalah-saat-diajukan.md) | Tanggal usulan dari draf adalah saat diajukan, bukan saat draf dibuat | Diterima |
 | [0050](keputusan/0050-lembar-rekap-barang-pada-ekspor-usulan.md) | Lembar Rekap Barang pada ekspor daftar usulan | Diterima |
-| [0051](keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) | BAST pengadaan digital dengan TTE QR; stok masuk setelah kedua pihak bertanda tangan | Diterima |
+| [0051](keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) | BAST pengadaan digital dengan TTE QR; stok masuk setelah kedua pihak bertanda tangan | Sebagian digantikan oleh 0052 |
+| [0052](keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md) | Catatan TTE BAST di kaki halaman 1, tanpa waktu di bawah QR | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

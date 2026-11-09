@@ -498,7 +498,8 @@ Persediaan BPK Perwakilan Provinsi Lampung**
   tanggal terbilang dari `received_at` ("Kamis tanggal Delapan belas bulan
   Desember tahun Dua ribu dua puluh lima (18-12-2025)"), data kedua pihak,
   dan tanda tangan dua kolom. A4, margin 1,5 cm atas/bawah dan 2 cm kiri/kanan,
-  Times 12 pt, tanpa footer.
+  Times 12 pt, tanpa footer; BAST ber-TTE punya satu baris catatan TTE di kaki
+  halaman 1 (ADR 0052).
 - **PIHAK PERTAMA — Pelaksana Belanja**: `procurements.purchased_by` (yang
   menandai dibelanjakan, ADR 0035), cadangannya pembuat realisasi.
   **PIHAK KEDUA — Petugas Persediaan**: `procurement_receipts.received_by`.
@@ -1105,8 +1106,11 @@ selebar penuh di atas halaman detail:
 
 - Yang belum terisi dicetak titik-titik, sehingga BAST bisa dilihat di setiap
   tahap.
-- Kolom yang sudah ber-TTE berisi QR ±1,9 cm dan waktu TTE, ditambah satu baris
-  catatan TTE.
+- Kolom yang sudah ber-TTE berisi QR ±1,9 cm saja. Waktu TTE tidak dicetak;
+  halaman verifikasi menampilkannya
+  ([ADR 0052](../keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md)).
+- Bila ada TTE, catatan "Dokumen ini ditandatangani secara elektronik…"
+  tercetak di kaki halaman 1, tidak di lampiran.
 - Versi kosong sama persis tanpa QR.
 
 **Verifikasi QR** — `GET /verifikasi/bast/{kode}`, publik, `throttle:60,1`:

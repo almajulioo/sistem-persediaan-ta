@@ -589,10 +589,14 @@ describe('isi PDF BAST', function () {
         siapDitandatanganiTte($this->procurement, $this->gudang);
         bubuhkanTte($this->procurement, $this->pejabat);
 
+        // Keterangan waktu di bawah QR sudah dihapus; catatannya pindah ke
+        // kaki halaman 1 (ADR 0052).
         expect(htmlBastTte($this->procurement))
             ->toContain('data:image/png;base64')
-            ->toContain('Ditandatangani secara elektronik')
-            ->toContain('Keaslian tanda tangan dapat diperiksa');
+            ->toContain('Dokumen ini ditandatangani secara elektronik')
+            ->toContain('Keaslian tanda tangan dapat diperiksa')
+            ->not->toContain('Ditandatangani secara elektronik')
+            ->not->toContain(' WIB');
 
         expect(htmlBastTte($this->procurement, denganTte: false))
             ->not->toContain('data:image/png;base64')

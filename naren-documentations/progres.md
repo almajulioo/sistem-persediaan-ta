@@ -5,6 +5,29 @@ perubahan.
 
 ---
 
+## 9 November 2026 — Catatan TTE BAST pindah ke kaki halaman 1
+
+Permintaan Narendra pada PDF BAST pengadaan
+([ADR 0052](keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md)):
+
+- tulisan kecil di bawah QR ("Ditandatangani secara elektronik" + waktu TTE)
+  dihapus. Waktunya tetap tampil di halaman verifikasi;
+- catatan "Dokumen ini ditandatangani secara elektronik. Keaslian tanda
+  tangan dapat diperiksa dengan memindai kode QR." pindah ke kaki halaman 1
+  lewat `position: absolute; bottom: 0`, tidak ikut ke lampiran.
+  `position: fixed` ditolak karena dompdf mengulangnya di setiap halaman.
+
+**Berkas.** `resources/views/pdf/bast-pengadaan.blade.php`,
+`App\Support\BastPengadaan::untukCetak()` (kunci `waktu` dibuang),
+`tests/Feature/Pengadaan/BastDigitalTest.php` (memeriksa catatan kaki ada dan
+keterangan waktu hilang).
+
+**Diperiksa.** PDF dari realisasi contoh ber-TTE dirender lalu diubah ke
+gambar dengan `pdftoppm`: catatan berada di dasar halaman 1, lampiran
+bersih.
+
+---
+
 ## 9 November 2026 — BAST pengadaan digital dengan TTE QR
 
 Permintaan Narendra: transisi ke paperless untuk BAST penerimaan barang

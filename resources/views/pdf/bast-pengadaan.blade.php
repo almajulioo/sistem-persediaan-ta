@@ -103,9 +103,19 @@
         /* QR TTE muat di ruang tanda tangan yang sama, supaya tata letak
            halaman 1 tidak bergeser antara BAST kosong dan yang ber-TTE. */
         table.ttd .qr { width: 1.9cm; height: 1.9cm; margin-top: 0.1cm; }
-        table.ttd .ket-tte { font-size: 7.5pt; line-height: 1.1; }
         .nama-ttd { font-weight: bold; text-decoration: underline; }
-        .catatan-tte { margin-top: 14pt; font-size: 9pt; font-style: italic; text-align: center; }
+        /* Kaki halaman 1 saja. `position: fixed` akan mengulanginya di setiap
+           halaman, lampiran ikut; `absolute` di dalam alur halaman 1 menempel
+           ke dasar halaman itu saja. */
+        .catatan-tte {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-size: 9pt;
+            font-style: italic;
+            text-align: center;
+        }
 
         /* --- Lampiran --- */
         .lampiran { page-break-before: always; }
@@ -204,10 +214,6 @@
                 <td class="ruang">
                     @if ($p['data']['tte'])
                         <img class="qr" src="{{ $p['data']['tte']['qr'] }}" alt="QR TTE {{ $p['data']['sebutan'] }}">
-                        <div class="ket-tte">
-                            Ditandatangani secara elektronik<br>
-                            {{ $p['data']['tte']['waktu']->translatedFormat('j M Y H:i') }} WIB
-                        </div>
                     @endif
                 </td>
             @endforeach
