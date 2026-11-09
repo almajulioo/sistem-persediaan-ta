@@ -47,6 +47,7 @@ ditindaklanjuti."
 | Usulan siap direalisasi | `disetujui_menunggu_realisasi` | sda. | `kelola-pengadaan` |
 | Realisasi ditolak | `ditolak` | `procurements.index?status=…` | `kelola-pengadaan` |
 | Belum dibelanjakan | `proses_belanja` | sda. | `kelola-pengadaan` |
+| BAST menunggu TTE Anda | `Procurement::scopeMenungguTte()` untuk pihak pemakai | `procurements.index?tte=pihak_pertama` / `pihak_kedua` | `tte-bast` — hanya Pejabat Pengadaan dan Pengelola Gudang; Admin dan Kasubbag tidak menandatangani ([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)) |
 | Barang menunggu penerimaan | `menunggu_penerimaan` | sda. | `kelola-gudang` |
 | Usulan barang baru | `item_proposals` `diajukan` | `item-proposals.index?status=diajukan` | `kelola-gudang` |
 | Draf usulan pengadaan | **jumlah barang** di draf | `procurement-requests.draft.edit` | `kelola-gudang` |

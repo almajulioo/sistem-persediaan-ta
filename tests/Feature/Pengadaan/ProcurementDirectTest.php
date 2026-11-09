@@ -393,14 +393,9 @@ describe('penerimaan realisasi langsung', function () {
         ]);
         belanjakanRealisasi(setujuiRealisasi($procurement));
 
-        $detail = $procurement->details->first();
-
-        $this->actingAs(pengelolaGudang())
-            ->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
-                'received_at' => now()->toDateString(),
-                'received' => [$detail->procurement_detail_id => 10],
-            ])
-            ->assertRedirect("/pengadaan/{$procurement->procurement_id}");
+        // Lewat alur BAST digital: pemeriksaan, nomor, lalu TTE kedua pihak
+        // (ADR 0051).
+        terimaLewatTte($procurement, pengelolaGudang(), pejabatPengadaan());
 
         $mutasi = StockMutation::where('item_id', $item->item_id)
             ->where('mutation_type', MutationType::Masuk)

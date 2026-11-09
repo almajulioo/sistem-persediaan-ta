@@ -53,6 +53,7 @@ enum NotificationType: string
     case RealisasiBelumDibelanjakan = 'realisasi_belum_dibelanjakan';
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
     case BastBelumDiunggah = 'bast_belum_diunggah';
+    case BastMenungguTandaTangan = 'bast_menunggu_tanda_tangan';
 
     // --- Keadaan usulan barang baru ---
     case UsulanBarangMenungguKeputusan = 'usulan_barang_menunggu_keputusan';
@@ -105,6 +106,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan => 'Realisasi Belum Dibelanjakan',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
             self::BastBelumDiunggah => 'BAST Belum Diunggah',
+            self::BastMenungguTandaTangan => 'BAST Menunggu TTE',
             self::UsulanBarangMenungguKeputusan => 'Usulan Barang Baru Menunggu Keputusan',
             self::OpnameDiposting => 'Opname Diposting',
             self::StokBergerakSetelahDicacah => 'Stok Bergerak Setelah Dicacah',
@@ -151,6 +153,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan => 'Realisasi pengadaan sudah lama disetujui tetapi belum ditandai sudah dibelanjakan.',
             self::RealisasiMenungguPenerimaan => 'Barang pengadaan sudah dibelanjakan dan menunggu konfirmasi diterima Pengelola Gudang.',
             self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
+            self::BastMenungguTandaTangan => 'Hasil pemeriksaan barang sudah dicatat dan BAST menunggu tanda tangan elektronik Anda; stok baru bertambah setelah kedua pihak bertanda tangan.',
             self::UsulanBarangMenungguKeputusan => 'Ada usulan barang baru yang menunggu diperiksa dan didaftarkan Pengelola Gudang.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
             self::StokBergerakSetelahDicacah => 'Stok berubah di antara pencacahan dan posting, sehingga penyesuaian berbeda dari hasil cacah.',
@@ -261,6 +264,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan,
             self::RealisasiMenungguPenerimaan,
             self::BastBelumDiunggah,
+            self::BastMenungguTandaTangan,
             self::UsulanBarangMenungguKeputusan,
             self::UsulanBarangDitolak,
             self::UsulanDitolak,

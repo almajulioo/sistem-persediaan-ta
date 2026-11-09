@@ -4,6 +4,8 @@
 
 Diterima — 6 September 2026
 
+Sebagian digantikan oleh [ADR 0051](0051-bast-pengadaan-digital-dengan-tte-qr.md) — 9 November 2026: penerimaan tidak lagi memasukkan stok saat dikonfirmasi; stok masuk saat TTE kedua pada BAST digital, dari isi yang ditandatangani.
+
 Sebagian digantikan oleh [ADR 0042](0042-bast-pengadaan-format-resmi-bpk.md):
 nomor BAST tidak lagi diisi (maupun disarankan) di formulir konfirmasi
 penerimaan, melainkan saat BAST dicetak pertama kali, dan `reference_number`

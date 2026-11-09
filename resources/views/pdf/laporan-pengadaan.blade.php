@@ -145,7 +145,9 @@
                             Rp{{ number_format(($detail->amount_received ?? 0) * $detail->unit_price, 0, ',', '.') }}
                         </td>
                         <td>
-                            @if ($procurement->receipt)
+                            {{-- Draf penerimaan (sebelum TTE lengkap) tidak dihitung
+                                 sebagai penerimaan (ADR 0051). --}}
+                            @if ($procurement->isDiterima() && $procurement->receipt)
                                 {{-- Nomor BAST kosong sampai BAST dicetak (ADR 0042). --}}
                                 {{ $procurement->receipt->bast_number ?? '-' }}
                                 <br><em style="font-size: 8px; color: #667085;">{{ $procurement->receipt->received_at->format('d/m/Y') }}</em>

@@ -19,7 +19,6 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Support\OpnamePoster;
 use App\Support\ProcurementDraftScanner;
-use App\Support\ProcurementReceiptPoster;
 use Illuminate\Support\Facades\Artisan;
 
 function mutasiManual(User $actor, Item $item, MutationType $type, int $amount): void
@@ -761,14 +760,9 @@ describe('barang yang sedang dalam proses pengadaan', function () {
         ProcurementDraftScanner::perbaruiSeluruh();
         expect(barisDrafUntuk($kurang))->toBeNull();
 
-        ProcurementReceiptPoster::post(
-            procurement: $procurement,
-            diterima: $procurement->details->mapWithKeys(fn ($detail) => [
-                $detail->procurement_detail_id => $detail->item_id === $kurang->item_id ? 5 : 50,
-            ])->all(),
-            actor: $gudang,
-            receivedAt: now(),
-        );
+        terimaLewatTte($procurement, $gudang, $pejabat, $procurement->details->mapWithKeys(fn ($detail) => [
+            $detail->procurement_detail_id => $detail->item_id === $kurang->item_id ? 5 : 50,
+        ])->all());
 
         expect(barisDrafUntuk($kurang)?->amount_request)->toBe(45)
             ->and(barisDrafUntuk($lengkap))->toBeNull();

@@ -31,20 +31,32 @@
          kembali sendiri bila validasinya gagal, supaya pesan galatnya tidak
          tersembunyi di balik dialog tertutup.
 
-         Formulir nomor BAST membuka PDF-nya di tab baru. Tab ini dimuat ulang
-         begitu dikunjungi lagi, supaya nomor yang baru diisi ikut tampil. --}}
+         Pada BAST lama, formulir nomor BAST membuka PDF-nya di tab baru. Tab
+         ini dimuat ulang begitu dikunjungi lagi, supaya nomor yang baru diisi
+         ikut tampil. --}}
+    @php
+        // BAST digital (ADR 0051) sejak barang menunggu penerimaan; BAST lama
+        // tetap memakai kartu penerimaannya sendiri di kolom kiri.
+        $tampilkanBast = $procurement->isMenungguPenerimaan()
+            || ($procurement->isDiterima() && ! $procurement->bastLama());
+    @endphp
     <div class="grid grid-cols-12 gap-4 md:gap-6"
         x-data="{
             batalTerbuka: @js($errors->hasAny(['cancel_reason', 'cancel_note'])),
             tolakTerbuka: @js($errors->has('review_note')),
             belanjaTerbuka: @js($errors->hasAny(['purchased_at', 'photos', 'photos.*', 'purchase_note'])),
             nomorBastTerbuka: @js($errors->has('bast_number')),
+            tteTerbuka: false,
             muatUlangSaatKembali() {
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') location.reload();
                 });
             },
         }">
+        @if ($tampilkanBast)
+            @include('pages.procurements._bast')
+        @endif
+
         {{-- Identitas realisasi --}}
         <div class="col-span-12 space-y-4 md:space-y-6 xl:col-span-4">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
@@ -93,7 +105,7 @@
                 @if ($procurement->isProsesBelanja())
                     @cannot('kelola-pengadaan')
                         <p class="text-theme-xs bg-blue-light-50 text-blue-light-700 dark:bg-blue-light-500/15 dark:text-blue-light-400 mt-4 rounded-lg p-3">
-                            Konfirmasi penerimaan terbuka setelah Pejabat Pengadaan menandai sudah dibelanjakan.
+                            Pemeriksaan barang terbuka setelah Pejabat Pengadaan menandai sudah dibelanjakan.
                         </p>
                     @endcannot
 
@@ -102,15 +114,6 @@
                             class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 mt-4 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                             Tandai Sudah Dibelanjakan
                         </button>
-                    @endcan
-                @endif
-
-                @if ($procurement->isMenungguPenerimaan())
-                    @can('kelola-gudang')
-                        <a href="{{ route('procurement-receipts.create', $procurement) }}"
-                            class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 mt-4 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
-                            Konfirmasi Penerimaan
-                        </a>
                     @endcan
                 @endif
 
@@ -261,7 +264,8 @@
                 </div>
             @endif
 
-            @if ($procurement->isDiterima() && $procurement->receipt)
+            {{-- BAST lama: diterima sebelum ADR 0051, ditandatangani basah. --}}
+            @if ($procurement->bastLama())
                 <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
                     <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Penerimaan (BAST)</h3>
 
@@ -378,7 +382,11 @@
                                     </td>
                                     <td class="px-5 py-4 sm:px-6">
                                         <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                            @if (! $detail->sudahDiterima())
+                                            @if (! $detail->sudahDiterima() && $detail->sudahDiperiksa())
+                                                {{-- Hasil pemeriksaan, menunggu kedua TTE (ADR 0051). --}}
+                                                {{ number_format($detail->amount_checked, 0, ',', '.') }} {{ $detail->item?->unit->label() }}
+                                                <span class="text-theme-xs block text-gray-400 dark:text-gray-500">belum masuk stok</span>
+                                            @elseif (! $detail->sudahDiterima())
                                                 Belum diterima
                                             @else
                                                 {{ number_format($detail->amount_received, 0, ',', '.') }} {{ $detail->item?->unit->label() }}
@@ -403,7 +411,7 @@
                 <div class="flex flex-wrap items-start justify-between gap-3 px-5 py-5 sm:px-6">
                     <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Berkas Pendukung</h3>
 
-                    @if ($procurement->isDiterima() && ! $procurement->bastSudahDiunggah())
+                    @if ($procurement->bastLama() && ! $procurement->bastSudahDiunggah())
                         <span class="text-theme-xs bg-warning-50 text-warning-700 dark:bg-warning-500/15 dark:text-warning-400 rounded-full px-2.5 py-1 font-medium">
                             BAST belum diunggah
                         </span>
@@ -628,7 +636,7 @@
         {{-- Nomor BAST: diisi saat cetak pertama, lalu langsung dicetak. Tidak
              ada saran nomor — nomornya dari agenda kantor, dan saran yang
              keliru justru dipercaya petugas (ADR 0042). --}}
-        @if ($procurement->isDiterima() && $procurement->nomorBastDapatDiubah())
+        @if ($procurement->bastLama() && $procurement->nomorBastDapatDiubah())
             @can('isi-nomor-bast')
                 <div x-show="nomorBastTerbuka" x-cloak @keydown.escape.window="nomorBastTerbuka = false"
                     class="fixed inset-0 z-99999 flex items-center justify-center p-5">

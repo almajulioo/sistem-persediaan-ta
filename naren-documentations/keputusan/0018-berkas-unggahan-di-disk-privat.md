@@ -4,6 +4,8 @@
 
 Diterima — 6 September 2026
 
+Sebagian digantikan oleh [ADR 0051](0051-bast-pengadaan-digital-dengan-tte-qr.md) — 9 November 2026: BAST pengadaan kini ditandatangani elektronik sebelum stoknya masuk, sehingga pindaian bertanda tangan menjadi dokumentasi opsional (hanya BAST lama yang masih ditagih).
+
 ## Konteks
 
 Modul Pengadaan membawa kebutuhan yang belum pernah ada di proyek ini:

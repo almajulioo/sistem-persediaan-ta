@@ -87,8 +87,11 @@ class AppServiceProvider extends ServiceProvider
      */
     private function registerGates(): void
     {
-        // Admin adalah peran tertinggi: lolos seluruh pemeriksaan otorisasi.
-        Gate::before(fn (User $user) => $user->isAdmin() ? true : null);
+        // Admin adalah peran tertinggi: lolos seluruh pemeriksaan otorisasi,
+        // kecuali tanda tangan elektronik. TTE mengikat identitas pribadi
+        // salah satu pihak BAST, dan Admin (staf TI) bukan pihak mana pun;
+        // bila lolos, ia bisa menandatangani kedua sisi sendirian (ADR 0051).
+        Gate::before(fn (User $user, string $ability) => $user->isAdmin() && $ability !== 'tte-bast' ? true : null);
 
         Gate::define('kelola-pengguna', fn (User $user) => $user->hasRole(UserRole::Admin));
 
@@ -145,6 +148,15 @@ class AppServiceProvider extends ServiceProvider
         // bernomor, tetapi tidak menomorinya (ADR 0041, ADR 0042).
         Gate::define(
             'isi-nomor-bast',
+            fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::PengelolaGudang),
+        );
+
+        // TTE BAST pengadaan: Pejabat Pengadaan sebagai Pihak Pertama,
+        // Pengelola Gudang sebagai Pihak Kedua — pihaknya diturunkan dari peran
+        // di server (PihakBast::dariPeran). Admin sengaja tidak lolos, lihat
+        // Gate::before di atas.
+        Gate::define(
+            'tte-bast',
             fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::PengelolaGudang),
         );
     }

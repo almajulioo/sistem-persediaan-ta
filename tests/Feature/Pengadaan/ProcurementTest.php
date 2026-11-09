@@ -396,12 +396,18 @@ describe('konfirmasi penerimaan', function () {
         $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
-        $response = $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
+        $url = "/pengadaan/{$procurement->procurement_id}";
+
+        $this->actingAs($gudang)->post("{$url}/penerimaan", [
             'received_at' => now()->toDateString(),
             'received' => [$detail->procurement_detail_id => 30],
-        ]);
+        ])->assertRedirect($url);
 
-        $response->assertRedirect("/pengadaan/{$procurement->procurement_id}");
+        // Sejak ADR 0051 stok baru masuk setelah BAST ditandatangani kedua
+        // pihak: hasil pemeriksaan, nomor, lalu dua TTE.
+        $this->actingAs($gudang)->patch("{$url}/bast", ['bast_number' => '005/UP_TUP/445237/2026']);
+        $this->actingAs($pejabat)->post("{$url}/bast/tte");
+        $this->actingAs($gudang)->post("{$url}/bast/tte")->assertRedirect($url);
 
         expect($item->refresh()->stock_current)->toBe(35)
             ->and($detail->refresh()->amount_received)->toBe(30)
@@ -409,11 +415,10 @@ describe('konfirmasi penerimaan', function () {
             ->and($procurement->refresh()->status)->toBe(ProcurementStatus::Diterima)
             ->and($procurement->receipt->received_by)->toBe($gudang->user_id);
 
-        // Nomor BAST baru diisi saat cetak pertama, sehingga mutasinya merujuk
-        // judul realisasi — baris mutasi tidak dapat diubah sesudahnya (ADR 0042).
-        expect($procurement->receipt->bast_number)->toBeNull()
-            ->and(StockMutation::where('item_id', $item->item_id)->sole()->reference_number)
-            ->toBe($procurement->judul());
+        // Nomornya sudah ada dan terkunci oleh TTE sebelum mutasi tercatat,
+        // jadi mutasinya kembali merujuk nomor BAST (ADR 0051).
+        expect(StockMutation::where('item_id', $item->item_id)->sole()->reference_number)
+            ->toBe('005/UP_TUP/445237/2026');
 
         expect(Notification::query()
             ->where('user_id', $pejabat->user_id)
@@ -449,10 +454,7 @@ describe('konfirmasi penerimaan', function () {
         $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
         $detail = $procurement->details->first();
 
-        $this->actingAs($gudang)->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
-            'received_at' => now()->toDateString(),
-            'received' => [$detail->procurement_detail_id => 10],
-        ]);
+        terimaLewatTte($procurement, $gudang, $pejabat);
 
         $this->actingAs($gudang)
             ->get("/pengadaan/{$procurement->procurement_id}/penerimaan/create")
@@ -463,9 +465,9 @@ describe('konfirmasi penerimaan', function () {
     });
 
     it('menolak konfirmasi yang tidak mencakup seluruh baris barang', function () {
-        // Penerimaan adalah peristiwa sekali jadi tanpa rute ubah, jadi baris
-        // yang hilang dari kiriman akan terbaca "nol diterima" secara permanen.
-        // Aturannya sama dengan formulir realisasi pada ADR 0021.
+        // Baris yang hilang dari kiriman akan terbaca "nol diterima", dan
+        // angka itulah yang ditandatangani kedua pihak. Aturannya sama dengan
+        // formulir realisasi pada ADR 0021.
         $pejabat = pejabatPengadaan();
         $gudang = pengelolaGudang();
         $kertas = Item::factory()->create(['item_name' => 'Kertas HVS A4', 'stock_current' => 0]);

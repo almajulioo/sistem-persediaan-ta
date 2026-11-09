@@ -53,8 +53,9 @@ penerimanya sudah ditendang keluar sesi.
 | Usulan Disetujui Belum Direalisasi | Perhatian | Pejabat Pengadaan + Admin | Tekan Realisasikan, atau tinjau ulang kebutuhannya |
 | Realisasi Menunggu Persetujuan | Perhatian | Kasubbag Umum dan TI + Admin | Periksa penyedia, barang, dan harganya; setujui atau tolak sebelum barang dipesan |
 | Realisasi Belum Dibelanjakan | Perhatian | Pejabat Pengadaan + Admin | Sudah &gt;7 hari disetujui; tandai sudah dibelanjakan beserta fotonya, atau batalkan |
-| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Barang sudah dibelanjakan; periksa fisiknya, konfirmasi penerimaan |
-| BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
+| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Barang sudah dibelanjakan; periksa fisiknya, catat hasil pemeriksaannya. Berhenti begitu hasil pemeriksaan lengkap (ADR 0051) |
+| BAST Menunggu TTE | Perhatian | Pemegang peran pihak yang belum bertanda tangan — Pejabat Pengadaan (Pihak Pertama) atau Pengelola Gudang (Pihak Kedua); **tanpa Admin** | Isi nomor bila belum ada, lalu bubuhkan TTE. Satu baris per pihak (dedupKey `{id}:{pihak}`), tertutup begitu pihak itu ber-TTE ([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)) |
+| BAST Belum Diunggah | Perhatian | Gudang + Admin | **Hanya BAST lama** (diterima sebelum ADR 0051): cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 | Usulan Barang Baru Menunggu Keputusan | Perhatian | Gudang + Admin | Periksa apakah barangnya benar-benar belum ada, lalu daftarkan atau tolak |
 
 ### Peristiwa
@@ -171,7 +172,8 @@ lama dipakai ulang lewat `resolved_at`; hasilnya sama, kodenya lebih banyak.)
 | `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan maupun belum dibelanjakan |
 | `ProcurementApprovalController::approve()` / `reject()` | `catatRealisasiDiputuskan()` |
 | `ProcurementPurchaseController::store()` | `periksaRealisasi()` — menutup belum dibelanjakan, menerbitkan menunggu penerimaan |
-| `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
+| `BastPengadaan::catatPemeriksaan()` / `isiNomor()` / `tandatangani()` | `periksaRealisasi()` — tagihan penerimaan pindah ke `BastMenungguTandaTangan` per pihak (ADR 0051) |
+| `ProcurementReceiptPoster::setelahPosting()` (TTE terakhir) | `catatPenerimaanDikonfirmasi()` + `periksaBarang()` per barang + `ProcurementDraftScanner::perbaruiBarangDokumen()`, di luar transaksi |
 | `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
 | `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
 | `ItemProposalController::store()` | `periksaUsulanBarang()` — menagih keputusan Pengelola Gudang |

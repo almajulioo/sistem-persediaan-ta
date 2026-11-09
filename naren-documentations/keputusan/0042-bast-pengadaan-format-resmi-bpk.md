@@ -4,6 +4,8 @@
 
 Diterima — 24 Oktober 2026
 
+Sebagian digantikan oleh [ADR 0051](0051-bast-pengadaan-digital-dengan-tte-qr.md) — 9 November 2026: nomor BAST diisi setelah hasil pemeriksaan dan sebelum TTE, lalu terkunci oleh TTE; `reference_number` mutasi kembali berisi nomor BAST. Cara ADR ini tetap berlaku untuk BAST lama.
+
 Menggantikan sebagian [ADR 0021](0021-realisasi-dan-penerimaan-pengadaan.md):
 `reference_number` mutasi penerimaan tidak lagi diisi nomor BAST, dan nomor
 BAST tidak lagi diisi di formulir konfirmasi penerimaan (berikut saran

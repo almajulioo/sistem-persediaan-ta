@@ -13,7 +13,6 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Support\DocumentStorage;
 use App\Support\NotificationScanner;
-use App\Support\ProcurementReceiptPoster;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -23,6 +22,10 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Realisasi yang sudah dikonfirmasi diterima seluruhnya, siap dilampiri berkas.
+ *
+ * Diterima **cara lama** (BAST lama, tanpa TTE): notifikasi BastBelumDiunggah
+ * yang diuji di berkas ini hanya berlaku untuk BAST lama sejak ADR 0051.
+ * Mengunggah berkas sendiri tidak bergantung pada cara penerimaannya.
  *
  * `$diterimaHariLalu` menggeser tanggal penerimaan ke belakang supaya ambang
  * notifikasi BastBelumDiunggah dapat diuji tanpa memanipulasi waktu sistem.
@@ -36,14 +39,7 @@ function realisasiDiterima(User $pejabat, User $petugas, int $diterimaHariLalu =
     // Persetujuan Kasubbag Umum dan TI adalah prasyarat penerimaan (ADR 0030).
     $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
 
-    ProcurementReceiptPoster::post(
-        procurement: $procurement,
-        diterima: $procurement->details
-            ->mapWithKeys(fn ($detail) => [$detail->procurement_detail_id => $detail->amount])
-            ->all(),
-        actor: $petugas,
-        receivedAt: now()->subDays($diterimaHariLalu),
-    );
+    terimaCaraLama($procurement, $petugas, tanggal: now()->subDays($diterimaHariLalu));
 
     return $procurement->fresh();
 }

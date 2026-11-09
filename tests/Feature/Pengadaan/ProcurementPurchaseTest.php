@@ -132,11 +132,11 @@ describe('proses belanja sebelum ditandai', function () {
             ->assertDontSee('Konfirmasi penerimaan terbuka');
     });
 
-    it('menjelaskan kepada gudang mengapa belum ada tombol konfirmasi penerimaan', function () {
+    it('menjelaskan kepada gudang mengapa belum ada tombol pemeriksaan barang', function () {
         $this->actingAs($this->gudang)
             ->get($this->url)
             ->assertOk()
-            ->assertSee('Konfirmasi penerimaan')
+            ->assertSee('Pemeriksaan barang terbuka')
             ->assertDontSee('Tandai Sudah Dibelanjakan')
             ->assertDontSee(route('procurement-receipts.create', $this->procurement));
     });
@@ -346,6 +346,14 @@ describe('menandai sudah dibelanjakan', function () {
                 'received' => [$detail->procurement_detail_id => 10],
             ])
             ->assertRedirect($this->url);
+
+        // Hasil pemeriksaan saja belum menambah stok; TTE kedua pihak yang
+        // memasukkannya (ADR 0051).
+        expect($detail->item->refresh()->stock_current)->toBe(0);
+
+        $this->actingAs($this->gudang)->patch("{$this->url}/bast", ['bast_number' => '001/UP_TUP/445237/2026']);
+        $this->actingAs($this->pejabat)->post("{$this->url}/bast/tte");
+        $this->actingAs($this->gudang)->post("{$this->url}/bast/tte")->assertRedirect($this->url);
 
         expect($this->procurement->fresh()->status)->toBe(ProcurementStatus::Diterima)
             ->and($detail->item->refresh()->stock_current)->toBe(10);

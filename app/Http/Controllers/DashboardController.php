@@ -7,6 +7,7 @@ use App\Enums\ItemProposalStatus;
 use App\Enums\ModulPengajuan;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
+use App\Enums\PihakBast;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Enums\SatuanBarang;
@@ -329,6 +330,20 @@ class DashboardController extends Controller
             $tugas[] = $this->tugasUsulan('Usulan siap direalisasi', ProcurementRequestStatus::DisetujuiMenungguRealisasi, 'file-check');
             $tugas[] = $this->tugasRealisasi('Realisasi ditolak', ProcurementStatus::Ditolak, 'file-x', 'error');
             $tugas[] = $this->tugasRealisasi('Belum dibelanjakan', ProcurementStatus::ProsesBelanja, 'bag', 'amber');
+        }
+
+        // TTE BAST hanya bagi penanda tangannya sendiri — Admin dan Kasubbag
+        // tidak menandatangani, jadi "Anda" tidak berlaku bagi mereka. Angkanya
+        // dari `Procurement::scopeMenungguTte()`, definisi yang sama dengan
+        // penyaring `tte` yang dituju dan notifikasinya (ADR 0051).
+        if ($user->can('tte-bast') && ($pihak = PihakBast::dariPeran($user->role)) !== null) {
+            $tugas[] = [
+                'label' => 'BAST menunggu TTE Anda',
+                'jumlah' => Procurement::query()->menungguTte($pihak)->count(),
+                'url' => route('procurements.index', ['tte' => $pihak->nilaiPenyaring()]),
+                'ikon' => 'pen-line',
+                'warna' => 'brand',
+            ];
         }
 
         if ($user->can('kelola-gudang')) {

@@ -169,6 +169,9 @@ ERD pada naskah Naren diperbarui.
 | `procurement_requests` | Hapus `source`, `reference_type`, `reference_id` — sumber pindah ke tiap barang | [0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md) |
 | `procurement_requests` | Tambah `submission_token` (uuid, nullable, **unique**) — token sekali pakai formulir usulan manual; kiriman ulang lewat tombol Kembali atau klik ganda ditolak basis data | [0045](../keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) |
 | `form_submissions` | Tabel baru — token kiriman semua formulir pembuat dokumen (`token` PK, `subject` polimorfik). `procurement_requests.submission_token` dipindahkan ke sini lalu dibuang | [0046](../keputusan/0046-token-kiriman-untuk-semua-formulir-pembuat-dokumen.md) |
+| `procurement_details` | Tambah `amount_checked` (nullable) — hasil pemeriksaan gudang yang belum menjadi stok; disalin ke `amount_received` saat TTE kedua | [0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) |
+| `procurement_receipts` | Tambah `content` (json) dan `content_hash` (char 64) — isi BAST yang dibekukan saat TTE pertama. Barisnya kini lahir sebagai draf saat hasil pemeriksaan dicatat | [0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) |
+| `procurement_receipt_signatures` | Tabel baru — TTE BAST per pihak: salinan identitas penanda tangan, sidik isi, `verification_code` unik untuk QR, `revoked_at`/`revoke_reason`. Milik Naren; FK ke `users` (restrictOnDelete) menambah satu relasi penahan hapus akun | [0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) |
 
 ## Butir yang perlu dikonfirmasi ke lapangan
 

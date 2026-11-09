@@ -10,6 +10,7 @@ use App\Http\Controllers\Gudang\ItemSubcategoryController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\BastVerificationController;
 use App\Http\Controllers\Pengadaan\ProcurementApprovalController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
 use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
@@ -43,6 +44,15 @@ Route::middleware('guest')->group(function () {
 Route::get('/verifikasi/nota-dinas/{requestDocument}/{token}', [RequestController::class, 'verifyNotaDinas'])
     ->whereUuid('requestDocument')
     ->name('request.nota-dinas.verify');
+
+// Verifikasi TTE BAST pengadaan dari QR (ADR 0051). Publik: pemeriksa dan
+// auditor tidak punya akun. Kodenya 40 karakter acak, jadi `throttle` bukan
+// pertahanan utama — hanya meredam pemindaian beruntun. Tanpa batasan pola:
+// kode yang salah ketik pun harus mendapat halaman "tidak ditemukan" yang
+// jelas, bukan 404 bawaan.
+Route::get('/verifikasi/bast/{kode}', BastVerificationController::class)
+    ->middleware('throttle:60,1')
+    ->name('bast.verify');
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
@@ -162,17 +172,26 @@ Route::middleware('auth')->group(function () {
         Route::get('pengadaan/laporan/csv', [ProcurementController::class, 'exportCsv'])
             ->name('procurements.csv');
 
-        // BAST dicetak dari sistem, lalu ditandatangani dan dipindai di luar
-        // sistem. Keduanya boleh dilakukan kedua peran pengadaan (ADR 0018).
+        // BAST bisa dilihat di setiap tahap, dari belum bertanda tangan sampai
+        // lengkap, beserta versi kosongnya tanpa QR untuk tanda tangan basah.
+        // Kasubbag ikut membaca dan mencetak (ADR 0041, ADR 0051).
         Route::get('pengadaan/{procurement}/bast', [ProcurementController::class, 'bast'])
             ->name('procurements.bast');
+        Route::get('pengadaan/{procurement}/bast/kosong', [ProcurementController::class, 'bastKosong'])
+            ->name('procurements.bast-blank');
 
-        // Nomor BAST diisi saat cetak pertama, oleh salah satu penanda
-        // tangannya (ADR 0042). Sama seperti unggah berkas, gate tambahan ini
-        // bagian dari `akses-pengadaan`.
+        // Nomor BAST diisi salah satu penanda tangannya sebelum TTE (ADR 0042,
+        // ADR 0051). Sama seperti unggah berkas, gate tambahan ini bagian dari
+        // `akses-pengadaan`.
         Route::patch('pengadaan/{procurement}/bast', [ProcurementReceiptController::class, 'nomorBast'])
             ->middleware('can:isi-nomor-bast')
             ->name('procurements.bast-number');
+
+        // TTE BAST. Pihaknya diturunkan dari peran di server; Admin tidak
+        // lolos `tte-bast` (ADR 0051).
+        Route::post('pengadaan/{procurement}/bast/tte', [ProcurementReceiptController::class, 'tandatangani'])
+            ->middleware('can:tte-bast')
+            ->name('procurements.bast-sign');
 
         // Berkas pendukung. Tidak ada tautan langsung ke berkasnya: disknya
         // privat, dan seluruh unduhan wajib melewati rute terjaga ini.
@@ -256,8 +275,9 @@ Route::middleware('auth')->group(function () {
         Route::patch('usulan-barang/{itemProposal}/tolak', [ItemProposalController::class, 'reject'])
             ->name('item-proposals.reject');
 
-        // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
-        // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
+        // Hasil pemeriksaan barang: tugas Pengelola Gudang, terpisah dari yang
+        // merealisasi (ADR 0008). Formulir yang sama untuk mencatat dan
+        // mengubah; stok baru masuk setelah kedua TTE BAST (ADR 0051).
         Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
             ->name('procurement-receipts.create');
         Route::post('pengadaan/{procurement}/penerimaan', [ProcurementReceiptController::class, 'store'])

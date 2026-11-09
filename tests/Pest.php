@@ -57,3 +57,91 @@ function tokenKiriman(): string
 {
     return (string) Illuminate\Support\Str::uuid();
 }
+
+/**
+ * Menuntaskan penerimaan lewat alur BAST digital sungguhan (ADR 0051): hasil
+ * pemeriksaan oleh `$petugas`, nomor BAST, lalu TTE `$pejabat` dan `$petugas`.
+ * Stok bertambah pada TTE kedua.
+ *
+ * `$jumlah` memetakan procurement_detail_id => jumlah diterima; bila null,
+ * seluruh barang dianggap datang lengkap. Ditaruh di sini supaya tersedia saat
+ * satu berkas dijalankan sendiri.
+ */
+function terimaLewatTte(
+    App\Models\Procurement $procurement,
+    App\Models\User $petugas,
+    App\Models\User $pejabat,
+    ?array $jumlah = null,
+    ?Carbon\CarbonInterface $tanggal = null,
+    ?string $nomor = null,
+): App\Models\Procurement {
+    $procurement->load('details');
+
+    App\Support\BastPengadaan::catatPemeriksaan(
+        procurement: $procurement,
+        petugas: $petugas,
+        tanggal: $tanggal ?? now(),
+        jumlah: $jumlah ?? $procurement->details
+            ->mapWithKeys(fn ($detail) => [$detail->procurement_detail_id => $detail->amount])
+            ->all(),
+        catatan: null,
+    );
+    App\Support\BastPengadaan::isiNomor(
+        $procurement,
+        $petugas,
+        $nomor ?? 'BAST-'.strtoupper(substr($procurement->procurement_id, 0, 8)).'/'.now()->year,
+    );
+    App\Support\BastPengadaan::tandatangani($procurement, $pejabat);
+    App\Support\BastPengadaan::tandatangani($procurement, $petugas);
+
+    return $procurement->fresh(['details', 'receipt.signatures']);
+}
+
+/**
+ * Meniru penerimaan sebelum ADR 0051 — "BAST lama": stok masuk saat gudang
+ * mengonfirmasi, tanpa TTE, BAST ditandatangani basah lalu dipindai. Hanya
+ * untuk menguji perilaku yang masih berlaku bagi data lama (cetak dan nomor
+ * ala ADR 0042, notifikasi BastBelumDiunggah).
+ */
+function terimaCaraLama(
+    App\Models\Procurement $procurement,
+    App\Models\User $petugas,
+    ?array $jumlah = null,
+    ?Carbon\CarbonInterface $tanggal = null,
+    ?string $nomor = null,
+): App\Models\Procurement {
+    $procurement->load('details');
+    $tanggal ??= now();
+
+    Illuminate\Support\Facades\DB::transaction(function () use ($procurement, $petugas, $jumlah, $tanggal, $nomor) {
+        foreach ($procurement->details as $detail) {
+            $diterima = (int) ($jumlah[$detail->procurement_detail_id] ?? $detail->amount);
+
+            if ($diterima > 0) {
+                App\Support\StockLedger::record(
+                    item: App\Models\Item::findOrFail($detail->item_id),
+                    type: App\Enums\MutationType::Masuk,
+                    amount: $diterima,
+                    recordedBy: $petugas,
+                    notes: 'Penerimaan cara lama',
+                    reference: $procurement,
+                    referenceNumber: $procurement->judul(),
+                    date: $tanggal,
+                );
+            }
+
+            $detail->forceFill(['amount_received' => $diterima])->save();
+        }
+
+        $procurement->forceFill(['status' => App\Enums\ProcurementStatus::Diterima])->save();
+
+        App\Models\ProcurementReceipt::create([
+            'procurement_id' => $procurement->procurement_id,
+            'bast_number' => $nomor,
+            'received_by' => $petugas->user_id,
+            'received_at' => $tanggal,
+        ]);
+    });
+
+    return $procurement->fresh(['details', 'receipt.signatures']);
+}

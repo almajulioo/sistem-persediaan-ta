@@ -169,6 +169,7 @@ class User extends Authenticatable
         'reviewedProcurements' => 'persetujuan realisasi pengadaan',
         'cancelledProcurements' => 'pembatalan realisasi pengadaan',
         'purchasedProcurements' => 'belanja realisasi pengadaan',
+        'bastSignatures' => 'tanda tangan elektronik BAST pengadaan',
         'itemProposals' => 'usulan barang baru',
         'decidedItemProposals' => 'keputusan usulan barang baru',
         'requestDocuments' => 'dokumen permintaan',
@@ -262,6 +263,16 @@ class User extends Authenticatable
     public function purchasedProcurements(): HasMany
     {
         return $this->hasMany(Procurement::class, 'purchased_by', 'user_id');
+    }
+
+    /**
+     * TTE yang pernah dibubuhkan akun ini pada BAST pengadaan, dicabut maupun
+     * tidak (ADR 0051). Akun yang pernah bertanda tangan diarsipkan, bukan
+     * dihapus, supaya QR-nya tetap menunjuk penanda tangan yang nyata.
+     */
+    public function bastSignatures(): HasMany
+    {
+        return $this->hasMany(ProcurementReceiptSignature::class, 'user_id', 'user_id');
     }
 
     /**

@@ -5,6 +5,135 @@ perubahan.
 
 ---
 
+## 9 November 2026 — BAST pengadaan digital dengan TTE QR
+
+Permintaan Narendra: transisi ke paperless untuk BAST penerimaan barang
+pengadaan. Pada tahap Menunggu Penerimaan, kedua pihak menekan tombol untuk
+membubuhkan QR sebagai TTE. Nomor BAST dibuat lebih dulu, dan stok baru masuk
+setelah keduanya bertanda tangan. BAST bisa dilihat di setiap tahap, BAST
+kosong tetap bisa diunduh, dan unggah berkas tetap ada tetapi opsional
+([ADR 0051](keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)).
+
+**Konsep dibahas dulu di mode plan.** QR Nota Dinas milik Alma dianalisis.
+Yang dipakai ulang adalah paketnya, gaya QR-nya, dan pola rute publiknya.
+Ada tujuh hal yang dibuat berbeda, antara lain:
+
+- kode disimpan apa adanya, bukan di-hash;
+- isi dibekukan beserta sidiknya;
+- QR yang dicabut berkata "tidak berlaku", bukan 404;
+- halaman verifikasi berisi isi dokumen;
+- `throttle`, URL dari `APP_URL`, dan Admin tidak bisa TTE.
+
+Berkas Alma tidak disentuh. Empat pertanyaan dijawab Narendra:
+
+- tanpa kata sandi saat TTE;
+- Admin tidak boleh TTE;
+- Pejabat Pengadaan mana pun boleh menjadi Pihak Pertama;
+- verifikasi publik dengan isi lengkap.
+
+**Alurnya** tetap di dalam `MenungguPenerimaan`, tanpa status baru:
+
+1. hasil pemeriksaan oleh gudang (draf, stok belum berubah);
+2. nomor BAST;
+3. TTE Pihak Pertama dan Pihak Kedua, urutan bebas.
+
+TTE terakhir memasukkan stok. Mengubah hasil pemeriksaan, nomor, atau
+realisasi setelah ada TTE mencabut TTE itu.
+
+**Yang berubah.**
+
+- **Migrasi** (semua tabel Naren):
+  - `procurement_details.amount_checked`;
+  - `procurement_receipts.content`/`content_hash`;
+  - tabel baru `procurement_receipt_signatures`.
+- **Baru:**
+  - `PihakBast`, `ProcurementReceiptSignature`, `KodeQr`, `BastPengadaan`
+    (logika keempat langkah, pencabutan, isi kanonik, data cetak);
+  - `BastVerificationController` dan view publik `pages/verifikasi/bast`;
+  - partial `pages/procurements/_bast` dan `_bast-langkah`.
+- **`ProcurementReceiptPoster`** dipecah menjadi `posting()` (di dalam
+  transaksi TTE, dari isi yang ditandatangani) dan `setelahPosting()`.
+  Referensi mutasi kembali ke nomor BAST.
+- **`ProcurementReceiptController`**:
+  - `store` kini mencatat hasil pemeriksaan (upsert);
+  - `nomorBast` diperluas;
+  - aksi baru `tandatangani`.
+
+  `ConfirmProcurementReceiptRequest` diganti nama menjadi
+  `StoreProcurementReceiptRequest`.
+- **`ProcurementController`**:
+  - `bast()` dan `bastKosong()` lewat satu `cetakBast()`;
+  - `update()`/`cancel()` mencabut TTE;
+  - penyaring daftar `tte`.
+- **Gate dan audit.** Gate baru `tte-bast`, dan `Gate::before` tidak
+  meloloskan Admin khusus untuk gate itu. Ditambah `AuditEvent::TandaTangan`.
+- **Notifikasi.**
+  - `RealisasiMenungguPenerimaan` berhenti begitu hasil pemeriksaan lengkap;
+  - keadaan baru `BastMenungguTandaTangan` dikirim per pihak, tanpa Admin;
+  - `BastBelumDiunggah` hanya untuk BAST lama.
+- **Dasbor:** butir "BAST menunggu TTE Anda".
+- **Laporan PDF/CSV:** nomor BAST hanya untuk realisasi `Diterima`.
+- **`User::RESTRICTED_RELATIONS`:** `bastSignatures`.
+- **Ikon baru** di `x-ui.icon`: `download`, `eye`, `qr-code`, `hash`,
+  `pen-line`.
+- **Seeder:**
+  - realisasi contoh dituntaskan lewat alur TTE sungguhan;
+  - satu realisasi baru ber-TTE Pihak Pertama saja.
+
+**Ikut ditutup:** butir terbuka 18. Penerimaan kini memanggil
+`NotificationScanner::periksaBarang()` per barang (aturan 7). Ini disebut di
+rencana yang disetujui.
+
+**Verifikasi.**
+
+- **Test:** 888 dari 888 lulus. Ada 41 test baru di `BastDigitalTest`, yang
+  fixture-nya mandiri sehingga berkas itu lulus juga saat dijalankan sendiri.
+  Test lama yang memakai konfirmasi lama dipindah ke helper global di
+  `tests/Pest.php`:
+  - `terimaLewatTte()` untuk alur baru;
+  - `terimaCaraLama()` untuk perilaku BAST lama, yaitu `BastPengadaanTest`,
+    `ProcurementDocumentTest`, dan `BastBelumDiunggah`.
+- **Uji mutasi:** empat kali, masing-masing membuat test gagal:
+  - TTE pertama sudah memposting (8 test gagal);
+  - pemeriksaan tanpa pencabutan;
+  - verifikasi tanpa cek sidik;
+  - Admin lolos `tte-bast`.
+- **Pint** bersih untuk 34 berkas.
+- **`migrate:fresh --seed` di MariaDB.** Isi BAST contoh tetap utuh setelah
+  bolak-balik lewat kolom JSON, dan kedua TTE sah.
+- **`npm run build`** berhasil.
+- **Uji peramban** (Edge headless lewat CDP, server kedua port 8123):
+  - tanpa ekspresi Alpine rusak dan tanpa gulir horizontal di 1440 dan 390 px;
+  - dialog TTE muncul hanya bagi pihak yang belum bertanda tangan;
+  - TTE terakhir lewat tombol sungguhan memasukkan stok;
+  - halaman verifikasi sah dan 404 di ponsel, terang maupun gelap;
+  - PDF BAST lengkap dan kosong dirender ke PNG lalu diperiksa: QR di kedua
+    kolom, titik-titik saat data kosong.
+
+**Belum diuji:** pemindaian QR dengan ponsel sungguhan. QR contoh menunjuk
+`http://localhost`, jadi `APP_URL` perlu diset ke IP LAN.
+
+**Temuan sampingan.**
+
+1. **MySQL membatasi nama indeks 64 karakter, SQLite tidak.** Nama bawaan
+   indeks `(procurement_receipt_id, party)` 65 karakter, sehingga
+   `migrate:fresh` gagal di MariaDB walaupun seluruh test lulus. Indeksnya
+   diberi nama eksplisit.
+2. **Halaman verifikasi di ponsel.** Pada versi pertama, kolom Jumlah dan nilai
+   tersembunyi di balik gulir tabel. Kini rinciannya bertumpuk di bawah
+   560 px.
+3. **Skrip tema bawaan layout** di `<head>` memanggil
+   `document.body.classList` sebelum `<body>` ada, sehingga melempar
+   `TypeError` di **setiap** halaman terautentikasi, `/login` juga. Galat ini
+   sudah ada sebelum sesi ini dan tidak disentuh.
+4. **Seeder.** Karena barang `ATK-0xx` tidak ada lagi di katalog (butir
+   terbuka 13), realisasi BAST contoh memakai dua barang aktif pertama dari
+   katalog sebagai barang tambahan. Realisasi contoh lain (menunggu
+   persetujuan, langsung, proses belanja) memang tidak terbentuk sejak itu,
+   walau pesan seedernya menyebutnya.
+
+---
+
 ## 8 November 2026 (lanjutan 7) — Lembar Rekap Barang pada ekspor usulan
 
 Narendra bertanya kenapa ekspor daftar usulan hanya satu lembar, padahal

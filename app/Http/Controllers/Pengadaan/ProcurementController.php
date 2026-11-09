@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Pengadaan;
 
 use App\Enums\AuditEvent;
 use App\Enums\AuditModule;
+use App\Enums\PihakBast;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Http\Controllers\Controller;
@@ -15,6 +16,7 @@ use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
 use App\Support\AuditLogger;
+use App\Support\BastPengadaan;
 use App\Support\KatalogBarang;
 use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
@@ -32,13 +34,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Realisasi pengadaan — dibuat Pejabat Pengadaan dari satu usulan yang sudah
  * disetujui, menautkannya ke penyedia. Berhenti di status MenungguPenerimaan
- * sampai Pengelola Gudang mengonfirmasi penerimaan lewat
+ * sampai BAST-nya ditandatangani kedua pihak lewat
  * ProcurementReceiptController; stok baru bertambah saat itu. Lihat ADR 0008,
- * ADR 0015, dan ADR 0016.
+ * ADR 0015, ADR 0016, dan ADR 0051.
  *
- * Mengurus pula keluaran cetak Tahap 4: BAST per realisasi, serta laporan
- * pengadaan PDF dan CSV yang isinya mengikuti penyaring yang sama dengan
- * layar (ADR 0009).
+ * Mengurus pula keluaran cetak: BAST per realisasi (dengan QR TTE maupun
+ * kosong), serta laporan pengadaan PDF dan CSV yang isinya mengikuti penyaring
+ * yang sama dengan layar (ADR 0009).
  */
 class ProcurementController extends Controller
 {
@@ -57,7 +59,7 @@ class ProcurementController extends Controller
         return view('pages.procurements.index', [
             'title' => 'Realisasi Pengadaan',
             'procurements' => $this->filteredQuery($filters)
-                ->with(['supplier', 'details'])
+                ->with(['supplier', 'details', 'receipt.signatures'])
                 ->paginate(self::PER_PAGE)
                 ->withQueryString(),
             'filters' => $filters,
@@ -67,6 +69,9 @@ class ProcurementController extends Controller
             'suppliers' => Supplier::query()
                 ->orderBy('supplier_name')
                 ->pluck('supplier_name', 'supplier_id')
+                ->all(),
+            'opsiTte' => collect(PihakBast::cases())
+                ->mapWithKeys(fn (PihakBast $pihak) => [$pihak->nilaiPenyaring() => "Menunggu TTE {$pihak->label()}"])
                 ->all(),
         ]);
     }
@@ -214,7 +219,7 @@ class ProcurementController extends Controller
             'title' => $procurement->judul(),
             'procurement' => $procurement->load([
                 'user', 'supplier', 'procurementRequest', 'details.item',
-                'receipt.receivedBy', 'documents.uploadedBy', 'cancelledBy', 'reviewedBy', 'purchasedBy',
+                'receipt.receivedBy', 'receipt.signatures', 'documents.uploadedBy', 'cancelledBy', 'reviewedBy', 'purchasedBy',
             ]),
         ]);
     }
@@ -263,7 +268,7 @@ class ProcurementController extends Controller
         $sebelumnyaDisetujui = $procurement->isProsesBelanja() || $procurement->isMenungguPenerimaan();
         $barangSebelumnya = $procurement->details->pluck('item_id');
 
-        DB::transaction(function () use ($procurement, $data) {
+        $dicabut = DB::transaction(function () use ($procurement, $data) {
             $procurement->forceFill([
                 'supplier_id' => $data['supplier_id'],
                 'procurement_date' => $data['procurement_date'],
@@ -319,11 +324,17 @@ class ProcurementController extends Controller
             $procurement->details
                 ->reject(fn (ProcurementDetail $detail) => in_array($detail->procurement_detail_id, $dikirim, true))
                 ->each(fn (ProcurementDetail $detail) => $detail->delete());
+
+            // Isi BAST ikut berubah (penyedia, barang, harga), jadi TTE yang
+            // sudah dibubuhkan gugur. Hasil pemeriksaan gudang dipertahankan:
+            // fisik barangnya tidak berubah karena dokumennya diperbaiki
+            // (ADR 0051).
+            return BastPengadaan::cabutUntukRealisasi($procurement, BastPengadaan::ALASAN_REALISASI_DIUBAH);
         });
 
         AuditLogger::record(
             user: $request->user(),
-            activity: "Mengubah realisasi pengadaan: {$procurement->judul()}",
+            activity: "Mengubah realisasi pengadaan: {$procurement->judul()}".BastPengadaan::kalimatPencabutan($dicabut),
             module: AuditModule::Pengadaan,
             event: AuditEvent::Ubah,
             subject: $procurement,
@@ -375,17 +386,23 @@ class ProcurementController extends Controller
 
         $alasan = $request->alasan();
 
-        $procurement->forceFill([
-            'status' => ProcurementStatus::Dibatalkan,
-            'cancelled_at' => now(),
-            'cancelled_by' => $request->user()->user_id,
-            'cancel_reason' => $alasan,
-            'cancel_note' => $request->input('cancel_note'),
-        ])->save();
+        $dicabut = DB::transaction(function () use ($procurement, $request, $alasan) {
+            $procurement->forceFill([
+                'status' => ProcurementStatus::Dibatalkan,
+                'cancelled_at' => now(),
+                'cancelled_by' => $request->user()->user_id,
+                'cancel_reason' => $alasan,
+                'cancel_note' => $request->input('cancel_note'),
+            ])->save();
+
+            // Draf penerimaannya tidak dihapus — catatan pemeriksaan gudang
+            // tetap menjadi jejak — tetapi TTE-nya gugur (ADR 0051).
+            return BastPengadaan::cabutUntukRealisasi($procurement, BastPengadaan::ALASAN_REALISASI_DIBATALKAN);
+        });
 
         AuditLogger::record(
             user: $request->user(),
-            activity: "Membatalkan {$procurement->judul()} dengan alasan {$alasan->label()}",
+            activity: "Membatalkan {$procurement->judul()} dengan alasan {$alasan->label()}".BastPengadaan::kalimatPencabutan($dicabut),
             module: AuditModule::Pengadaan,
             event: AuditEvent::Batal,
             subject: $procurement,
@@ -408,41 +425,64 @@ class ProcurementController extends Controller
     }
 
     /**
-     * BAST siap tanda tangan, dicetak dari sistem dengan format resmi BPK:
-     * serah terima dari Pelaksana Belanja kepada Petugas Persediaan, rincian
-     * barangnya di lampiran. Lihat ADR 0042.
+     * BAST dengan format resmi BPK: serah terima dari Pelaksana Belanja kepada
+     * Petugas Persediaan, rincian barangnya di lampiran (ADR 0042), dan QR TTE
+     * di kolom tanda tangan yang sudah dibubuhkan (ADR 0051).
      *
-     * Isinya memakai `amount_received` — yang benar-benar datang — bukan
-     * `amount` yang dipesan. Menandatangani jumlah pesanan atas barang yang
-     * datang kurang justru membuat dokumennya berbohong. Lihat ADR 0017.
+     * Bisa dilihat di setiap tahap sejak barang ditandai dibelanjakan: yang
+     * belum terisi dicetak sebagai titik-titik. Setelah TTE pertama, isinya
+     * dibekukan sehingga BAST tidak ikut berubah bila master barang atau data
+     * akun diperbarui.
      *
-     * Baru tersedia setelah penerimaan dikonfirmasi dan nomornya diisi —
-     * nomor itu diisi lewat `ProcurementReceiptController::nomorBast()`.
+     * Isinya memakai jumlah yang benar-benar datang, bukan `amount` yang
+     * dipesan. Menandatangani jumlah pesanan atas barang yang datang kurang
+     * justru membuat dokumennya berbohong. Lihat ADR 0017.
      */
     public function bast(Procurement $procurement): Response|RedirectResponse
     {
-        $procurement->load(['supplier', 'details.item', 'receipt.receivedBy', 'purchasedBy', 'user']);
+        return $this->cetakBast($procurement, denganTte: true);
+    }
 
-        if ($procurement->receipt === null) {
+    /**
+     * BAST yang sama tanpa QR, untuk tanda tangan basah — tetap tersedia
+     * setelah kedua TTE lengkap (ADR 0051).
+     */
+    public function bastKosong(Procurement $procurement): Response|RedirectResponse
+    {
+        return $this->cetakBast($procurement, denganTte: false);
+    }
+
+    private function cetakBast(Procurement $procurement, bool $denganTte): Response|RedirectResponse
+    {
+        $procurement->load(['supplier', 'details.item', 'receipt.receivedBy', 'receipt.signatures', 'purchasedBy', 'user']);
+
+        if (! $procurement->isMenungguPenerimaan() && ! $procurement->isDiterima()) {
             return redirect()
                 ->route('procurements.show', $procurement)
-                ->with('error', 'BAST baru dapat dicetak setelah penerimaan barang dikonfirmasi.');
+                ->with('error', 'BAST tersedia setelah barang ditandai sudah dibelanjakan.');
         }
 
-        if ($procurement->receipt->bast_number === null) {
+        // BAST lama dicetak untuk ditandatangani basah, jadi nomornya wajib ada
+        // lebih dulu — seperti ADR 0042.
+        if ($procurement->bastLama() && $procurement->receipt->bast_number === null) {
             return redirect()
                 ->route('procurements.show', $procurement)
                 ->with('error', 'Isi nomor BAST terlebih dahulu.');
         }
 
+        $bast = BastPengadaan::untukCetak($procurement, $denganTte);
+
         $pdf = Pdf::loadView('pdf.bast-pengadaan', [
-            'procurement' => $procurement,
-            'receipt' => $procurement->receipt,
+            'bast' => $bast,
         ])->setPaper('a4', 'portrait');
 
         // Garis miring diganti lebih dulu: Str::slug membuangnya begitu saja,
         // sehingga "001/UP_TUP/445237/2026" menjadi satu deret angka.
-        return $pdf->stream('bast-'.Str::slug(str_replace('/', '-', $procurement->receipt->bast_number)).'.pdf');
+        $nama = $bast['isi']['nomor'] ?? $procurement->judul();
+
+        return $pdf->stream(
+            'bast-'.($denganTte ? '' : 'kosong-').Str::slug(str_replace('/', '-', $nama)).'.pdf',
+        );
     }
 
     public function exportPdf(Request $request): Response|RedirectResponse
@@ -504,8 +544,10 @@ class ProcurementController extends Controller
                         $detail->sudahDiterima() ? $detail->amount_received : '',
                         $detail->kurangKirim(),
                         ($detail->amount_received ?? 0) * $detail->unit_price,
-                        $procurement->receipt?->bast_number ?? '',
-                        $procurement->receipt?->received_at->format('d/m/Y') ?? '',
+                        // Draf penerimaan ada sejak hasil pemeriksaan dicatat, tetapi
+                        // baru menjadi penerimaan setelah kedua TTE (ADR 0051).
+                        $procurement->isDiterima() ? ($procurement->receipt?->bast_number ?? '') : '',
+                        $procurement->isDiterima() ? ($procurement->receipt?->received_at->format('d/m/Y') ?? '') : '',
                     ], ';');
                 }
             }
@@ -526,6 +568,7 @@ class ProcurementController extends Controller
             'status' => (string) $request->query('status', ''),
             'sumber' => (string) $request->query('sumber', ''),
             'supplier' => (string) $request->query('supplier', ''),
+            'tte' => (string) $request->query('tte', ''),
             'from' => (string) $request->query('from', ''),
             'to' => (string) $request->query('to', ''),
         ];

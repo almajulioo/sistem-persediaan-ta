@@ -8,7 +8,9 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Konfirmasi penerimaan barang pengadaan oleh Pengelola Gudang.
+ * Hasil pemeriksaan barang pengadaan oleh Pengelola Gudang — langkah pertama
+ * BAST digital (ADR 0051). Dipakai untuk mencatat maupun mengubahnya; stok
+ * baru bertambah setelah kedua pihak menandatangani BAST.
  *
  * `received.*` tidak dibatasi maksimum terhadap jumlah dipesan — penyedia
  * yang mengirim lebih banyak dari pesanan bukan kasus yang dicegah ADR 0017,
@@ -17,14 +19,14 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * Sebaliknya, **kelengkapan barisnya wajib**: setiap rincian realisasi harus
  * punya angka. Alasannya sama persis dengan alasan ADR 0021 mewajibkan
- * formulir realisasi mencakup seluruh rincian usulan yang disetujui —
- * penerimaan adalah peristiwa sekali jadi tanpa rute ubah, sehingga baris yang
- * hilang dari kiriman akan terbaca sebagai "nol diterima" secara permanen.
+ * formulir realisasi mencakup seluruh rincian usulan yang disetujui — baris
+ * yang hilang dari kiriman akan terbaca sebagai "nol diterima", dan angka itu
+ * yang ditandatangani kedua pihak.
  *
- * Nomor BAST tidak diminta di sini: nomornya diisi saat BAST dicetak pertama
- * kali, lewat `UpdateBastNumberRequest` (ADR 0042).
+ * Nomor BAST tidak diminta di sini, melainkan lewat `UpdateBastNumberRequest`
+ * — kedua pihak boleh mengisinya (ADR 0042).
  */
-class ConfirmProcurementReceiptRequest extends FormRequest
+class StoreProcurementReceiptRequest extends FormRequest
 {
     public function authorize(): bool
     {

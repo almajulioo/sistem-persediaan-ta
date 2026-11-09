@@ -36,7 +36,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0005](keputusan/0005-buku-mutasi-immutable-dan-urutan-pencatatan.md) | Buku mutasi immutable dan diurutkan menurut waktu pencatatan | Diterima |
 | [0006](keputusan/0006-mutationtype-merangkap-alasan-manual.md) | `MutationType` merangkap alasan mutasi manual | Diterima |
 | [0007](keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) | Kolom audit tambahan dan referensi dokumen polimorfik | Diterima |
-| [0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md) | Penerimaan barang dikonfirmasi Pengelola Gudang | Diterima |
+| [0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md) | Penerimaan barang dikonfirmasi Pengelola Gudang | Sebagian digantikan oleh 0051 |
 | [0009](keputusan/0009-laporan-pdf-dan-csv.md) | Laporan PDF lewat dompdf dan CSV tanpa paket tambahan | Sebagian digantikan oleh 0048 |
 | [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Diterima |
 | [0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) | Alasan selisih: enum baku berpasangan keterangan wajib | Diterima |
@@ -46,10 +46,10 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0015](keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) | Usulan pengadaan dan penerimaan barang: skema diperbaiki dan dipisah tegas dari sub sistem Permintaan | Sebagian digantikan oleh 0044 |
 | [0016](keputusan/0016-alur-pengadaan-tiga-dokumen.md) | Alur pengadaan tiga dokumen dan pemisahan tugas | Diterima |
 | [0017](keputusan/0017-jumlah-diterima-terpisah-dari-jumlah-dipesan.md) | Jumlah diterima dicatat terpisah dari jumlah dipesan | Diterima |
-| [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Diterima |
+| [0018](keputusan/0018-berkas-unggahan-di-disk-privat.md) | Berkas unggahan di disk privat, dan BAST bertanda tangan boleh menyusul | Sebagian digantikan oleh 0051 |
 | [0019](keputusan/0019-harga-di-realisasi-tanpa-penilaian-persediaan.md) | Harga dicatat di realisasi pengadaan; penilaian persediaan di luar cakupan | Diterima |
 | [0020](keputusan/0020-notifikasi-usulan-dan-persetujuan-sebagian.md) | Notifikasi usulan pengadaan dan persetujuan sebagian per barang | Diterima |
-| [0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md) | Realisasi dan penerimaan pengadaan: batas cakupan Tahap 3 | Sebagian digantikan oleh 0042 |
+| [0021](keputusan/0021-realisasi-dan-penerimaan-pengadaan.md) | Realisasi dan penerimaan pengadaan: batas cakupan Tahap 3 | Sebagian digantikan oleh 0042 dan 0051 |
 | [0022](keputusan/0022-wewenang-unggah-dan-hapus-berkas-pengadaan.md) | Wewenang mengunggah dan menghapus berkas pengadaan | Sebagian digantikan oleh 0041 |
 | [0023](keputusan/0023-laporan-pengadaan-per-baris-barang.md) | Laporan pengadaan berbutir barang, dan BAST mencetak jumlah diterima | Diterima |
 | [0024](keputusan/0024-pembatalan-realisasi-pengadaan.md) | Pembatalan realisasi pengadaan, dan penagih usulan yang menganggur | Diterima |
@@ -70,7 +70,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0039](keputusan/0039-pemotong-foto-profil-interaktif.md) | Pemotong foto profil interaktif, tanpa pustaka | Diterima |
 | [0040](keputusan/0040-dasbor-berbasis-peran-dari-data-langsung.md) | Dasbor berbasis peran, dihitung langsung dari data | Diterima |
 | [0041](keputusan/0041-kasubbag-pengawas-baca-saja.md) | Kasubbag Umum dan TI sebagai pengawas baca-saja gudang dan pengadaan | Diterima |
-| [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Diterima |
+| [0042](keputusan/0042-bast-pengadaan-format-resmi-bpk.md) | BAST pengadaan mengikuti format resmi BPK, nomornya diisi saat cetak pertama | Sebagian digantikan oleh 0051 |
 | [0043](keputusan/0043-kategori-dan-sub-kategori-barang.md) | Kategori dan sub kategori barang (dikerjakan Alma) | Diterima |
 | [0044](keputusan/0044-sumber-usulan-pengadaan-per-barang.md) | Sumber usulan pengadaan dicatat per barang, keterangan opsional untuk barang manual | Diterima |
 | [0045](keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md) | Kiriman ulang formulir usulan dan halaman draf yang usang | Sebagian digantikan oleh 0046 |
@@ -79,6 +79,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0048](keputusan/0048-ekspor-excel-usulan-pengadaan.md) | Ekspor Excel usulan pengadaan, per usulan dan per rentang tanggal diajukan | Sebagian digantikan oleh 0049 dan 0050 |
 | [0049](keputusan/0049-tanggal-usulan-dari-draf-adalah-saat-diajukan.md) | Tanggal usulan dari draf adalah saat diajukan, bukan saat draf dibuat | Diterima |
 | [0050](keputusan/0050-lembar-rekap-barang-pada-ekspor-usulan.md) | Lembar Rekap Barang pada ekspor daftar usulan | Diterima |
+| [0051](keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md) | BAST pengadaan digital dengan TTE QR; stok masuk setelah kedua pihak bertanda tangan | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

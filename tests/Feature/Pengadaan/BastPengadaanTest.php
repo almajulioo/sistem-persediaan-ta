@@ -10,21 +10,26 @@ use App\Models\Procurement;
 use App\Models\ProcurementDocument;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Support\BastPengadaan;
 use App\Support\DocumentStorage;
-use App\Support\ProcurementReceiptPoster;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * BAST pengadaan dengan format resmi BPK (ADR 0042): nomornya diisi saat
- * cetak pertama, pihaknya Pelaksana Belanja dan Petugas Persediaan, rincian
- * barangnya di lampiran. Nama pembantu bersufiks `Bast` karena fungsi Pest
- * berbagi ruang nama global.
+ * BAST pengadaan dengan format resmi BPK (ADR 0042): pihaknya Pelaksana
+ * Belanja dan Petugas Persediaan, rincian barangnya di lampiran.
+ *
+ * Sejak ADR 0051 penerimaan baru melewati TTE (lihat BastDigitalTest). Berkas
+ * ini menguji **BAST lama** — sudah diterima sebelum perubahan itu, tanpa TTE —
+ * yang tetap memakai cara ADR 0042: nomor diisi saat cetak pertama dan
+ * terkunci setelah pindaian bertanda tangan diunggah. Isi cetaknya berlaku
+ * untuk keduanya. Nama pembantu bersufiks `Bast` karena fungsi Pest berbagi
+ * ruang nama global.
  */
 
 /**
- * Realisasi dua barang yang sudah diterima: kertas datang penuh, tinta tidak
- * datang sama sekali. Nomor BAST-nya belum diisi.
+ * Realisasi dua barang yang sudah diterima cara lama: kertas datang penuh,
+ * tinta tidak datang sama sekali. Nomor BAST-nya belum diisi.
  */
 function realisasiDiterimaBast(User $pejabat, User $petugas): Procurement
 {
@@ -42,15 +47,10 @@ function realisasiDiterimaBast(User $pejabat, User $petugas): Procurement
 
     $detail = $procurement->details->keyBy('item_id');
 
-    ProcurementReceiptPoster::post(
-        procurement: $procurement,
-        diterima: [
-            $detail[$kertas->item_id]->procurement_detail_id => 10,
-            $detail[$tinta->item_id]->procurement_detail_id => 0,
-        ],
-        actor: $petugas,
-        receivedAt: now(),
-    );
+    terimaCaraLama($procurement, $petugas, [
+        $detail[$kertas->item_id]->procurement_detail_id => 10,
+        $detail[$tinta->item_id]->procurement_detail_id => 0,
+    ]);
 
     return $procurement->fresh();
 }
@@ -62,11 +62,8 @@ function isiNomorBast(Procurement $procurement, string $nomor): \Illuminate\Test
 
 function htmlBast(Procurement $procurement): string
 {
-    $procurement->load(['supplier', 'details.item', 'receipt.receivedBy', 'purchasedBy', 'user']);
-
     return view('pdf.bast-pengadaan', [
-        'procurement' => $procurement,
-        'receipt' => $procurement->receipt,
+        'bast' => BastPengadaan::untukCetak($procurement->fresh()),
     ])->render();
 }
 

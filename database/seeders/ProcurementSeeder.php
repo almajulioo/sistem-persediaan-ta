@@ -11,17 +11,18 @@ use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\Supplier;
 use App\Models\User;
-use App\Support\ProcurementReceiptPoster;
+use App\Support\BastPengadaan;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 class ProcurementSeeder extends Seeder
 {
     /**
-     * Empat realisasi contoh.
+     * Lima realisasi contoh.
      *
-     * Yang pertama dibawa sampai penerimaan supaya modul Tahap 3 langsung
-     * terlihat bekerja: stok bertambah lewat StockLedger sungguhan, bukan data
+     * Yang pertama dibawa sampai penerimaan lewat alur BAST digital sungguhan
+     * (ADR 0051) — hasil pemeriksaan, nomor, dan TTE kedua pihak — supaya QR
+     * dan stok yang bertambah lewat StockLedger langsung terlihat, bukan data
      * yang ditulis langsung ke tabel. Yang kedua sengaja berhenti di
      * `MenungguPersetujuan` supaya layar Kasubbag Umum dan TI punya antrean
      * berisi sejak data awal (ADR 0030). Yang ketiga dibuat **tanpa usulan**
@@ -34,9 +35,14 @@ class ProcurementSeeder extends Seeder
      * direalisasikan — itulah yang mendemokan tombol "Realisasikan" pada
      * halaman usulan.
      *
-     * Tanggal penerimaannya dimundurkan lima hari, melewati ambang tiga hari
-     * pada NotificationScanner, supaya notifikasi keadaan BastBelumDiunggah
-     * punya contoh nyata di data awal — berkas BAST-nya memang belum ada.
+     * Yang kelima sudah diperiksa dan ditandatangani Pihak Pertama saja,
+     * supaya Pengelola Gudang punya TTE terakhir untuk didemokan.
+     *
+     * Barang contoh dari ProcurementRequestSeeder (`ATK-0xx`) tidak ada lagi di
+     * katalog sungguhan sejak 24 Oktober 2026 (butir terbuka 13). Bila
+     * usulannya kosong, kedua realisasi BAST memakai dua barang aktif pertama
+     * dari katalog sebagai barang tambahan (ADR 0029): BAST tanpa barang tidak
+     * dapat diperiksa maupun ditandatangani.
      */
     public function run(): void
     {
@@ -98,29 +104,116 @@ class ProcurementSeeder extends Seeder
             ]);
         }
 
+        $this->lengkapiBarang($procurement);
+
         // Salah satu barang datang kurang dari pesanan, supaya
         // ProcurementDetail::kurangKirim() punya contoh nyata untuk ditampilkan.
-        $diterima = [];
-
-        foreach ($procurement->details as $line) {
-            $diterima[$line->procurement_detail_id] = $line->item?->item_code === 'ATK-004'
-                ? max(0, $line->amount - 5)
-                : $line->amount;
-        }
-
-        ProcurementReceiptPoster::post(
+        $this->tandatanganiBast(
             procurement: $procurement,
-            diterima: $diterima,
-            actor: $petugasGudang,
-            receivedAt: now()->subDays(5),
-            notes: 'Tinta warna dikirim kurang 5 botol dari pesanan; penyedia akan mengirim susulan.',
+            nomor: '001/UP_TUP/445237/'.now()->year,
+            petugasGudang: $petugasGudang,
+            penandaTangan: [$pejabat, $petugasGudang],
+            catatan: 'Satu jenis barang dikirim kurang dari pesanan; penyedia akan mengirim susulan.',
         );
 
         $this->antreanPersetujuan($supplier, $pejabat);
         $this->realisasiLangsung($supplier, $pejabat);
         $this->prosesBelanja($supplier, $pejabat, $kasubbag);
+        $this->menungguTtePihakKedua($supplier, $pejabat, $petugasGudang, $kasubbag);
 
-        $this->command?->info('Realisasi pengadaan contoh berhasil dibuat (1 sudah diterima sebagian, 1 menunggu persetujuan, 1 langsung tanpa usulan, 1 dalam proses belanja).');
+        $this->command?->info('Realisasi pengadaan contoh berhasil dibuat (1 sudah diterima sebagian, 1 menunggu persetujuan, 1 langsung tanpa usulan, 1 dalam proses belanja, 1 menunggu TTE Pihak Kedua).');
+    }
+
+    /**
+     * Realisasi yang barangnya sudah datang dan diperiksa, ber-TTE Pihak
+     * Pertama, menunggu TTE Pengelola Gudang (ADR 0051).
+     */
+    private function menungguTtePihakKedua(Supplier $supplier, User $pejabat, User $petugasGudang, ?User $kasubbag): void
+    {
+        $procurement = Procurement::create([
+            'procurement_id' => (string) Str::uuid(),
+            'procurement_request_id' => null,
+            'supplier_id' => $supplier->supplier_id,
+            'procurement_date' => now()->subDays(4),
+            'basis_reason' => AlasanPengadaan::BelanjaRutinNilaiKecil,
+            'basis_note' => 'Kebutuhan rutin bulanan; dibeli langsung di penyedia langganan.',
+            'status' => ProcurementStatus::MenungguPenerimaan,
+            'user_id' => $pejabat->user_id,
+        ]);
+
+        $procurement->forceFill([
+            'reviewed_at' => now()->subDays(3),
+            'reviewed_by' => $kasubbag?->user_id,
+            'review_note' => 'Setuju.',
+            'purchased_at' => now()->subDays(2),
+            'purchased_by' => $pejabat->user_id,
+        ])->save();
+
+        $this->lengkapiBarang($procurement);
+
+        $this->tandatanganiBast(
+            procurement: $procurement,
+            nomor: '002/UP_TUP/445237/'.now()->year,
+            petugasGudang: $petugasGudang,
+            penandaTangan: [$pejabat],
+        );
+    }
+
+    /**
+     * Barang cadangan bila usulan contohnya tidak punya barang (butir terbuka
+     * 13): dua barang aktif pertama dari katalog.
+     */
+    private function lengkapiBarang(Procurement $procurement): void
+    {
+        if ($procurement->details()->exists()) {
+            return;
+        }
+
+        Item::query()
+            ->where('is_active', true)
+            ->orderBy('item_code')
+            ->take(2)
+            ->get()
+            ->each(fn (Item $item, int $i) => $procurement->details()->create([
+                'item_id' => $item->item_id,
+                'amount' => 10 * ($i + 1),
+                'unit_price' => 15000 + 10000 * $i,
+            ]));
+    }
+
+    /**
+     * Menjalankan alur BAST digital lewat `BastPengadaan`, sama seperti dari
+     * layar: hasil pemeriksaan, nomor, lalu TTE. Barang terakhir datang kurang
+     * lima dari pesanan.
+     *
+     * @param  list<User>  $penandaTangan
+     */
+    private function tandatanganiBast(
+        Procurement $procurement,
+        string $nomor,
+        User $petugasGudang,
+        array $penandaTangan,
+        ?string $catatan = null,
+    ): void {
+        $procurement->load('details');
+
+        if ($procurement->details->isEmpty()) {
+            return;
+        }
+
+        $terakhir = $procurement->details->last()->procurement_detail_id;
+        $jumlah = $procurement->details->mapWithKeys(fn ($line) => [
+            $line->procurement_detail_id => $line->procurement_detail_id === $terakhir
+                ? max(0, $line->amount - 5)
+                : $line->amount,
+        ])->all();
+
+        BastPengadaan::catatPemeriksaan($procurement, $petugasGudang, now()->subDays(1), $jumlah, $catatan);
+        BastPengadaan::isiNomor($procurement, $petugasGudang, $nomor);
+
+        foreach ($penandaTangan as $user) {
+            BastPengadaan::tandatangani($procurement, $user);
+        }
     }
 
     /**
