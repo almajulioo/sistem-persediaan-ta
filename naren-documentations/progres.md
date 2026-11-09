@@ -5,6 +5,99 @@ perubahan.
 
 ---
 
+## 9 November 2026 — Laporan stok opname dalam Excel; barang kosong mengikuti stok sistem
+
+Dua permintaan Narendra untuk modul Stok Opname.
+
+**1. Laporan Stok Opname menjadi Excel**
+([ADR 0055](keputusan/0055-laporan-stok-opname-dalam-excel.md)).
+
+- `GET opname/{opname}/excel` (`opname.excel`) menggantikan `opname/{opname}/cetak`
+  (`opname.pdf`). Templat `pdf/laporan-opname.blade.php` dihapus. Tombol menjadi
+  "Unduh Excel" (rincian) dan "Excel" (daftar).
+- Isinya mengikuti PDF: kop, identitas, rekap, rincian, catatan. Ditambah kolom **Stok Saat Posting** (berwarna bila stok bergerak
+  setelah dicacah) dan **Pencacahan** (diisi petugas / mengikuti stok sistem /
+  belum diisi). Selisih dan Penyesuaian berformat bertanda; teks ditulis
+  eksplisit sebagai string.
+- Pembantu Excel dipindah dari `LaporanUsulanPengadaan` ke trait baru
+  `LembarExcel`, dipakai kedua laporan. Ekspor usulan pengadaan tidak berubah.
+
+**2. Barang yang tidak diisi mengikuti stok sistem saat posting**
+([ADR 0056](keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md)),
+menggantikan syarat "seluruh barang sudah dicacah" dari ADR 0010.
+
+- `OpnamePoster` mengisi baris kosong dengan `stock_real = stock_stored`,
+  `difference = 0`: tanpa mutasi, stok akhir = stok sistem saat posting.
+  `counted_at` dibiarkan kosong sebagai penanda (`diisiPetugas()`,
+  `mengikutiStokSistem()`), tanpa migrasi. `counted_at` kini hanya berubah saat
+  angkanya berubah.
+- Posting lewat `PUT opname/{opname}` dengan `aksi=posting`: isian di layar
+  tersimpan dulu, lalu diposting. Rute `opname.post` dihapus.
+- Layar pencacahan ditulis ulang: placeholder = stok sistem, label "Ikut
+  sistem", satu kalimat petunjuk, kartu ringkasan berjalan, pencarian,
+  penyaring (Semua / Diisi / Berselisih / Ikut Stok Sistem / Perlu
+  Dilengkapi), Enter berpindah isian, penghitung perubahan belum disimpan, dan
+  modal konfirmasi posting yang menyebut berapa barang mengikuti stok sistem.
+- Halaman hasil: kartu Diisi Petugas / Ikut Stok Sistem, penyaring `?baris=`,
+  label "Ikut sistem". Daftar: "X / Y diisi".
+- Notifikasi "Opname Siap Diposting" dihapus (migrasi menghapus barisnya);
+  "Draf Opname Menggantung" berlaku untuk setiap draf >7 hari.
+- `StockOpnameSeeder`: opname selesai contoh kini hanya 8 barang diisi.
+
+**Cacat yang ditemukan dan ditutup.** Layar lama mengirim satu isian per
+barang, dan `max_input_vars` PHP di mesin ini **1000**: dengan katalog ribuan
+barang, isian di atas batas itu dibuang diam-diam. Di bawah aturan baru,
+barang yang terpotong akan diposting sebagai "sesuai". Kini hanya baris yang
+berubah dikirim, sebagai satu JSON (`hasil_cacah`). Cacat kedua: posting dulu
+memakai data tersimpan saja, sehingga isian yang lupa disimpan akan ikut
+"sesuai" — ditutup dengan menggabungkan simpan dan posting. Teks "Simpan draf
+sebelum memposting" ikut dihapus.
+
+**Keputusan yang diambil sendiri** (tidak ditanyakan, disebut di sini supaya
+dapat dikoreksi):
+
+- PDF opname **dihapus**, bukan didampingi Excel.
+- Baris kosong dicatat `stock_real = stock_stored` (bukan dibiarkan kosong),
+  ditandai lewat `counted_at`.
+- Notifikasi "Opname Siap Diposting" **dihapus**.
+- Simpan + posting digabung; kiriman tanpa perubahan tidak lagi menulis log
+  aktivitas.
+- Kolom "Stok Tercatat" di layar dan laporan berganti nama **"Stok Sistem"**,
+  supaya cocok dengan kalimat petunjuknya.
+
+**Berkas.** `OpnamePoster`, `LaporanStokOpname` (baru), `LembarExcel` (baru),
+`LaporanUsulanPengadaan`, `StockOpnameController`, `UpdateOpnameCountRequest`,
+`OpnameDetail`, `StockOpname`, `OpnameTidakSiapException`, `NotificationType`,
+`NotificationScanner`, `routes/web.php`, view `opname/edit|show|index`,
+migrasi `2026_11_09_000004_delete_opname_siap_diposting_notifications`,
+`StockOpnameSeeder`; tes `StockOpnameTest`, `StockOpnamePostingTest`,
+`StockOpnameExportTest` (ditulis ulang untuk Excel), `PengawasanKasubbagTest`,
+`ActivityLogTest`. Tidak ada berkas Alma yang disentuh.
+
+**Diperiksa.**
+
+- `php artisan test`: **910 lulus** (+16).
+- Uji mutasi: menghapus penjaga `isDirty('stock_real')` di controller
+  menggagalkan uji `counted_at`.
+- Pint bersih untuk 19 berkas yang disentuh.
+- `migrate:fresh --seed` di MariaDB — **langsung pada database lokal
+  `sistem_persediaan`**, tidak pada database cadangan seperti sesi sebelumnya,
+  sehingga data lokal kembali ke data contoh. Kekeliruan prosedur; gotcha di
+  CLAUDE.md kini menyebut database sementara.
+- Uji peramban (Edge headless lewat CDP, server kedua port 8123 atas SQLite
+  terpisah), sebagai `gudang` atas draf contoh 120 barang — 33 pemeriksaan
+  lulus: seluruh ekspresi Alpine terkompilasi; 50 baris dirender; placeholder =
+  stok sistem; isi angka berbeda → selisih +2, chip Perlu Dilengkapi, Enter ke
+  alasan; Simpan tanpa alasan → galat server, isian dipulihkan, penyaring
+  "Perlu Dilengkapi"; lengkapi alasan; penyaring Ikut Stok Sistem (114) dan
+  baris yang diisi tidak lenyap; pencarian kode; Tampilkan lebih banyak (100);
+  390 px tanpa gulir horizontal; kiriman berisi 2 baris berubah; modal "7
+  barang diisi, 113 mengikuti stok sistem"; posting → halaman hasil, 113 label
+  "Ikut sistem", penyaring Diisi Petugas = 7 baris; tanpa galat konsol selain
+  skrip tema lama (butir terbuka 23). Berkas Excel hasilnya diperiksa isinya.
+
+---
+
 ## 9 November 2026 — Halaman Usulan Barang Baru dan menu Persetujuan dihapus
 
 Dua permintaan Narendra, keduanya membuang tampilan yang tumpang tindih.

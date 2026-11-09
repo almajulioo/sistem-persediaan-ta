@@ -17,14 +17,6 @@ class OpnameTidakSiapException extends RuntimeException
         return new self('Stok opname ini sudah diposting dan tidak dapat diproses ulang.');
     }
 
-    public static function masihAdaYangBelumDicacah(int $jumlah): self
-    {
-        return new self(sprintf(
-            'Masih ada %d barang yang belum dicacah. Lengkapi seluruh hasil cacah sebelum memposting.',
-            $jumlah,
-        ));
-    }
-
     public static function selisihTanpaAlasan(string $itemCode): self
     {
         return new self(sprintf(

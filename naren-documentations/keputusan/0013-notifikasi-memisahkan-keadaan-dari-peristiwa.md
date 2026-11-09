@@ -8,6 +8,10 @@ Sebagian digantikan oleh [ADR 0036](0036-lonceng-kotak-masuk-dan-notifikasi-sele
 — 27 September 2026: keadaan yang pulih kini dihapus (kolom `resolved_at`
 dibuang), dan lonceng hanya berisi notifikasi yang belum dibaca.
 
+Sebagian digantikan oleh [ADR 0056](0056-barang-tidak-diisi-mengikuti-stok-sistem.md)
+— 9 November 2026: jenis "Opname Siap Diposting" dihapus, dan "Draf Opname
+Menggantung" berlaku untuk setiap draf yang belum diposting lebih dari 7 hari.
+
 ## Konteks
 
 Kebutuhan yang diajukan sederhana: pengguna ingin diberi tahu ketika stok sebuah

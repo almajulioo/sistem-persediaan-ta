@@ -40,7 +40,9 @@ class StockOpnameSeeder extends Seeder
     }
 
     /**
-     * Opname triwulan lalu: sebagian barang berselisih dan sudah diposting.
+     * Opname triwulan lalu, sudah diposting. Seperti di lapangan (ADR 0056),
+     * petugas hanya mengisi sebagian barang — tiga berselisih, lima sesuai —
+     * dan sisanya dikosongkan sehingga mengikuti stok sistem saat diposting.
      */
     private function opnameSelesai(User $petugas): void
     {
@@ -55,7 +57,8 @@ class StockOpnameSeeder extends Seeder
             'notes' => 'Opname rutin triwulanan bersama Subbagian Umum dan TU.',
         ]);
 
-        // Selisih hanya pada tiga barang pertama; sisanya cocok.
+        // Selisih hanya pada tiga barang pertama; lima berikutnya diisi dan
+        // cocok; sisanya tidak diisi.
         $selisih = [
             0 => [-2, AlasanSelisih::BarangRusak, 'Dua rim basah terkena rembesan atap gudang.'],
             1 => [-1, AlasanSelisih::BarangHilang, 'Tidak ditemukan saat pencacahan ulang.'],
@@ -63,6 +66,15 @@ class StockOpnameSeeder extends Seeder
         ];
 
         foreach ($barang as $i => $item) {
+            if ($i >= 8) {
+                $opname->details()->create([
+                    'item_id' => $item->item_id,
+                    'stock_stored' => $item->stock_current,
+                ]);
+
+                continue;
+            }
+
             [$delta, $alasan, $keterangan] = $selisih[$i] ?? [0, null, null];
 
             $stokFisik = max(0, $item->stock_current + $delta);
@@ -84,7 +96,7 @@ class StockOpnameSeeder extends Seeder
     }
 
     /**
-     * Opname triwulan berjalan: masih draf, baru sebagian dicacah.
+     * Opname triwulan berjalan: masih draf, baru sebagian diisi.
      */
     private function opnameDraf(User $petugas): void
     {
@@ -100,7 +112,7 @@ class StockOpnameSeeder extends Seeder
         ]);
 
         foreach ($barang as $i => $item) {
-            // Lima barang pertama sudah dicacah tanpa selisih, sisanya belum.
+            // Lima barang pertama sudah diisi tanpa selisih, sisanya belum.
             $sudahDicacah = $i < 5;
 
             $opname->details()->create([
@@ -112,6 +124,6 @@ class StockOpnameSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info("Opname contoh berstatus draf: {$opname->judul()} (5 dari {$barang->count()} barang dicacah).");
+        $this->command?->info("Opname contoh berstatus draf: {$opname->judul()} (5 dari {$barang->count()} barang diisi).");
     }
 }

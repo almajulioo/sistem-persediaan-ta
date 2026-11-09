@@ -10,9 +10,17 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Penyimpanan hasil pencacahan secara massal.
+ * Penyimpanan hasil pencacahan, sekaligus posting bila `aksi=posting`.
  *
- * Boleh sebagian: barang yang belum dicacah dikirim dengan `stock_real` kosong.
+ * Hanya baris yang berubah yang dikirim; baris yang tidak dikirim tetap
+ * seperti tersimpan. Barang yang dikosongkan dikirim dengan `stock_real`
+ * kosong dan akan mengikuti stok sistem saat diposting (ADR 0056).
+ *
+ * Layar pencacahan mengirim barisnya sebagai satu JSON di `hasil_cacah`,
+ * bukan ribuan isian `details[...]`: `max_input_vars` PHP (bawaan 1000)
+ * memotong isian di atas batas itu diam-diam, dan baris yang terpotong akan
+ * ikut diposting sebagai "sesuai". `details` sebagai larik biasa tetap
+ * diterima.
  */
 class UpdateOpnameCountRequest extends FormRequest
 {
@@ -28,13 +36,36 @@ class UpdateOpnameCountRequest extends FormRequest
         return $this->user()?->can('kelola-gudang') ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('hasil_cacah')) {
+            return;
+        }
+
+        $isi = json_decode((string) $this->input('hasil_cacah'), true);
+
+        // Middleware pengubah string kosong menjadi null sudah berjalan
+        // sebelum JSON ini dibuka, jadi pembersihannya diulang di sini.
+        $this->merge(['details' => is_array($isi)
+            ? array_map(
+                fn ($baris) => is_array($baris)
+                    ? array_map(fn ($nilai) => is_string($nilai) && trim($nilai) === '' ? null : $nilai, $baris)
+                    : $baris,
+                $isi,
+            )
+            : null,
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         return [
-            'details' => ['required', 'array'],
+            'aksi' => ['nullable', Rule::in(['simpan', 'posting'])],
+            'details' => ['sometimes', 'array'],
+            'details.*' => ['array'],
             'details.*.stock_real' => ['nullable', 'integer', 'min:0', 'max:999999'],
             'details.*.adjustment_reason' => ['nullable', Rule::enum(AlasanSelisih::class)],
             'details.*.adjustment_note' => ['nullable', 'string', 'max:500'],
@@ -61,7 +92,7 @@ class UpdateOpnameCountRequest extends FormRequest
             foreach ((array) $this->input('details', []) as $id => $baris) {
                 $detail = $this->details()->get((string) $id);
 
-                if ($detail === null || ! isset($baris['stock_real']) || $baris['stock_real'] === '') {
+                if ($detail === null || ! is_array($baris) || ! isset($baris['stock_real']) || $baris['stock_real'] === '') {
                     continue;
                 }
 
@@ -88,6 +119,11 @@ class UpdateOpnameCountRequest extends FormRequest
         });
     }
 
+    public function mauPosting(): bool
+    {
+        return $this->input('aksi') === 'posting';
+    }
+
     /**
      * @return Collection<string, OpnameDetail>
      */
@@ -106,9 +142,11 @@ class UpdateOpnameCountRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'details.required' => 'Tidak ada data pencacahan yang dikirim.',
+            'details.array' => 'Data pencacahan tidak terbaca. Muat ulang halaman lalu coba lagi.',
+            'details.*.array' => 'Data pencacahan tidak terbaca. Muat ulang halaman lalu coba lagi.',
             'details.*.stock_real.integer' => 'Hasil cacah harus berupa angka bulat.',
             'details.*.stock_real.min' => 'Hasil cacah tidak boleh kurang dari :min.',
+            'details.*.stock_real.max' => 'Hasil cacah tidak boleh lebih dari :max.',
             'details.*.adjustment_note.max' => 'Keterangan maksimal :max karakter.',
         ];
     }

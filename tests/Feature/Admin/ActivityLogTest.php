@@ -249,7 +249,7 @@ describe('celah pencatatan yang ditutup', function () {
             ->firstOrFail();
 
         expect($log->activity)->toContain('Mengubah hasil cacah')
-            ->and($log->activity)->toContain('1 dari 1 barang tercacah')
+            ->and($log->activity)->toContain('1 barang diubah, 1 dari 1 barang diisi')
             ->and($log->subject_id)->toBe($opname->opname_id)
             ->and($log->actor_role)->toBe(UserRole::PengelolaGudang);
     });

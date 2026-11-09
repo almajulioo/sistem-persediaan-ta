@@ -233,8 +233,13 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan tiap dokumen opname: siap diposting, atau menggantung terlalu
-     * lama. Opname yang sudah selesai menutup keduanya.
+     * Keadaan tiap dokumen opname: draf yang menggantung terlalu lama.
+     * Opname yang sudah selesai atau dihapus menutupnya.
+     *
+     * "Siap diposting" tidak ada lagi (ADR 0056): barang yang tidak diisi
+     * mengikuti stok sistem, jadi setiap draf selalu dapat diposting dan
+     * sistem tidak dapat tahu kapan pencacahan selesai. Yang tersisa adalah
+     * pengingat bahwa draf belum juga diposting.
      */
     public static function periksaOpname(): void
     {
@@ -243,45 +248,23 @@ class NotificationScanner
 
         StockOpname::query()->with('user')->chunk(100, function ($opnames) use ($admin, $batas) {
             foreach ($opnames as $opname) {
-                $siap = $opname->siapDiposting();
-
-                // Menggantung dan siap diposting dibuat saling eksklusif: draf
-                // yang sudah lengkap butuh satu ajakan yang jelas, bukan dua
-                // notifikasi tentang dokumen yang sama.
-                $menggantung = $opname->isDraf() && ! $siap && $opname->created_at->lt($batas);
-
                 $pembuat = $opname->user;
-                $penerimaSiap = $pembuat !== null ? new EloquentCollection([$pembuat]) : new EloquentCollection;
-                $penerimaMenggantung = $pembuat !== null
-                    ? $admin->concat([$pembuat])->unique('user_id')
-                    : $admin;
-
-                $tautan = route('opname.edit', $opname, false);
+                $ringkasan = $opname->ringkasan();
 
                 Notifier::terapkanKeadaan(
-                    berlaku: $siap,
-                    penerima: $penerimaSiap,
-                    type: NotificationType::OpnameSiapDiposting,
-                    dedupKey: NotificationType::OpnameSiapDiposting->dedupKey($opname->opname_id),
-                    title: "Siap diposting: {$opname->judul()}",
-                    body: "Seluruh barang pada {$opname->judul()} sudah dicacah. Periksa sekali lagi lalu posting supaya penyesuaian masuk ke buku mutasi.",
-                    actionUrl: $tautan,
-                    subject: $opname,
-                );
-
-                Notifier::terapkanKeadaan(
-                    berlaku: $menggantung,
-                    penerima: $penerimaMenggantung,
+                    berlaku: $opname->isDraf() && $opname->created_at->lt($batas),
+                    penerima: $pembuat !== null ? $admin->concat([$pembuat])->unique('user_id') : $admin,
                     type: NotificationType::OpnameDrafMenggantung,
                     dedupKey: NotificationType::OpnameDrafMenggantung->dedupKey($opname->opname_id),
                     title: "Draf menggantung: {$opname->judul()}",
                     body: sprintf(
-                        'Draf %s dibuat %s dan masih menyisakan %d barang yang belum dicacah. Lanjutkan pencacahan atau hapus drafnya.',
+                        'Draf %s dibuat %s dan belum diposting (%d dari %d barang diisi). Selesaikan pencacahan lalu posting, atau hapus drafnya.',
                         $opname->judul(),
                         $opname->created_at->diffForHumans(),
-                        $opname->ringkasan()['belum_dicacah'],
+                        $ringkasan['diisi'],
+                        $ringkasan['barang'],
                     ),
-                    actionUrl: $tautan,
+                    actionUrl: route('opname.edit', $opname, false),
                     subject: $opname,
                 );
             }
@@ -1295,10 +1278,11 @@ class NotificationScanner
             dedupKey: NotificationType::OpnameDiposting->dedupKey($opname->opname_id),
             title: "{$opname->judul()} telah diposting",
             body: sprintf(
-                '%s memposting %s: %d barang dicacah, %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
+                '%s memposting %s: %d dari %d barang diisi, sisanya mengikuti stok sistem; %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
                 $pelaku->fullname,
                 $opname->judul(),
-                $ringkasan['dicacah'],
+                $ringkasan['diisi'],
+                $ringkasan['barang'],
                 $ringkasan['selisih'],
                 number_format($ringkasan['lebih'], 0, ',', '.'),
                 number_format($ringkasan['kurang'], 0, ',', '.'),

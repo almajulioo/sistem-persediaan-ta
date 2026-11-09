@@ -4,6 +4,11 @@
 
 Diterima — 4 September 2026
 
+Sebagian digantikan oleh [ADR 0056](0056-barang-tidak-diisi-mengikuti-stok-sistem.md)
+— 9 November 2026: syarat posting "seluruh barang sudah dicacah" dihapus;
+barang yang tidak diisi mengikuti stok sistem saat diposting. Aturan
+penyesuaian (hanya selisih hasil cacah yang diterapkan) tetap berlaku.
+
 ## Konteks
 
 Activity diagram awal menggambarkan stok opname sebagai satu jalur lurus:

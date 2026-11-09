@@ -53,13 +53,37 @@ class OpnameDetail extends Model
     }
 
     /**
+     * Angka fisiknya diketik petugas.
+     *
+     * `counted_at` hanya diisi saat petugas memasukkan angka, sehingga baris
+     * yang diisi sistem ketika posting tetap tanpa waktu cacah (ADR 0056).
+     */
+    public function diisiPetugas(): bool
+    {
+        return $this->counted_at !== null;
+    }
+
+    /**
+     * Tidak diisi petugas, lalu diposting dengan stok sistem sebagai hasil
+     * cacahnya: dianggap sesuai, tanpa penyesuaian (ADR 0056).
+     */
+    public function mengikutiStokSistem(): bool
+    {
+        return $this->sudahDicacah() && ! $this->diisiPetugas();
+    }
+
+    /**
      * Stok bergerak setelah barang ini dicacah, mis. ada penyerahan barang di
      * tengah opname berjalan. Ditandai di laporan supaya penyesuaian yang
      * berbeda dari selisih hasil cacah dapat dijelaskan.
+     *
+     * Baris yang mengikuti stok sistem tidak pernah ditandai: tidak ada hasil
+     * cacah yang bisa berbeda dari stok akhirnya.
      */
     public function stokBerubahSejakDicacah(): bool
     {
-        return $this->stock_at_posting !== null
+        return $this->diisiPetugas()
+            && $this->stock_at_posting !== null
             && $this->stock_at_posting !== $this->stock_stored;
     }
 

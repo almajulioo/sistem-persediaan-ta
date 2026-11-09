@@ -76,12 +76,9 @@ class OpnamePoster
             throw OpnameTidakSiapException::bukanDraf();
         }
 
-        $belumDicacah = $opname->details()->whereNull('stock_real')->count();
-
-        if ($belumDicacah > 0) {
-            throw OpnameTidakSiapException::masihAdaYangBelumDicacah($belumDicacah);
-        }
-
+        // Barang yang belum diisi tidak lagi menghalangi posting: ia mengikuti
+        // stok sistem (ADR 0056, menggantikan syarat "seluruh barang sudah
+        // dicacah" pada ADR 0010).
         $tanpaAlasan = $opname->details()
             ->with('item')
             ->where('difference', '!=', 0)
@@ -105,6 +102,19 @@ class OpnamePoster
         $item = Item::query()->lockForUpdate()->findOrFail($detail->item_id);
 
         $stokSaatPosting = $item->stock_current;
+
+        // Barang yang tidak diisi petugas dianggap sesuai stok sistem (ADR
+        // 0056). Hasil cacahnya disamakan dengan stok tercatat — bukan dengan
+        // stok saat posting, yang akan menerapkan ulang mutasi sah sejak draf
+        // dibuat — sehingga selisihnya nol dan stok akhirnya tetap stok sistem
+        // pada detik ini. `counted_at` sengaja dibiarkan kosong: tidak ada yang
+        // menghitungnya, dan itulah penanda baris ini di layar dan laporan.
+        if (! $detail->sudahDicacah()) {
+            $detail->forceFill([
+                'stock_real' => $detail->stock_stored,
+                'difference' => 0,
+            ]);
+        }
 
         // Yang diterapkan adalah selisih yang ditemukan saat mencacah, bukan
         // jarak antara hasil cacah dan stok saat posting. Memakai yang kedua

@@ -246,7 +246,8 @@ Route::middleware('auth')->group(function () {
 
         // Stok opname. Opname yang sudah diposting bersifat final: rute ubah dan
         // hapus menolaknya di controller, bukan disembunyikan dari daftar rute.
-        Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
+        // Posting tidak punya rute sendiri: ia dikirim lewat opname.update
+        // dengan aksi=posting supaya isian di layar ikut tersimpan (ADR 0056).
         Route::resource('opname', StockOpnameController::class)
             ->except(['index', 'show'])
             ->names('opname');
@@ -398,7 +399,7 @@ Route::middleware('auth')->group(function () {
         Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');
         Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
 
-        Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
+        Route::get('opname/{opname}/excel', [StockOpnameController::class, 'exportExcel'])->name('opname.excel');
         Route::resource('opname', StockOpnameController::class)
             ->only(['index', 'show'])
             ->names('opname');

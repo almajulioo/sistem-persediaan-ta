@@ -61,7 +61,7 @@ dengan `kasubbag_umum_ti`, yang menaungi gudang.
 | Tampilan | Blade + Alpine.js, template TailAdmin (Tailwind CSS v4) |
 | Basis data | MySQL/MariaDB (XAMPP saat pengembangan), SQLite in-memory untuk pengujian |
 | Autentikasi | Sesi bawaan Laravel, tanpa starter kit — [ADR 0001](keputusan/0001-autentikasi-sesi-tanpa-starter-kit.md) |
-| Laporan | `barryvdh/laravel-dompdf` untuk PDF, CSV memakai kode bawaan — [ADR 0009](keputusan/0009-laporan-pdf-dan-csv.md) |
+| Laporan | `barryvdh/laravel-dompdf` untuk PDF, CSV memakai kode bawaan — [ADR 0009](keputusan/0009-laporan-pdf-dan-csv.md); `phpoffice/phpspreadsheet` untuk Excel usulan pengadaan dan Laporan Stok Opname — [ADR 0048](keputusan/0048-ekspor-excel-usulan-pengadaan.md), [ADR 0055](keputusan/0055-laporan-stok-opname-dalam-excel.md) |
 | Pengujian | Pest 4 |
 | Gaya kode | Laravel Pint |
 

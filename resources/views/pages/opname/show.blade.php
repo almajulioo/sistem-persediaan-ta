@@ -3,6 +3,17 @@
 @php
     $ringkasan = $opname->ringkasan();
     $adaYangBerubah = $opname->details->contains(fn ($d) => $d->stokBerubahSejakDicacah());
+
+    // Pada draf, barang yang tidak diisi baru akan mengikuti stok sistem bila
+    // diposting (ADR 0056).
+    $labelTidakDiisi = $opname->isSelesai() ? 'Ikut Stok Sistem' : 'Belum Diisi';
+
+    $penyaring = [
+        'semua' => ['Semua', $ringkasan['barang']],
+        'diisi' => ['Diisi Petugas', $ringkasan['diisi']],
+        'berselisih' => ['Berselisih', $ringkasan['selisih']],
+        'tidak_diisi' => [$labelTidakDiisi, $ringkasan['tidak_diisi']],
+    ];
 @endphp
 
 @section('content')
@@ -33,9 +44,10 @@
             </span>
 
             @if ($opname->isSelesai())
-                <a href="{{ route('opname.pdf', $opname) }}" target="_blank" rel="noopener"
-                    class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                    Cetak Laporan
+                <a href="{{ route('opname.excel', $opname) }}"
+                    class="text-theme-sm inline-flex items-center gap-2 rounded-lg px-4 py-3 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                    <x-ui.icon name="download" class="size-4" />
+                    Unduh Excel
                 </a>
             @else
                 @can('kelola-gudang')
@@ -59,10 +71,10 @@
     {{-- Ringkasan --}}
     <div class="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4 md:gap-6">
         @foreach ([
-            ['label' => 'Barang Dicacah', 'value' => $ringkasan['dicacah'] . ' / ' . $ringkasan['barang'], 'class' => 'text-gray-800 dark:text-white/90'],
+            ['label' => 'Diisi Petugas', 'value' => $ringkasan['diisi'] . ' / ' . $ringkasan['barang'], 'class' => 'text-gray-800 dark:text-white/90'],
+            ['label' => $labelTidakDiisi, 'value' => $ringkasan['tidak_diisi'], 'class' => 'text-gray-800 dark:text-white/90'],
             ['label' => 'Barang Berselisih', 'value' => $ringkasan['selisih'], 'class' => $ringkasan['selisih'] > 0 ? 'text-warning-600 dark:text-orange-400' : 'text-gray-800 dark:text-white/90'],
-            ['label' => 'Selisih Lebih', 'value' => '+' . $ringkasan['lebih'], 'class' => 'text-success-600 dark:text-success-500'],
-            ['label' => 'Selisih Kurang', 'value' => '-' . $ringkasan['kurang'], 'class' => 'text-error-600 dark:text-error-500'],
+            ['label' => 'Selisih Lebih / Kurang', 'value' => '+' . $ringkasan['lebih'] . ' / -' . $ringkasan['kurang'], 'class' => 'text-gray-800 dark:text-white/90'],
         ] as $card)
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $card['label'] }}</span>
@@ -96,23 +108,42 @@
 
     {{-- Rincian --}}
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        <div class="px-5 py-5 sm:px-6">
+        <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-6">
             <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Rincian Pencacahan</h3>
+
+            <div class="flex flex-wrap gap-2" role="group" aria-label="Saring barang">
+                @foreach ($penyaring as $kunci => [$label, $jumlah])
+                    <a href="{{ route('opname.show', $kunci === 'semua' ? $opname : [$opname, 'baris' => $kunci]) }}"
+                        @if ($saring === $kunci) aria-current="true" @endif
+                        @class([
+                            'text-theme-sm inline-flex items-center gap-1.5 rounded-lg px-3 py-2 font-medium ring-1 ring-inset transition',
+                            'bg-brand-500 text-white ring-brand-500' => $saring === $kunci,
+                            'text-gray-700 ring-gray-300 hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]' => $saring !== $kunci,
+                        ])>
+                        {{ $label }}
+                        <span @class([
+                            'text-theme-xs rounded-full px-1.5 tabular-nums',
+                            'bg-white/20' => $saring === $kunci,
+                            'bg-gray-100 dark:bg-gray-800' => $saring !== $kunci,
+                        ])>{{ number_format($jumlah, 0, ',', '.') }}</span>
+                    </a>
+                @endforeach
+            </div>
         </div>
 
         <div class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">
             <table class="w-full min-w-[1120px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        @foreach (['Kode', 'Nama Barang', 'Stok Tercatat', 'Stok Fisik', 'Selisih', 'Penyesuaian', 'Alasan', 'Keterangan'] as $heading)
+                        @foreach (['Kode', 'Nama Barang', 'Stok Sistem', 'Stok Fisik', 'Selisih', 'Penyesuaian', 'Alasan', 'Keterangan'] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
-                                <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
+                                <p class="text-theme-xs font-medium whitespace-nowrap text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                             </th>
                         @endforeach
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($opname->details as $detail)
+                    @forelse ($rincian as $detail)
                         <tr class="border-b border-gray-100 dark:border-gray-800">
                             <td class="px-5 py-4 sm:px-6">
                                 <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
@@ -137,9 +168,20 @@
                                 </span>
                             </td>
                             <td class="px-5 py-4 sm:px-6">
-                                <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
-                                    {{ $detail->sudahDicacah() ? number_format($detail->stock_real, 0, ',', '.') : '—' }}
-                                </span>
+                                @if ($detail->mengikutiStokSistem())
+                                    <span class="text-theme-sm text-gray-500 dark:text-gray-400">
+                                        {{ number_format($detail->stock_real, 0, ',', '.') }}
+                                    </span>
+                                    <span class="text-theme-xs bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400 mt-1 block w-fit rounded-full px-2 py-0.5 font-medium whitespace-nowrap">
+                                        Ikut sistem
+                                    </span>
+                                @elseif ($detail->sudahDicacah())
+                                    <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
+                                        {{ number_format($detail->stock_real, 0, ',', '.') }}
+                                    </span>
+                                @else
+                                    <span class="text-theme-sm text-gray-400">—</span>
+                                @endif
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <span @class([
@@ -175,7 +217,13 @@
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">{{ $detail->adjustment_note ?? '—' }}</p>
                             </td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="8" class="px-5 py-10 text-center sm:px-6">
+                                <p class="text-theme-sm text-gray-500 dark:text-gray-400">Tidak ada barang pada penyaring ini.</p>
+                            </td>
+                        </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>

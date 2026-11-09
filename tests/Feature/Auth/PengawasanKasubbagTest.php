@@ -105,7 +105,7 @@ describe('Kasubbag membaca', function () {
             '/opname',
             "/opname/{$this->draf->opname_id}",
             "/opname/{$this->selesai->opname_id}",
-            "/opname/{$this->selesai->opname_id}/cetak",
+            "/opname/{$this->selesai->opname_id}/excel",
             '/penyedia',
             "/penyedia/{$this->supplier->supplier_id}",
             '/usulan-pengadaan',
@@ -166,7 +166,6 @@ describe('Kasubbag tidak bisa mengubah', function () {
             ['post', '/opname'],
             ['put', "/opname/{$draf}"],
             ['delete', "/opname/{$draf}"],
-            ['post', "/opname/{$draf}/posting"],
             ['post', '/penyedia'],
             ['put', "/penyedia/{$supplier}"],
             ['delete', "/penyedia/{$supplier}"],
@@ -235,7 +234,7 @@ describe('tampilan baca-saja', function () {
 
         $this->get('/opname')
             ->assertSee(route('opname.show', $this->draf), false)
-            ->assertSee(route('opname.pdf', $this->selesai), false)
+            ->assertSee(route('opname.excel', $this->selesai), false)
             ->assertDontSee(route('opname.create'), false)
             ->assertDontSee(route('opname.edit', $this->draf), false);
 

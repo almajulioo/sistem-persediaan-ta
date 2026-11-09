@@ -43,17 +43,72 @@ function drafDenganHasilCacah(User $petugas, array $hasil): StockOpname
     return $opname->fresh('details');
 }
 
-it('menolak posting bila masih ada barang belum dicacah', function () {
+// ADR 0056: barang yang tidak diisi tidak lagi menghalangi posting. Ia
+// dianggap sesuai stok sistem — tanpa mutasi — dan ditandai tidak diisi.
+it('memposting barang yang tidak diisi sebagai mengikuti stok sistem', function () {
+    $petugas = User::factory()->role(UserRole::PengelolaGudang)->create();
+    $kosong = Item::factory()->create(['stock_current' => 100]);
+    $selisih = Item::factory()->create(['stock_current' => 50]);
+
+    $opname = drafDenganHasilCacah($petugas, [
+        [$kosong, null, null, null],
+        [$selisih, 47, AlasanSelisih::BarangHilang, 'Tidak ditemukan.'],
+    ]);
+
+    OpnamePoster::post($opname, $petugas);
+
+    $detail = $opname->refresh()->details->firstWhere('item_id', $kosong->item_id);
+
+    expect($opname->status)->toBe(OpnameStatus::Selesai)
+        ->and($kosong->refresh()->stock_current)->toBe(100)
+        ->and($selisih->refresh()->stock_current)->toBe(47)
+        ->and(StockMutation::where('item_id', $kosong->item_id)->count())->toBe(0)
+        ->and($detail->stock_real)->toBe(100)
+        ->and($detail->difference)->toBe(0)
+        ->and($detail->adjustment_amount)->toBe(0)
+        ->and($detail->stock_at_posting)->toBe(100)
+        ->and($detail->counted_at)->toBeNull()
+        ->and($detail->mengikutiStokSistem())->toBeTrue()
+        ->and($detail->diisiPetugas())->toBeFalse()
+        ->and($opname->ringkasan())->toMatchArray(['barang' => 2, 'diisi' => 1, 'tidak_diisi' => 1, 'selisih' => 1]);
+});
+
+it('memposting draf yang tidak diisi sama sekali tanpa mutasi apa pun', function () {
+    $petugas = User::factory()->role(UserRole::PengelolaGudang)->create();
+    $a = Item::factory()->create(['stock_current' => 10]);
+    $b = Item::factory()->create(['stock_current' => 0]);
+
+    $opname = drafDenganHasilCacah($petugas, [[$a, null, null, null], [$b, null, null, null]]);
+
+    OpnamePoster::post($opname, $petugas);
+
+    expect($opname->refresh()->status)->toBe(OpnameStatus::Selesai)
+        ->and(StockMutation::count())->toBe(0)
+        ->and($opname->details->every(fn ($d) => $d->mengikutiStokSistem()))->toBeTrue();
+});
+
+// Stok sistem yang diikuti adalah stok pada detik posting: transaksi sah sejak
+// draf dibuat tetap berlaku, dan tidak diterapkan dua kali.
+it('mengikuti stok sistem saat posting walau stok bergerak sejak draf dibuat', function () {
     $petugas = User::factory()->role(UserRole::PengelolaGudang)->create();
     $item = Item::factory()->create(['stock_current' => 100]);
 
     $opname = drafDenganHasilCacah($petugas, [[$item, null, null, null]]);
 
-    expect(fn () => OpnamePoster::post($opname, $petugas))
-        ->toThrow(OpnameTidakSiapException::class);
+    StockLedger::record($item, MutationType::Keluar, 20);
 
-    expect($opname->refresh()->status)->toBe(OpnameStatus::Draf)
-        ->and(StockMutation::count())->toBe(0);
+    OpnamePoster::post($opname, $petugas);
+
+    $detail = $opname->refresh()->details->first();
+
+    expect($item->refresh()->stock_current)->toBe(80)
+        ->and($detail->stock_real)->toBe(100)
+        ->and($detail->stock_at_posting)->toBe(80)
+        ->and($detail->adjustment_amount)->toBe(0)
+        // Tidak ada hasil cacah yang bisa berbeda dari stok akhirnya, jadi
+        // baris ini tidak ditandai "stok berubah sejak dicacah".
+        ->and($detail->stokBerubahSejakDicacah())->toBeFalse()
+        ->and(StockMutation::where('mutation_type', MutationType::Penyesuaian)->count())->toBe(0);
 });
 
 it('menolak posting bila ada selisih tanpa alasan', function () {

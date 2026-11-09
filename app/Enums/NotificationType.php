@@ -36,7 +36,8 @@ enum NotificationType: string
     case BarangTidakBergerak = 'barang_tidak_bergerak';
 
     // --- Keadaan stok opname ---
-    case OpnameSiapDiposting = 'opname_siap_diposting';
+    // OpnameSiapDiposting dihapus (ADR 0056): sejak barang kosong mengikuti
+    // stok sistem, setiap draf selalu dapat diposting.
     case OpnameDrafMenggantung = 'opname_draf_menggantung';
     case PeriodeBelumDiopname = 'periode_belum_diopname';
 
@@ -96,7 +97,6 @@ enum NotificationType: string
             self::StokBerlebih => 'Stok Berlebih',
             self::BarangTidakBergerak => 'Barang Tidak Bergerak',
             self::DraftUsulanTersedia => 'Draf Usulan Tersedia',
-            self::OpnameSiapDiposting => 'Opname Siap Diposting',
             self::OpnameDrafMenggantung => 'Draf Opname Menggantung',
             self::PeriodeBelumDiopname => 'Periode Belum Diopname',
             self::UsulanMenungguPersetujuan => 'Usulan Menunggu Persetujuan',
@@ -143,7 +143,6 @@ enum NotificationType: string
             self::StokBerlebih => 'Stok melampaui batas maksimum; berisiko menumpuk dan kedaluwarsa.',
             self::BarangTidakBergerak => 'Tidak ada mutasi apa pun dalam waktu lama; layak dievaluasi atau diarsipkan.',
             self::DraftUsulanTersedia => 'Draf usulan pengadaan otomatis sudah terkumpul dari pemantauan stok, menunggu ditinjau.',
-            self::OpnameSiapDiposting => 'Seluruh barang sudah dicacah dan draf tinggal diposting.',
             self::OpnameDrafMenggantung => 'Draf opname dibiarkan terlalu lama tanpa diselesaikan.',
             self::PeriodeBelumDiopname => 'Periode berjalan hampir berakhir tetapi opname belum dibuat.',
             self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
@@ -252,7 +251,6 @@ enum NotificationType: string
             self::StokHabis => NotificationLevel::Mendesak,
             self::StokMenipis,
             self::DraftUsulanTersedia,
-            self::OpnameSiapDiposting,
             self::OpnameDrafMenggantung,
             self::PeriodeBelumDiopname,
             self::StokBergerakSetelahDicacah,

@@ -65,30 +65,27 @@ class StockOpname extends Model
     /**
      * Ringkasan hasil pencacahan.
      *
-     * @return array<string, int>
+     * `tidak_diisi` adalah barang yang tidak diketik petugas: pada draf ia
+     * akan mengikuti stok sistem bila diposting, pada opname selesai ia sudah
+     * mengikutinya (ADR 0056).
+     *
+     * @return array{barang: int, diisi: int, tidak_diisi: int, selisih: int, lebih: int, kurang: int}
      */
     public function ringkasan(): array
     {
         $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
 
+        $diisi = $details->filter(fn (OpnameDetail $d) => $d->diisiPetugas())->count();
         $dicacah = $details->filter(fn (OpnameDetail $d) => $d->sudahDicacah());
 
         return [
             'barang' => $details->count(),
-            'dicacah' => $dicacah->count(),
-            'belum_dicacah' => $details->count() - $dicacah->count(),
+            'diisi' => $diisi,
+            'tidak_diisi' => $details->count() - $diisi,
             'selisih' => $dicacah->filter(fn (OpnameDetail $d) => $d->adaSelisih())->count(),
             'lebih' => (int) $dicacah->where('difference', '>', 0)->sum('difference'),
             'kurang' => (int) abs($dicacah->where('difference', '<', 0)->sum('difference')),
         ];
-    }
-
-    /**
-     * Apakah seluruh barang sudah dicacah — syarat untuk diposting.
-     */
-    public function siapDiposting(): bool
-    {
-        return $this->isDraf() && $this->details()->whereNull('stock_real')->doesntExist();
     }
 
     public function scopeFilter(Builder $query, array $filters): Builder

@@ -45,8 +45,7 @@ penerimanya sudah ditendang keluar sesi.
 | Stok Berlebih | Info | Gudang + Admin | Tinjau kebutuhan, cegah menumpuk |
 | Barang Tidak Bergerak | Info | Gudang + Admin | Evaluasi atau arsipkan |
 | Draf Usulan Tersedia | Perhatian | Gudang + Admin | Tinjau, sesuaikan jumlah, lalu ajukan |
-| Opname Siap Diposting | Perhatian | Pembuat draf | Periksa lalu posting |
-| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Lanjutkan atau hapus draf |
+| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Draf belum diposting &gt;7 hari: selesaikan lalu posting, atau hapus draf. Sejak [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) berlaku untuk setiap draf; "Opname Siap Diposting" dihapus karena setiap draf selalu dapat diposting |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
@@ -96,6 +95,9 @@ instansi pemeriksa, justru inilah yang paling layak diketahui Admin.
 **Stok Bergerak Setelah Dicacah** memakai `OpnameDetail::stokBerubahSejakDicacah()`
 yang sudah ada sejak modul opname tetapi **tidak pernah ditampilkan kepada
 siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md).
+Sejak [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md)
+hanya baris yang diisi petugas yang dihitung: baris yang mengikuti stok sistem
+tidak punya hasil cacah yang bisa berbeda dari stok akhirnya.
 
 ## Ambang batas
 

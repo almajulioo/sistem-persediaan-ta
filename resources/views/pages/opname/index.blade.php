@@ -93,7 +93,7 @@
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    {{ $ringkasan['dicacah'] }} / {{ $ringkasan['barang'] }} barang
+                                    {{ $ringkasan['diisi'] }} / {{ $ringkasan['barang'] }} diisi
                                 </p>
                             </td>
                             <td class="px-5 py-4 sm:px-6">
@@ -128,9 +128,10 @@
                                             Lihat
                                         </a>
                                         @unless ($opname->isDraf())
-                                            <a href="{{ route('opname.pdf', $opname) }}" target="_blank" rel="noopener"
-                                                class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                                                Cetak
+                                            <a href="{{ route('opname.excel', $opname) }}"
+                                                class="text-theme-xs inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                                <x-ui.icon name="download" class="size-3.5" />
+                                                Excel
                                             </a>
                                         @endunless
                                     @endif

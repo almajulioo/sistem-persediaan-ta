@@ -142,6 +142,7 @@ ERD pada naskah Naren diperbarui.
 | `opname_details` | `stock_real` dan `difference` menjadi **nullable** — draf menyimpan barang yang belum dicacah | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
 | `opname_details` | Tambah `counted_at`, `stock_at_posting`, `adjustment_amount` | [0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) |
 | `opname_details` | Tambah `adjustment_reason` | [0011](../keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) |
+| `opname_details` | Tanpa perubahan skema: `counted_at` kosong pada opname selesai kini berarti "tidak diisi petugas, mengikuti stok sistem" | [0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) |
 | `procurement_requests` | Hapus `request_id`, `request_type`; tambah `source`, `reference_type`, `reference_id`, `status` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
 | `request_details` → `procurement_request_details` | Rename tabel + PK; FK diperbaiki menunjuk `procurement_requests` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |
 | `procurements` | Tambah `procurement_request_id`; hapus `bast_scan` | [0015](../keputusan/0015-usulan-pengadaan-dan-penerimaan-barang.md) |

@@ -11,27 +11,32 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Gudang\StoreOpnameRequest;
 use App\Http\Requests\Gudang\UpdateOpnameCountRequest;
 use App\Models\Item;
+use App\Models\OpnameDetail;
 use App\Models\StockOpname;
 use App\Support\AuditLogger;
 use App\Support\KirimanFormulir;
+use App\Support\LaporanStokOpname;
 use App\Support\OpnamePoster;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Stok opname: pencacahan fisik dan penyesuaian stok.
  *
- * Draf boleh disimpan sebagian, tetapi posting menuntut seluruh barang sudah
- * dicacah. Setelah diposting, dokumen bersifat final karena penyesuaiannya sudah
- * tercatat di buku mutasi yang immutable. Lihat ADR 0010.
+ * Petugas cukup mengisi barang yang jumlah fisiknya berbeda; barang yang
+ * dikosongkan mengikuti stok sistem saat diposting (ADR 0056). Setelah
+ * diposting, dokumen bersifat final karena penyesuaiannya sudah tercatat di
+ * buku mutasi yang immutable. Lihat ADR 0010.
  */
 class StockOpnameController extends Controller
 {
     private const PER_PAGE = 10;
+
+    /** Penyaring baris pada halaman hasil opname. */
+    private const SARING_BARIS = ['diisi', 'berselisih', 'tidak_diisi'];
 
     public function index(Request $request): View
     {
@@ -113,11 +118,24 @@ class StockOpnameController extends Controller
             ->with('status', "{$opname->judul()} dibuat dengan {$barang->count()} barang.");
     }
 
-    public function show(StockOpname $opname): View
+    public function show(Request $request, StockOpname $opname): View
     {
+        $opname->load(['user', 'details.item']);
+
+        $saring = in_array($request->query('baris'), self::SARING_BARIS, true)
+            ? (string) $request->query('baris')
+            : 'semua';
+
         return view('pages.opname.show', [
             'title' => $opname->judul(),
-            'opname' => $opname->load(['user', 'details.item']),
+            'opname' => $opname,
+            'saring' => $saring,
+            'rincian' => $opname->details->filter(fn (OpnameDetail $detail) => match ($saring) {
+                'diisi' => $detail->diisiPetugas(),
+                'berselisih' => $detail->adaSelisih(),
+                'tidak_diisi' => ! $detail->diisiPetugas(),
+                default => true,
+            }),
         ]);
     }
 
@@ -135,81 +153,123 @@ class StockOpnameController extends Controller
         ]);
     }
 
+    /**
+     * Simpan hasil cacah, lalu posting bila `aksi=posting`.
+     *
+     * Posting lewat sini, bukan rute tersendiri, supaya isian di layar yang
+     * belum disimpan ikut terposting. Dulu posting memakai data tersimpan
+     * saja; dengan barang kosong yang mengikuti stok sistem, isian yang lupa
+     * disimpan akan diam-diam diposting sebagai "sesuai" (ADR 0056).
+     */
     public function update(UpdateOpnameCountRequest $request, StockOpname $opname): RedirectResponse
     {
         if ($opname->isSelesai()) {
             return back()->with('error', 'Stok opname ini sudah diposting dan tidak dapat diubah.');
         }
 
-        $details = $request->details();
+        $berubah = $this->simpanHasilCacah($request);
 
-        DB::transaction(function () use ($request, $details) {
-            foreach ((array) $request->validated()['details'] as $id => $baris) {
+        // Angka hasil cacah fisik adalah dasar penyesuaian stok nanti, jadi
+        // pengisiannya ikut ditelusuri — bukan hanya pembuatan dan pemostingan
+        // drafnya. Kemajuan pengisian disebut supaya pembaca log dapat
+        // membedakan pengisian awal dari koreksi menjelang posting. Kiriman
+        // tanpa perubahan tidak mengubah apa pun, jadi tidak dicatat.
+        if ($berubah > 0) {
+            AuditLogger::record(
+                user: $request->user(),
+                activity: sprintf(
+                    'Mengubah hasil cacah %s (%d barang diubah, %d dari %d barang diisi)',
+                    $opname->judul(),
+                    $berubah,
+                    $opname->details()->whereNotNull('counted_at')->count(),
+                    $opname->details()->count(),
+                ),
+                module: AuditModule::Opname,
+                event: AuditEvent::Ubah,
+                subject: $opname,
+            );
+        }
+
+        if ($request->mauPosting()) {
+            return $this->posting($request, $opname);
+        }
+
+        return redirect()
+            ->route('opname.edit', $opname)
+            ->with('status', $berubah === 0 ? 'Tidak ada perubahan untuk disimpan.' : 'Hasil cacah tersimpan.');
+    }
+
+    /**
+     * Terapkan penyesuaian ke stok dan kunci dokumen menjadi final.
+     */
+    private function posting(Request $request, StockOpname $opname): RedirectResponse
+    {
+        try {
+            OpnamePoster::post($opname, $request->user());
+        } catch (OpnameTidakSiapException $e) {
+            return redirect()->route('opname.edit', $opname)->with('error', $e->getMessage());
+        } catch (InsufficientStockException $e) {
+            // Penyesuaian kurang bisa membuat stok minus bila banyak barang
+            // keluar setelah pencacahan. Seluruh posting dibatalkan; isian
+            // yang baru disimpan tetap ada di draf.
+            return redirect()
+                ->route('opname.edit', $opname)
+                ->with('error', $e->getMessage().' Posting dibatalkan; periksa kembali hasil cacah.');
+        }
+
+        return redirect()
+            ->route('opname.show', $opname)
+            ->with('status', "{$opname->judul()} berhasil diposting.");
+    }
+
+    /**
+     * Simpan baris yang dikirim; yang tidak dikirim tetap seperti tersimpan.
+     *
+     * @return int jumlah baris yang benar-benar berubah
+     */
+    private function simpanHasilCacah(UpdateOpnameCountRequest $request): int
+    {
+        $details = $request->details();
+        $berubah = 0;
+
+        DB::transaction(function () use ($request, $details, &$berubah) {
+            foreach ((array) ($request->validated()['details'] ?? []) as $id => $baris) {
                 $detail = $details->get((string) $id);
 
                 if ($detail === null) {
                     continue;
                 }
 
-                $stokReal = ($baris['stock_real'] ?? '') === '' || $baris['stock_real'] === null
+                $stokReal = ($baris['stock_real'] ?? null) === null || $baris['stock_real'] === ''
                     ? null
                     : (int) $baris['stock_real'];
+
+                // Alasan hanya bermakna pada baris berselisih. Baris yang
+                // kembali cocok atau dikosongkan membuang sisa isiannya.
+                $berselisih = $stokReal !== null && $stokReal !== $detail->stock_stored;
 
                 $detail->forceFill([
                     'stock_real' => $stokReal,
                     'difference' => $stokReal === null ? null : $stokReal - $detail->stock_stored,
-                    'counted_at' => $stokReal === null ? null : now(),
-                    'adjustment_reason' => $baris['adjustment_reason'] ?? null,
-                    'adjustment_note' => $baris['adjustment_note'] ?? null,
-                ])->save();
+                    'adjustment_reason' => $berselisih ? ($baris['adjustment_reason'] ?? null) : null,
+                    'adjustment_note' => $berselisih ? ($baris['adjustment_note'] ?? null) : null,
+                ]);
+
+                // Waktu cacah adalah saat angka itu dimasukkan, bukan saat
+                // terakhir disimpan. Baris tanpa waktu cacah adalah baris yang
+                // tidak diisi petugas (ADR 0056).
+                if ($detail->isDirty('stock_real')) {
+                    $detail->counted_at = $stokReal === null ? null : now();
+                }
+
+                if ($detail->isDirty()) {
+                    $detail->save();
+                    $berubah++;
+                }
             }
         });
 
-        $sisa = $opname->details()->whereNull('stock_real')->count();
-        $total = $opname->details()->count();
-
-        // Angka hasil cacah fisik adalah dasar penyesuaian stok nanti, jadi
-        // pengisiannya ikut ditelusuri — bukan hanya pembuatan dan pemostingan
-        // drafnya. Kemajuan pencacahan disebut supaya pembaca log dapat
-        // membedakan pengisian awal dari koreksi menjelang posting.
-        AuditLogger::record(
-            user: $request->user(),
-            activity: sprintf(
-                'Mengubah hasil cacah %s (%d dari %d barang tercacah)',
-                $opname->judul(),
-                $total - $sisa,
-                $total,
-            ),
-            module: AuditModule::Opname,
-            event: AuditEvent::Ubah,
-            subject: $opname,
-        );
-
-        return redirect()
-            ->route('opname.edit', $opname)
-            ->with('status', $sisa === 0
-                ? 'Hasil cacah tersimpan. Seluruh barang sudah dicacah dan siap diposting.'
-                : "Hasil cacah tersimpan. Masih ada {$sisa} barang yang belum dicacah.");
-    }
-
-    /**
-     * Terapkan penyesuaian ke stok dan kunci dokumen menjadi final.
-     */
-    public function post(Request $request, StockOpname $opname): RedirectResponse
-    {
-        try {
-            OpnamePoster::post($opname, $request->user());
-        } catch (OpnameTidakSiapException $e) {
-            return back()->with('error', $e->getMessage());
-        } catch (InsufficientStockException $e) {
-            // Penyesuaian kurang bisa membuat stok minus bila banyak barang
-            // keluar setelah pencacahan. Seluruh posting dibatalkan.
-            return back()->with('error', $e->getMessage().' Posting dibatalkan; periksa kembali hasil cacah.');
-        }
-
-        return redirect()
-            ->route('opname.show', $opname)
-            ->with('status', "{$opname->judul()} berhasil diposting.");
+        return $berubah;
     }
 
     public function destroy(Request $request, StockOpname $opname): RedirectResponse
@@ -235,13 +295,11 @@ class StockOpnameController extends Controller
             ->with('status', "Draf {$judul} berhasil dihapus.");
     }
 
-    public function exportPdf(Request $request, StockOpname $opname): Response
+    public function exportExcel(Request $request, StockOpname $opname): StreamedResponse
     {
-        $pdf = Pdf::loadView('pdf.laporan-opname', [
-            'opname' => $opname->load(['user', 'details.item']),
-            'dicetakOleh' => $request->user()->fullname,
-        ])->setPaper('a4', 'landscape');
-
-        return $pdf->stream('laporan-opname-'.$opname->period_year.'-'.$opname->period_type->value.'.pdf');
+        return LaporanStokOpname::unduh(
+            LaporanStokOpname::laporan($opname->load(['user', 'details.item']), $request->user()),
+            LaporanStokOpname::namaBerkas($opname),
+        );
     }
 }
