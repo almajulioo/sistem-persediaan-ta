@@ -13,7 +13,6 @@ use App\Models\Supplier;
 use App\Models\User;
 use App\Support\DocumentStorage;
 use App\Support\NotificationScanner;
-use App\Support\ProcurementReceiptPoster;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -23,6 +22,10 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Realisasi yang sudah dikonfirmasi diterima seluruhnya, siap dilampiri berkas.
+ *
+ * Diterima **cara lama** (BAST lama, tanpa TTE): notifikasi BastBelumDiunggah
+ * yang diuji di berkas ini hanya berlaku untuk BAST lama sejak ADR 0051.
+ * Mengunggah berkas sendiri tidak bergantung pada cara penerimaannya.
  *
  * `$diterimaHariLalu` menggeser tanggal penerimaan ke belakang supaya ambang
  * notifikasi BastBelumDiunggah dapat diuji tanpa memanipulasi waktu sistem.
@@ -36,14 +39,7 @@ function realisasiDiterima(User $pejabat, User $petugas, int $diterimaHariLalu =
     // Persetujuan Kasubbag Umum dan TI adalah prasyarat penerimaan (ADR 0030).
     $procurement = buatRealisasiSiapDiterima($pejabat, $usulan, Supplier::factory()->create());
 
-    ProcurementReceiptPoster::post(
-        procurement: $procurement,
-        diterima: $procurement->details
-            ->mapWithKeys(fn ($detail) => [$detail->procurement_detail_id => $detail->amount])
-            ->all(),
-        actor: $petugas,
-        receivedAt: now()->subDays($diterimaHariLalu),
-    );
+    terimaCaraLama($procurement, $petugas, tanggal: now()->subDays($diterimaHariLalu));
 
     return $procurement->fresh();
 }
@@ -89,13 +85,14 @@ describe('hak akses berkas', function () {
         // dikembalikan secara eksplisit.
         auth()->logout();
 
-        $this->post($this->url, ['type' => 'bast', 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf')])
+        $this->post($this->url, ['submission_token' => tokenKiriman(), 'type' => 'bast', 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf')])
             ->assertRedirect('/login');
     });
 
     it('menolak peran di luar pengadaan', function () {
         $this->actingAs(User::factory()->role(UserRole::KepalaUnit)->create())
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
             ])
@@ -105,6 +102,7 @@ describe('hak akses berkas', function () {
     it('mengizinkan Pengelola Gudang mengunggah BAST bertanda tangan', function () {
         $this->actingAs($this->petugas)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('bast-ttd.pdf', 40, 'application/pdf'),
             ])
@@ -116,6 +114,7 @@ describe('hak akses berkas', function () {
     it('mengizinkan Pejabat Pengadaan mengunggah SPK', function () {
         $this->actingAs($this->pejabat)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'spk_kontrak',
                 'file' => UploadedFile::fake()->create('spk.pdf', 20, 'application/pdf'),
             ])
@@ -127,6 +126,7 @@ describe('hak akses berkas', function () {
     it('mengizinkan Admin mengunggah', function () {
         $this->actingAs(User::factory()->role(UserRole::Admin)->create())
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('bast.pdf', 20, 'application/pdf'),
             ])
@@ -139,6 +139,7 @@ describe('hak akses berkas', function () {
 describe('mengunggah berkas', function () {
     it('menyimpan berkas di disk privat beserta identitas aslinya', function () {
         $this->actingAs($this->petugas)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('BAST Ditandatangani.pdf', 128, 'application/pdf'),
             'notes' => 'Hasil pindai lengkap tiga halaman.',
@@ -161,6 +162,7 @@ describe('mengunggah berkas', function () {
 
     it('mencatat jejak audit', function () {
         $this->actingAs($this->petugas)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
         ]);
@@ -171,6 +173,7 @@ describe('mengunggah berkas', function () {
     it('menolak jenis berkas yang tidak diizinkan', function () {
         $this->actingAs($this->petugas)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('virus.exe', 10, 'application/octet-stream'),
             ])
@@ -182,6 +185,7 @@ describe('mengunggah berkas', function () {
     it('menolak berkas melebihi 10 MB', function () {
         $this->actingAs($this->petugas)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('besar.pdf', 11000, 'application/pdf'),
             ])
@@ -192,6 +196,7 @@ describe('mengunggah berkas', function () {
         // ADR 0035: HEIC adalah format bawaan kamera iPhone.
         $this->actingAs($this->pejabat)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'foto_belanja',
                 'file' => UploadedFile::fake()->create('barang.webp', 200, 'image/webp'),
             ])
@@ -199,6 +204,7 @@ describe('mengunggah berkas', function () {
 
         $this->actingAs($this->pejabat)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'foto_belanja',
                 'file' => UploadedFile::fake()->create('IMG_0001.heic', 200, 'image/heic'),
             ])
@@ -213,6 +219,7 @@ describe('mengunggah berkas', function () {
         // membawa skrip (ADR 0035).
         $this->actingAs($this->pejabat)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'foto_belanja',
                 'file' => UploadedFile::fake()->create('gambar.svg', 5, 'image/svg+xml'),
             ])
@@ -224,6 +231,7 @@ describe('mengunggah berkas', function () {
         // diberi jenis "foto" akan meloloskan syarat itu tanpa satu pun foto.
         $this->actingAs($this->pejabat)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'foto_belanja',
                 'file' => UploadedFile::fake()->create('nota.pdf', 20, 'application/pdf'),
             ])
@@ -233,6 +241,7 @@ describe('mengunggah berkas', function () {
     it('menolak jenis dokumen yang tidak dikenal', function () {
         $this->actingAs($this->petugas)
             ->post($this->url, [
+                'submission_token' => tokenKiriman(),
                 'type' => 'faktur_pajak',
                 'file' => UploadedFile::fake()->create('berkas.pdf', 10, 'application/pdf'),
             ])
@@ -241,10 +250,12 @@ describe('mengunggah berkas', function () {
 
     it('menerima lebih dari satu berkas pada satu pengadaan', function () {
         $this->actingAs($this->petugas)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
         ]);
         $this->actingAs($this->pejabat)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'spk_kontrak',
             'file' => UploadedFile::fake()->create('spk.pdf', 10, 'application/pdf'),
         ]);
@@ -257,6 +268,7 @@ describe('mengunggah berkas', function () {
 describe('mengunduh berkas', function () {
     beforeEach(function () {
         $this->actingAs($this->petugas)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast-asli.pdf', 32, 'application/pdf'),
         ]);
@@ -308,6 +320,7 @@ describe('mengunduh berkas', function () {
 describe('melihat berkas', function () {
     beforeEach(function () {
         $this->actingAs($this->pejabat)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'foto_belanja',
             'file' => UploadedFile::fake()->image('rak-kertas.jpg'),
         ]);
@@ -336,6 +349,7 @@ describe('melihat berkas', function () {
 
     it('mengunduh berkas yang tidak dapat dibuka peramban', function () {
         $this->actingAs($this->pejabat)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'foto_belanja',
             'file' => UploadedFile::fake()->create('IMG_0002.heic', 50, 'image/heic'),
         ]);
@@ -368,6 +382,7 @@ describe('melihat berkas', function () {
 describe('menghapus berkas', function () {
     beforeEach(function () {
         $this->actingAs($this->petugas)->post($this->url, [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast.pdf', 16, 'application/pdf'),
         ]);
@@ -439,6 +454,7 @@ describe('notifikasi BAST belum diunggah', function () {
         expect($aktif($lama))->toBeGreaterThan(0);
 
         $this->actingAs($this->petugas)->post("/pengadaan/{$lama->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
         ]);
@@ -450,6 +466,7 @@ describe('notifikasi BAST belum diunggah', function () {
         $lama = realisasiDiterima($this->pejabat, $this->petugas, diterimaHariLalu: 5);
 
         $this->actingAs($this->pejabat)->post("/pengadaan/{$lama->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'spk_kontrak',
             'file' => UploadedFile::fake()->create('spk.pdf', 10, 'application/pdf'),
         ]);
@@ -463,6 +480,7 @@ describe('notifikasi BAST belum diunggah', function () {
         $lama = realisasiDiterima($this->pejabat, $this->petugas, diterimaHariLalu: 5);
 
         $this->actingAs($this->petugas)->post("/pengadaan/{$lama->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'bast',
             'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
         ]);
@@ -473,5 +491,18 @@ describe('notifikasi BAST belum diunggah', function () {
             ->delete("/pengadaan/{$lama->procurement_id}/dokumen/{$document->procurement_document_id}");
 
         expect($aktif($lama))->toBeGreaterThan(0);
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak mengunggah berkas kedua saat formulir yang sama dikirim ulang', function () {
+        $payload = ['submission_token' => tokenKiriman(), 'type' => 'bast', 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf')];
+
+        $this->actingAs($this->petugas)->post($this->url, $payload);
+        $this->actingAs($this->petugas)->post($this->url, $payload)
+            ->assertRedirect(route('procurements.show', $this->procurement))
+            ->assertSessionHas('status', 'Berkas ini sudah diunggah sebelumnya.');
+
+        expect(bastTerunggah()->count())->toBe(1);
     });
 });

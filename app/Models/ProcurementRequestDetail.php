@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ProcurementRequestSource;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Sebelumnya bernama `RequestDetail` dengan foreign key yang salah arah
  * (menunjuk `requests`, permintaan unit milik sub sistem Permintaan). Nama
  * dan arah FK diperbaiki di migrasi 2026_09_05_000002. Lihat ADR 0015.
+ *
+ * `source` mencatat asal barangnya dan tidak berubah oleh penyuntingan
+ * jumlah, sedangkan `is_auto` hanya menandai baris draf yang masih dikelola
+ * pemindaian stok (ADR 0027). Keduanya dulu tercampur: menyimpan draf
+ * mengubah baris pemantauan stok menjadi terbaca "Manual" (ADR 0044).
  */
 class ProcurementRequestDetail extends Model
 {
@@ -26,11 +32,12 @@ class ProcurementRequestDetail extends Model
     /**
      * @var list<string>
      */
-    protected $fillable = ['procurement_request_id', 'item_id', 'amount_request', 'amount_granted', 'is_auto'];
+    protected $fillable = ['procurement_request_id', 'item_id', 'source', 'note', 'amount_request', 'amount_granted', 'is_auto'];
 
     protected function casts(): array
     {
         return [
+            'source' => ProcurementRequestSource::class,
             'amount_request' => 'integer',
             'amount_granted' => 'integer',
             'is_auto' => 'boolean',

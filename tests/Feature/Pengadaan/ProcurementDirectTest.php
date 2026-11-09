@@ -7,6 +7,7 @@ use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemSubcategory;
 use App\Models\Notification;
 use App\Models\Procurement;
 use App\Models\StockMutation;
@@ -29,6 +30,7 @@ use Illuminate\Support\Str;
 function payloadLangsung(Supplier $supplier, array $items, array $overrides = []): array
 {
     return array_merge([
+        'submission_token' => tokenKiriman(),
         'supplier_id' => $supplier->supplier_id,
         'procurement_date' => now()->toDateString(),
         'basis_reason' => AlasanPengadaan::KebutuhanMendesak->value,
@@ -221,13 +223,41 @@ describe('membuat realisasi langsung', function () {
         expect(Procurement::count())->toBe(0);
     });
 
-    it('menawarkan usulan barang baru dari pencarian barang yang tidak ditemukan', function () {
+    it('menawarkan permohonan barang baru dari pencarian barang yang tidak ditemukan', function () {
         // Pengganti kalimat penjelasan yang dulu selalu tampil di bawah daftar.
+        // Barang baru dimohonkan lewat Permohonan sejak ADR 0053.
         $this->actingAs(pejabatPengadaan())
             ->get('/pengadaan/create')
             ->assertOk()
-            ->assertSee('href="'.route('item-proposals.create').'"', false)
-            ->assertSee('Usulkan barang baru');
+            ->assertSee('href="'.route('item-applications.create').'"', false)
+            ->assertSee('Ajukan permohonan barang baru');
+    });
+
+    it('memakai pemilih barang berkategori dan bersub kategori', function () {
+        $alatTulis = ItemSubcategory::factory()->atk()->create(['subcategory_name' => 'ALAT TULIS']);
+        $pulpen = Item::factory()->create(['subcategory_id' => $alatTulis]);
+
+        $response = $this->actingAs(pejabatPengadaan())
+            ->get('/pengadaan/create')
+            ->assertOk()
+            ->assertSee('pemilihBarang(', escape: false)
+            ->assertSee('Pilih ATK atau ARTK untuk menyaring sampai sub kategorinya.');
+
+        expect(collect($response->viewData('katalog'))->firstWhere('item_id', $pulpen->item_id)['subcategory_name'])->toBe('ALAT TULIS')
+            ->and(collect($response->viewData('subkategori'))->pluck('id'))->toContain($alatTulis->subcategory_id);
+    });
+
+    it('mempertahankan barang yang sudah ditambahkan setelah galat validasi', function () {
+        $item = Item::factory()->create();
+
+        $this->actingAs(pejabatPengadaan())
+            ->from('/pengadaan/create')
+            ->post('/pengadaan', payloadLangsung(Supplier::factory()->create(), [barisLangsung($item)], ['basis_note' => '']))
+            ->assertSessionHasErrors('basis_note');
+
+        // Baris yang dipulihkan memuat kode barang, beda dengan baris katalog.
+        $this->get('/pengadaan/create')
+            ->assertSee('"item_name":'.json_encode("{$item->item_code} — {$item->item_name}", JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), escape: false);
     });
 
     it('tidak menyebut usulan asal di dialog pembatalan realisasi langsung', function () {
@@ -364,14 +394,9 @@ describe('penerimaan realisasi langsung', function () {
         ]);
         belanjakanRealisasi(setujuiRealisasi($procurement));
 
-        $detail = $procurement->details->first();
-
-        $this->actingAs(pengelolaGudang())
-            ->post("/pengadaan/{$procurement->procurement_id}/penerimaan", [
-                'received_at' => now()->toDateString(),
-                'received' => [$detail->procurement_detail_id => 10],
-            ])
-            ->assertRedirect("/pengadaan/{$procurement->procurement_id}");
+        // Lewat alur BAST digital: pemeriksaan, nomor, lalu TTE kedua pihak
+        // (ADR 0051).
+        terimaLewatTte($procurement, pengelolaGudang(), pejabatPengadaan());
 
         $mutasi = StockMutation::where('item_id', $item->item_id)
             ->where('mutation_type', MutationType::Masuk)
@@ -440,5 +465,21 @@ describe('rekap dan penyaring dasar pengadaan', function () {
 
         expect($isi)->toContain('Dasar')
             ->and($isi)->toContain('Langsung');
+    });
+});
+
+describe('kiriman ulang', function () {
+    it('tidak membuat realisasi kedua saat formulir yang sama dikirim ulang', function () {
+        $pejabat = pejabatPengadaan();
+        $payload = payloadLangsung(Supplier::factory()->create(), [barisLangsung(Item::factory()->create())]);
+        $sebelum = Procurement::count();
+
+        $pertama = $this->actingAs($pejabat)->post('/pengadaan', $payload);
+
+        $this->actingAs($pejabat)->post('/pengadaan', $payload)
+            ->assertRedirect($pertama->headers->get('Location'))
+            ->assertSessionHas('status');
+
+        expect(Procurement::count())->toBe($sebelum + 1);
     });
 });

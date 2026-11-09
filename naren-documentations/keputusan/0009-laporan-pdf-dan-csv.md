@@ -4,6 +4,14 @@
 
 Diterima — 3 September 2026
 
+Sebagian digantikan oleh [ADR 0048](0048-ekspor-excel-usulan-pengadaan.md):
+`phpoffice/phpspreadsheet` kini dipasang untuk ekspor Excel usulan
+pengadaan. Ekspor CSV di sini tidak berubah.
+
+Sebagian digantikan oleh [ADR 0055](0055-laporan-stok-opname-dalam-excel.md)
+— 9 November 2026: Laporan Stok Opname kini berkas Excel, bukan PDF. Laporan
+PDF lainnya tidak berubah.
+
 ## Konteks
 
 Rancangan antarmuka riwayat mutasi memuat tombol Cetak dengan rentang tanggal.

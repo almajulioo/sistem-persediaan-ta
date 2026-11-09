@@ -10,16 +10,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Collection;
 
 /**
  * Usulan pengadaan — permintaan dari Gudang kepada Pejabat Pengadaan.
  *
- * Tidak berelasi ke `requests` (permintaan unit ke gudang, milik sub sistem
- * Permintaan) lewat foreign key basis data. Satu-satunya jalur ke sana adalah
- * `reference_type`/`reference_id` polimorfik, dan itu pun hanya terisi ketika
- * `source` bernilai DariPermintaan. Lihat ADR 0015.
+ * Tidak berelasi ke sub sistem Permintaan lewat foreign key di tabel ini.
+ * Asal setiap barang disimpan per baris rincian (ADR 0044); barang yang
+ * datang dari permohonan pengguna ditunjuk balik oleh
+ * `item_application_details.procurement_request_id` milik sub sistem itu.
  */
 class ProcurementRequest extends Model
 {
@@ -32,13 +31,12 @@ class ProcurementRequest extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'user_id', 'source', 'reference_type', 'reference_id', 'status',
+        'user_id', 'status',
     ];
 
     protected function casts(): array
     {
         return [
-            'source' => ProcurementRequestSource::class,
             'status' => ProcurementRequestStatus::class,
         ];
     }
@@ -105,6 +103,24 @@ class ProcurementRequest extends Model
         ];
     }
 
+    /**
+     * Banyak barang per sumber, urut sesuai urutan kasus enum dan hanya yang
+     * ada isinya, untuk chip ringkasan di detail usulan dan banner draf.
+     *
+     * @return list<array{sumber: ProcurementRequestSource, jumlah: int}>
+     */
+    public function jumlahPerSumber(): array
+    {
+        $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
+        $jumlah = $details->countBy(fn (ProcurementRequestDetail $detail) => $detail->source->value);
+
+        return collect(ProcurementRequestSource::cases())
+            ->filter(fn (ProcurementRequestSource $sumber) => $jumlah->has($sumber->value))
+            ->map(fn (ProcurementRequestSource $sumber) => ['sumber' => $sumber, 'jumlah' => $jumlah->get($sumber->value)])
+            ->values()
+            ->all();
+    }
+
     public function scopeDraf(Builder $query): Builder
     {
         return $query->where('status', ProcurementRequestStatus::Draf);
@@ -120,6 +136,10 @@ class ProcurementRequest extends Model
         return $query->where('status', '!=', ProcurementRequestStatus::Draf);
     }
 
+    /**
+     * Rentang tanggal disaring pada `created_at`, tanggal yang ditampilkan
+     * sebagai "Diajukan" di daftar dan detail usulan (ADR 0048).
+     */
     public function scopeFilter(Builder $query, array $filters): Builder
     {
         return $query
@@ -128,8 +148,12 @@ class ProcurementRequest extends Model
                 fn (Builder $query, ProcurementRequestStatus $status) => $query->where('status', $status),
             )
             ->when(
-                ProcurementRequestSource::tryFrom((string) ($filters['source'] ?? '')),
-                fn (Builder $query, ProcurementRequestSource $source) => $query->where('source', $source),
+                trim((string) ($filters['from'] ?? '')),
+                fn (Builder $query, string $from) => $query->whereDate('created_at', '>=', $from),
+            )
+            ->when(
+                trim((string) ($filters['to'] ?? '')),
+                fn (Builder $query, string $to) => $query->whereDate('created_at', '<=', $to),
             );
     }
 
@@ -169,14 +193,5 @@ class ProcurementRequest extends Model
             ->with('application.user')
             ->get()
             ->groupBy('item_id');
-    }
-
-    /**
-     * Dokumen asal saat `source` DariPermintaan — baris `requests` milik sub
-     * sistem Permintaan lewat alias morph map `permintaan`.
-     */
-    public function reference(): MorphTo
-    {
-        return $this->morphTo(__FUNCTION__, 'reference_type', 'reference_id');
     }
 }

@@ -1,19 +1,16 @@
 <?php
 
 use App\Enums\AlasanPengadaan;
-use App\Enums\ItemProposalStatus;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
 use App\Enums\PeriodeOpname;
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
-use App\Enums\SatuanBarang;
 use App\Enums\StockStatus;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Models\Item;
-use App\Models\ItemProposal;
 use App\Models\Procurement;
 use App\Models\ProcurementDetail;
 use App\Models\ProcurementReceipt;
@@ -78,7 +75,6 @@ function usulanDasbor(ProcurementRequestStatus $status): ProcurementRequest
 {
     return ProcurementRequest::create([
         'user_id' => penggunaDasbor(UserRole::PengelolaGudang)->user_id,
-        'source' => ProcurementRequestSource::Manual,
         'status' => $status,
     ]);
 }
@@ -164,7 +160,8 @@ describe('akses cepat', function () {
 
     it('menampilkan seluruh modul bagi Admin', function () {
         $this->actingAs(penggunaDasbor(UserRole::Admin))->get('/dasbor')
-            ->assertViewHas('aksesCepat', fn (array $ubin) => count($ubin) === 11);
+            // 10 sejak ubin Usulan Barang Baru dihapus (ADR 0053).
+            ->assertViewHas('aksesCepat', fn (array $ubin) => count($ubin) === 10);
     });
 
     it('tidak menautkan halaman yang akan ditolak', function () {
@@ -209,21 +206,17 @@ describe('perlu ditindaklanjuti', function () {
         realisasiDasbor(ProcurementStatus::MenungguPenerimaan);
         realisasiDasbor(ProcurementStatus::MenungguPersetujuan);
 
-        ItemProposal::create([
-            'item_name' => 'Stapler besar',
-            'unit' => SatuanBarang::Buah,
-            'purpose_note' => 'Kebutuhan uji dasbor.',
-            'proposed_by' => $petugas->user_id,
-            'status' => ItemProposalStatus::Diajukan,
-        ]);
-
         $draf = ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
         foreach (Item::factory()->habis()->count(3)->create() as $item) {
-            $draf->details()->create(['item_id' => $item->item_id, 'amount_request' => 5, 'is_auto' => true]);
+            $draf->details()->create([
+                'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::PemantauanStok,
+                'amount_request' => 5,
+                'is_auto' => true,
+            ]);
         }
 
         StockOpname::create([
@@ -240,7 +233,6 @@ describe('perlu ditindaklanjuti', function () {
         // Draf dihitung per barang: draf selalu tunggal (ADR 0027).
         expect(tugasDasbor($petugas))->toBe([
             'Barang menunggu penerimaan' => 1,
-            'Usulan barang baru' => 1,
             'Draf usulan pengadaan' => 3,
             'Opname belum selesai' => 1,
             'Permintaan perlu diproses' => 1,
@@ -382,7 +374,6 @@ describe('alur pengadaan', function () {
     it('menghitung tiap tahap tanpa draf, dengan penolakan terpisah', function () {
         ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
         usulanDasbor(ProcurementRequestStatus::Diajukan);

@@ -5,10 +5,16 @@ namespace App\Support;
 use App\Enums\NotificationType;
 use App\Enums\ProcurementRequestSource;
 use App\Enums\ProcurementRequestStatus;
+use App\Enums\ProcurementStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
+use App\Models\Procurement;
+use App\Models\ProcurementDetail;
 use App\Models\ProcurementRequest;
+use App\Models\ProcurementRequestDetail;
 use App\Models\StockOpname;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,6 +33,10 @@ use Illuminate\Support\Facades\DB;
  * ProcurementDraftController::update(), seluruh baris yang ia kirim ditandai
  * `is_auto = false` dan sejak itu tidak pernah lagi disentuh pemindaian —
  * baik jumlahnya maupun keberadaannya — walau barangnya kelak pulih.
+ *
+ * Barang yang sudah punya pengadaan berjalan tidak diusulkan lagi walau
+ * stoknya masih kurang; ia dinilai ulang begitu siklus itu selesai — ditolak,
+ * dibatalkan, atau diterima (ADR 0047).
  */
 class ProcurementDraftScanner
 {
@@ -39,7 +49,7 @@ class ProcurementDraftScanner
         DB::transaction(function () use ($item) {
             $draft = ProcurementRequest::query()->draf()->lockForUpdate()->first();
 
-            if ($item->is_active && $item->diBawahMinimum()) {
+            if ($item->is_active && $item->diBawahMinimum() && self::dokumenDalamProses([$item->item_id])->isEmpty()) {
                 $draft ??= self::buatDraf();
                 self::pastikanBaris($draft, $item);
             } elseif ($draft !== null) {
@@ -60,6 +70,7 @@ class ProcurementDraftScanner
             $draft = ProcurementRequest::query()->draf()->lockForUpdate()->first();
 
             $dibawahMinimum = Item::query()->aktif()->diBawahMinimum()
+                ->whereNotIn('item_id', self::dokumenDalamProses()->keys())
                 ->get(['item_id', 'stock_current', 'stock_min', 'stock_max']);
 
             if ($dibawahMinimum->isEmpty()) {
@@ -108,11 +119,65 @@ class ProcurementDraftScanner
         );
     }
 
+    /**
+     * Barang pada dokumen pengadaan yang baru berubah nasibnya — diajukan,
+     * diputus, direalisasi, diubah, dibatalkan, atau diterima. Barang bisa
+     * masuk atau keluar dari "dalam proses" tanpa stoknya berubah, sehingga
+     * pemicu dari perubahan stok saja tidak cukup (ADR 0047).
+     *
+     * @param  iterable<int, string>  $itemIds
+     */
+    public static function perbaruiBarangDokumen(iterable $itemIds): void
+    {
+        Item::query()->whereIn('item_id', collect($itemIds)->unique()->values())->each(
+            fn (Item $item) => self::perbaruiBarang($item),
+        );
+    }
+
+    /**
+     * Dokumen pengadaan yang masih berjalan, dikelompokkan per `item_id`
+     * (ADR 0047). Satu definisi untuk pemindaian dan untuk halaman draf, supaya
+     * barang yang dilewati pemindaian selalu tepat barang yang ditampilkan.
+     *
+     * Usulan dihitung selama belum diputus atau disetujui untuk barang itu
+     * tetapi belum direalisasi; barang yang tidak disetujui (`amount_granted`
+     * 0) langsung lepas. Begitu direalisasi, yang dihitung adalah rincian
+     * realisasinya — termasuk barang tambahan (ADR 0029) dan realisasi tanpa
+     * usulan (ADR 0031) — selama `masihBerjalan()`. Realisasi yang ditolak
+     * ikut dihitung karena masih bisa diperbaiki lalu diajukan ulang.
+     *
+     * @param  list<string>|null  $itemIds  null berarti seluruh barang.
+     * @return Collection<string, Collection<int, ProcurementRequest|Procurement>>
+     */
+    public static function dokumenDalamProses(?array $itemIds = null): Collection
+    {
+        $usulan = ProcurementRequestDetail::query()
+            ->when($itemIds !== null, fn (Builder $query) => $query->whereIn('item_id', $itemIds))
+            ->where(fn (Builder $query) => $query->whereNull('amount_granted')->orWhere('amount_granted', '>', 0))
+            ->whereHas('procurementRequest', fn (Builder $query) => $query->whereIn('status', [
+                ProcurementRequestStatus::Diajukan,
+                ProcurementRequestStatus::DisetujuiMenungguRealisasi,
+            ]))
+            ->with('procurementRequest')
+            ->get()
+            ->map(fn (ProcurementRequestDetail $detail) => ['item_id' => $detail->item_id, 'dokumen' => $detail->procurementRequest]);
+
+        $realisasi = ProcurementDetail::query()
+            ->when($itemIds !== null, fn (Builder $query) => $query->whereIn('item_id', $itemIds))
+            ->whereHas('procurement', fn (Builder $query) => $query->whereIn('status', ProcurementStatus::berjalan()))
+            ->with('procurement')
+            ->get()
+            ->map(fn (ProcurementDetail $detail) => ['item_id' => $detail->item_id, 'dokumen' => $detail->procurement]);
+
+        return $usulan->toBase()->concat($realisasi)
+            ->groupBy('item_id')
+            ->map(fn (Collection $baris) => $baris->pluck('dokumen'));
+    }
+
     private static function buatDraf(): ProcurementRequest
     {
         return ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
     }
@@ -124,6 +189,7 @@ class ProcurementDraftScanner
         if ($baris === null) {
             $draft->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::PemantauanStok,
                 'amount_request' => self::saranJumlah($item),
                 'is_auto' => true,
             ]);
@@ -183,7 +249,7 @@ class ProcurementDraftScanner
             dedupKey: NotificationType::DraftUsulanTersedia->dedupKey('aktif'),
             title: 'Draf usulan pengadaan tersedia',
             body: sprintf(
-                '%d barang di bawah stok minimum sudah terkumpul pada draf usulan. Tinjau, sesuaikan jumlahnya, lalu ajukan.',
+                '%d barang sudah terkumpul pada draf usulan. Tinjau, sesuaikan jumlahnya, lalu ajukan.',
                 $jumlah,
             ),
             actionUrl: route('procurement-requests.draft.edit', absolute: false),

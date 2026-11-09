@@ -14,12 +14,17 @@ sistem**, di antara realisasi dan penerimaan.
 ```
 Pengelola Gudang    Pejabat Pengadaan    Kasubbag Umum & TI    [LUAR SISTEM]    Pengelola Gudang
       │                     │                     │                   │                  │
-  Usulan ──disetujui──▶ Realisasi ──ditinjau──▶ disetujui ────▶ pembelian nyata ──▶ Penerimaan
+  Usulan ──disetujui──▶ Realisasi ──ditinjau──▶ disetujui ────▶ pembelian nyata ──▶ Pemeriksaan
                             ▲                     │                                      │
-                            └────── ditolak ──────┘                                stok bertambah
+                            └────── ditolak ──────┘                          BAST: nomor + TTE kedua pihak
                           (diperbaiki, diajukan ulang)                                   │
-                                                                                   BAST dicetak
+                                                                                  stok bertambah
 ```
+
+Sejak [ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)
+BAST tidak lagi dicetak untuk ditandatangani basah: kedua pihak membubuhkan
+TTE QR, dan stok baru bertambah setelah keduanya bertanda tangan. Lihat
+[BAST digital dengan TTE QR](#bast-digital-dengan-tte-qr).
 
 Sejak [ADR 0031](../keputusan/0031-realisasi-pengadaan-tanpa-usulan.md) ada
 jalur kedua yang memotong dokumen usulan, tetapi **tidak** memotong pemutusnya:
@@ -53,14 +58,16 @@ Tidak ada satu peran pun yang dapat menjalankan seluruh siklus sendirian:
 | Tahap | Pelaku | Tercatat di |
 |---|---|---|
 | Mengusulkan | Pengelola Gudang | `procurement_requests.user_id` |
-| Mengusulkan barang baru | Pejabat Pengadaan | `item_proposals.proposed_by` |
+| Memohon barang baru (lewat Permohonan) | siapa pun | `item_proposals.proposed_by` |
 | Menyetujui / menolak usulan barang baru | Pengelola Gudang | `item_proposals.decided_by` |
 | Menyetujui / menolak usulan | Pejabat Pengadaan | `procurement_requests.status` |
 | Merealisasi | Pejabat Pengadaan | `procurements.user_id` |
 | **Menyetujui / menolak realisasi** | **Kasubbag Umum dan TI** | `procurements.reviewed_by` |
 | Menandai sudah dibelanjakan (+ foto) | Pejabat Pengadaan | `procurements.purchased_by` |
 | Membatalkan realisasi | Pejabat Pengadaan | `procurements.cancelled_by` |
-| Mengonfirmasi diterima | Pengelola Gudang | `procurement_receipts.received_by` |
+| Mencatat hasil pemeriksaan barang | Pengelola Gudang | `procurement_receipts.received_by` |
+| TTE BAST sebagai Pihak Pertama (Pelaksana Belanja) | Pejabat Pengadaan | `procurement_receipt_signatures` |
+| TTE BAST sebagai Pihak Kedua (Petugas Persediaan) | Pengelola Gudang | `procurement_receipt_signatures` |
 
 Sejak [ADR 0030](../keputusan/0030-persetujuan-realisasi-oleh-kasubbag-umum-dan-ti.md)
 siklusnya bertangan empat: jenjang persetujuan realisasi disisipkan antara
@@ -75,6 +82,9 @@ karena itu jalur langsung baru layak dibuka **setelah** ADR 0030 ada.
 Admin lolos seluruhnya lewat `Gate::before`, **termasuk `setujui-pengadaan`**.
 Pemisahan staf TI dari pemberi persetujuan karena itu bersifat organisasional,
 bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 0030.
+Satu-satunya pengecualian adalah **`tte-bast`**: Admin tidak dapat membubuhkan
+TTE pada BAST, karena tanda tangan mengikat identitas pribadi salah satu pihak
+([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)).
 
 ## Aturan bisnis yang ditegakkan
 
@@ -109,26 +119,32 @@ bukan ditegakkan sistem — konsekuensi yang diambil dengan sadar, lihat ADR 003
    realisasi langsung — kalau tidak, persetujuan atas dasar yang wajar dapat
    ditukar setelah terbit (ADR 0031).
 10. **Barang wajib sudah terdaftar di master barang sebelum dapat diadakan.**
-   Barang yang belum ada diusulkan lebih dulu lewat Usulan Barang Baru, dan
-   Pengelola Gudang yang mendaftarkannya
-   ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)).
+   Barang yang belum ada dimohonkan lebih dulu lewat Permohonan, dan
+   Pengelola Gudang yang mendaftarkannya dari rincian permohonan itu
+   ([ADR 0032](../keputusan/0032-usulan-barang-baru.md),
+   [ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)).
 11. **Barang baru dapat diterima setelah realisasinya ditandai sudah
    dibelanjakan**, dan penandaan itu wajib disertai minimal satu foto belanja.
    Perubahan realisasi setelah dibelanjakan mengulang persetujuan, tetapi tidak
    mengulang belanjanya
    ([ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md)).
+12. **Stok baru bertambah setelah BAST ditandatangani kedua pihak**, sebesar
+   isi yang ditandatangani. Mengubah hasil pemeriksaan, nomor, atau
+   realisasinya setelah ada TTE mencabut TTE itu
+   ([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)).
 
 ## Tabel
 
 | Tabel | Isi |
 |---|---|
 | `suppliers` | Data induk penyedia; identitasnya dicetak di BAST |
-| `procurement_requests` | Usulan pengadaan; `source` membedakan tiga asal-usul |
-| `procurement_request_details` | Rincian barang usulan; `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
+| `procurement_requests` | Usulan pengadaan: pengaju dan status. Asal-usulnya dicatat per barang (ADR 0044) |
+| `procurement_request_details` | Rincian barang usulan; `source` asal barangnya (permohonan pengguna, manual, pemantauan stok), `note` keterangan opsional barang manual, `amount_granted` merangkap keputusan per barang, `is_auto` menandai baris yang masih dikelola draf otomatis |
 | `procurements` | Realisasi pengadaan; menautkan usulan ke penyedia, atau berdiri sendiri dengan `basis_reason`/`basis_note` bila tanpa usulan (ADR 0031). `reviewed_at`/`reviewed_by`/`review_note` menampung keputusan **terakhir** Kasubbag Umum dan TI — persetujuan maupun penolakan, karena statusnya yang membedakan |
-| `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_received` datang, `unit_price` harga satuan |
-| `procurement_receipts` | Peristiwa penerimaan: siapa, kapan; nomor BAST menyusul saat cetak pertama (ADR 0042) |
-| `procurement_documents` | Berkas BAST pindai dan SPK/kontrak, di disk privat |
+| `procurement_details` | Rincian realisasi; `amount` dipesan, `amount_checked` hasil pemeriksaan gudang (belum stok), `amount_received` yang masuk stok, `unit_price` harga satuan |
+| `procurement_receipts` | BAST penerimaan: lahir saat hasil pemeriksaan dicatat (draf), berlaku saat kedua TTE lengkap. `bast_number`, serta `content`/`content_hash` isi yang dibekukan saat TTE pertama (ADR 0051) |
+| `procurement_receipt_signatures` | TTE per pihak: identitas penanda tangan yang disalin, sidik isi, kode verifikasi QR, pencabutan (ADR 0051) |
+| `procurement_documents` | Berkas pendukung opsional (BAST pindai, SPK/kontrak) dan foto belanja, di disk privat |
 | `item_proposals` | Usulan barang baru; `item_id` terisi saat Pengelola Gudang mendaftarkan barangnya (ADR 0032) |
 
 ---
@@ -191,7 +207,9 @@ jenis notifikasi baru. Rincian keputusan:
 
 | Metode | URL | Nama | Gate | Keterangan |
 |---|---|---|---|---|
-| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan sumber |
+| GET | `/usulan-pengadaan` | `procurement-requests.index` | `akses-pengadaan` | Daftar, penyaring status dan tanggal diajukan (penyaring sumber dibuang, ADR 0044) |
+| GET | `/usulan-pengadaan/laporan/excel` | `procurement-requests.excel` | `akses-pengadaan` | Ekspor Excel daftar usulan sesuai penyaring (ADR 0048) |
+| GET | `/usulan-pengadaan/{procurementRequest}/excel` | `procurement-requests.excel-detail` | `akses-pengadaan` | Ekspor Excel satu usulan beserta rincian barangnya (ADR 0048) |
 | GET | `/usulan-pengadaan/create` | `procurement-requests.create` | `kelola-gudang` | Formulir usulan manual, murni dari nol |
 | POST | `/usulan-pengadaan` | `procurement-requests.store` | `kelola-gudang` | |
 | GET | `/usulan-pengadaan/{procurementRequest}` | `procurement-requests.show` | `akses-pengadaan` | Detail + formulir keputusan bila masih Diajukan |
@@ -207,13 +225,12 @@ jenis notifikasi baru. Rincian keputusan:
 - Usulan yang sudah diputuskan (`DisetujuiMenungguRealisasi`/`DisetujuiSelesai`/`Ditolak`)
   tidak dapat diputuskan ulang; rute `approve`/`reject` menolaknya dengan
   pesan, bukan 500.
-- Formulir manual ini hanya menerima `source = Manual` sejak
-  [ADR 0027](../keputusan/0027-draf-usulan-pengadaan-otomatis.md) —
-  `PemantauanStok` sekarang seluruhnya lahir lewat draf otomatis (lihat
-  [Draf usulan pengadaan otomatis](#draf-usulan-pengadaan-otomatis) di bawah),
-  bukan lagi lewat formulir ini dengan satu barang terisi. Sumber
-  `DariPermintaan` sengaja belum bisa dipilih sama sekali lewat formulir —
-  integrasi ke sub sistem Permintaan belum ada titik masuknya.
+- Seluruh barang formulir manual bersumber `Manual`, ditetapkan controller
+  dan tidak diterima dari kiriman. `PemantauanStok` seluruhnya lahir lewat
+  draf otomatis (lihat
+  [Draf usulan pengadaan otomatis](#draf-usulan-pengadaan-otomatis) di bawah)
+  dan `DariPermohonan` lewat persetujuan permohonan. Lihat
+  [Sumber per barang](#sumber-per-barang).
 
 **Notifikasi baru** (lihat [modul/notifikasi.md](notifikasi.md)):
 `UsulanMenungguPersetujuan` dan `UsulanMenggantung` (keadaan, saling
@@ -233,7 +250,7 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
 |---|---|---|---|
 | GET | `/usulan-pengadaan/draf` | `procurement-requests.draft.edit` | Menjalankan ulang pemindaian lalu menampilkan draf, atau keadaan kosong |
 | PUT | `/usulan-pengadaan/draf` | `procurement-requests.draft.update` | Mengganti seluruh rincian draf sekaligus |
-| POST | `/usulan-pengadaan/draf/ajukan` | `procurement-requests.draft.finalize` | Memindahkan status Draf → Diajukan |
+| POST | `/usulan-pengadaan/draf/ajukan` | `procurement-requests.draft.finalize` | Memindahkan status Draf → Diajukan; `created_at` diisi waktu pengajuan (ADR 0049) |
 | DELETE | `/usulan-pengadaan/draf` | `procurement-requests.draft.discard` | Membuang draf beserta rinciannya |
 
 **Aturan.**
@@ -247,6 +264,8 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
   pemindaian, dibuang begitu barangnya pulih. Begitu Pengelola Gudang
   menyimpan draf lewat `draft.update`, seluruh baris yang dikirim ditandai
   `is_auto = false` dan sejak itu kebal dari perubahan otomatis.
+  **Sumbernya tidak ikut berubah** (ADR 0044) — `is_auto` hanya menjawab
+  "masih dikelola pemindaian?", bukan "dari mana asalnya?".
 - Draf yang kehabisan seluruh barisnya (baik karena pulih maupun dikosongkan
   manual) **dihapus**, bukan dibiarkan sebagai baris kosong.
 - Draf tidak pernah muncul di tabel `/usulan-pengadaan`, hitungan
@@ -259,6 +278,35 @@ dengan draf tunggal yang dijaga otomatis oleh sistem. Rincian keputusan:
 
 **Notifikasi baru**: `DraftUsulanTersedia` (keadaan, ke Pengelola Gudang +
 Admin), aktif selama draf berisi minimal satu barang.
+
+### Barang yang sedang dalam proses pengadaan
+
+Ditambahkan 8 November 2026. Rincian keputusan:
+[ADR 0047](../keputusan/0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md).
+
+- Pemindaian **melewati** barang yang sudah punya pengadaan berjalan, walau
+  stoknya masih di bawah minimum. Baris otomatisnya dibuang bila sudah
+  terlanjur ada di draf.
+- Barang dihitung **dalam proses** bila ada di salah satu dari: usulan
+  `Diajukan`; usulan `DisetujuiMenungguRealisasi` dengan `amount_granted > 0`;
+  atau rincian realisasi yang `masihBerjalan()`. Realisasi yang ditolak
+  Kasubbag termasuk, karena masih bisa diperbaiki. Barang tambahan dan
+  realisasi langsung juga termasuk.
+- Barang **lepas** dan dinilai ulang begitu usulannya ditolak Pejabat
+  Pengadaan (seluruhnya atau barang itu saja), realisasinya dibatalkan, atau
+  barangnya diterima. Barang yang datang kurang dan stoknya masih di bawah
+  minimum langsung kembali dengan saran baru.
+- Hanya baris otomatis yang diatur. Baris permohonan dan baris manual tetap
+  masuk, tanpa penanda.
+- Satu definisi untuk pemindaian dan halaman:
+  `ProcurementDraftScanner::dokumenDalamProses()`, dihitung langsung dari
+  status dokumen. Tidak ada kolom baru.
+- `ProcurementDraftScanner::perbaruiBarangDokumen()` dipanggil setelah usulan
+  manual diajukan, usulan disetujui atau ditolak, realisasi dibuat, diubah,
+  atau dibatalkan, dan penerimaan dikonfirmasi.
+- Halaman draf punya bagian lipat **Sedang dalam Proses Pengadaan** (tertutup
+  secara default, dengan jumlah). Isinya barang yang dilewati beserta tautan
+  dan status setiap dokumennya. Bagian ini tetap tampil walau tidak ada draf.
 
 ## Status usulan disetujui: dua rupa
 
@@ -314,14 +362,15 @@ penerimaan barang yang menambah stok lewat `StockLedger`. Rincian keputusan:
 Tidak ada rute "ajukan ulang": perbaikan dikirim lewat `procurements.update`
 milik Pejabat Pengadaan, dan penyimpanan perubahan itulah pengajuan ulangnya.
 
-**Rute penerimaan** — `ProcurementReceiptController`, gate `kelola-gudang`,
-peristiwa sekali jadi tanpa rute ubah/hapus. Hanya terbuka untuk realisasi yang
-sudah disetujui:
+**Rute penerimaan** — `ProcurementReceiptController`, gate `kelola-gudang`.
+Hanya terbuka untuk realisasi yang menunggu penerimaan. Sejak ADR 0051 rute ini
+mencatat **hasil pemeriksaan** (draf, dapat diubah) dan tidak lagi memasukkan
+stok; lihat [BAST digital dengan TTE QR](#bast-digital-dengan-tte-qr):
 
 | Metode | URL | Nama | Keterangan |
 |---|---|---|---|
-| GET | `/pengadaan/{procurement}/penerimaan/create` | `procurement-receipts.create` | Formulir konfirmasi; tanpa nomor BAST sejak [ADR 0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md) |
-| POST | `/pengadaan/{procurement}/penerimaan` | `procurement-receipts.store` | Menjalankan `ProcurementReceiptPoster` |
+| GET | `/pengadaan/{procurement}/penerimaan/create` | `procurement-receipts.create` | Formulir hasil pemeriksaan, untuk mencatat maupun mengubah |
+| POST | `/pengadaan/{procurement}/penerimaan` | `procurement-receipts.store` | `BastPengadaan::catatPemeriksaan()` — upsert, stok tidak berubah |
 
 **Aturan.**
 
@@ -338,11 +387,22 @@ sudah disetujui:
   Pejabat Pengadaan juga boleh menambahkan baris **di luar** usulan, yang
   mengirim `item_id` langsung; jumlah pesan pun tidak lagi dibatasi terhadap
   `amount_granted`.
-- `ProcurementReceiptPoster::post()` mengikuti pola `OpnamePoster`: transaksi
-  terkunci, `StockLedger::record(type: Masuk, amount: amount_received)` per
-  barang (baris bernilai nol tidak menghasilkan mutasi), referensi menunjuk
-  `Procurement` (alias morph `pengadaan`), status realisasi berubah menjadi
-  `Diterima`, lalu `AuditLogger` dan notifikasi dipanggil di luar transaksi.
+- Pemilih barang tambahan di formulir buat dan ubah realisasi memakai
+  `x-request.pemilih-barang` (cari teks, saring kategori lalu sub kategori,
+  [ADR 0043](../keputusan/0043-kategori-dan-sub-kategori-barang.md)) sejak
+  8 November 2026. Barang yang sudah ada di realisasi — dari usulan maupun
+  tambahan — tetap tampil tetapi **tidak dapat dipilih**, berlabel "Sudah di
+  daftar"; pemilih mengindeks katalog sekali saat dimuat, dan barang yang
+  hilang begitu saja dari hasil pencarian membingungkan. Pencarian tanpa
+  hasil menawarkan "Usulkan barang baru".
+- `ProcurementReceiptPoster` mengikuti pola `OpnamePoster`: transaksi
+  terkunci, `StockLedger::record(type: Masuk)` per barang (baris bernilai nol
+  tidak menghasilkan mutasi), referensi menunjuk `Procurement` (alias morph
+  `pengadaan`), status realisasi berubah menjadi `Diterima`, lalu notifikasi
+  dipanggil di luar transaksi. Sejak ADR 0051 dipanggil dari TTE kedua
+  (`posting()` di dalam transaksinya, `setelahPosting()` sesudahnya), jumlahnya
+  diambil dari isi BAST yang ditandatangani, dan `periksaBarang()` ikut
+  dipanggil per barang.
 - Kiriman yang **lebih** dari pesanan tidak dibatasi validasi — hanya
   kekurangan kiriman yang jadi perhatian ADR 0017.
 - `received_at` adalah tanggal bisnis yang dapat diedit (seperti
@@ -379,8 +439,10 @@ melampirkan bukti bukan bagian dari pemisahan tugas ADR 0016:
 |---|---|---|---|
 | GET | `/pengadaan/laporan/pdf` | `procurements.pdf` | Laporan pengadaan, mengikuti penyaring aktif |
 | GET | `/pengadaan/laporan/csv` | `procurements.csv` | Ekspor CSV, kolom identik dengan PDF |
-| GET | `/pengadaan/{procurement}/bast` | `procurements.bast` | BAST siap tanda tangan; menolak bila nomornya belum diisi |
-| PATCH | `/pengadaan/{procurement}/bast` | `procurements.bast-number` | Mengisi/mengoreksi nomor BAST lalu membuka PDF-nya. Ditambah gate `isi-nomor-bast` — Pejabat Pengadaan dan Pengelola Gudang, bukan Kasubbag ([ADR 0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md)) |
+| GET | `/pengadaan/{procurement}/bast` | `procurements.bast` | BAST dengan QR TTE yang sudah dibubuhkan; terbuka sejak Menunggu Penerimaan (ADR 0051). BAST lama: menolak bila nomornya belum diisi |
+| GET | `/pengadaan/{procurement}/bast/kosong` | `procurements.bast-blank` | BAST yang sama tanpa QR, untuk tanda tangan basah (ADR 0051) |
+| PATCH | `/pengadaan/{procurement}/bast` | `procurements.bast-number` | Mengisi/mengoreksi nomor BAST. Ditambah gate `isi-nomor-bast` — Pejabat Pengadaan dan Pengelola Gudang, bukan Kasubbag ([ADR 0042](../keputusan/0042-bast-pengadaan-format-resmi-bpk.md)). BAST digital kembali ke halaman detail; BAST lama langsung membuka PDF-nya |
+| POST | `/pengadaan/{procurement}/bast/tte` | `procurements.bast-sign` | TTE; pihak diturunkan dari peran. Gate `tte-bast`, Admin ditolak (ADR 0051) |
 | POST | `/pengadaan/{procurement}/dokumen` | `procurement-documents.store` | Unggah BAST pindai, SPK/kontrak, atau foto belanja. Ditambah gate `unggah-berkas-pengadaan` — hanya Pejabat Pengadaan dan Pengelola Gudang; Kasubbag tidak melampirkan bukti ke realisasi yang ia nilai ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.md)) |
 | GET | `/pengadaan/{procurement}/dokumen/{document}/unduh` | `procurement-documents.download` | Unduhan terautentikasi; tidak ada URL berkas |
 | GET | `/pengadaan/{procurement}/dokumen/{document}/lihat` | `procurement-documents.show` | Tampil *inline* untuk JPEG/PNG/WEBP/PDF, tetap dicatat (ADR 0035) |
@@ -419,6 +481,12 @@ path sendiri.
 
 ### BAST
 
+> Sejak [ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)
+> BAST ditandatangani elektronik — lihat
+> [BAST digital dengan TTE QR](#bast-digital-dengan-tte-qr). Isi cetaknya di
+> bawah tetap berlaku. Aturan nomor dan cetak di bagian ini kini hanya untuk
+> **BAST lama**, yaitu penerimaan yang sudah `Diterima` sebelum ADR 0051.
+
 Dicetak dari sistem lalu ditandatangani, dipindai, dan diunggah kembali —
 urutan yang ditetapkan [ADR 0018](../keputusan/0018-berkas-unggahan-di-disk-privat.md).
 Sejak 24 Oktober 2026 mengikuti **format resmi Berita Acara Serah Terima Barang
@@ -431,7 +499,8 @@ Persediaan BPK Perwakilan Provinsi Lampung**
   tanggal terbilang dari `received_at` ("Kamis tanggal Delapan belas bulan
   Desember tahun Dua ribu dua puluh lima (18-12-2025)"), data kedua pihak,
   dan tanda tangan dua kolom. A4, margin 1,5 cm atas/bawah dan 2 cm kiri/kanan,
-  Times 12 pt, tanpa footer.
+  Times 12 pt, tanpa footer; BAST ber-TTE punya satu baris catatan TTE di kaki
+  halaman 1 (ADR 0052).
 - **PIHAK PERTAMA — Pelaksana Belanja**: `procurements.purchased_by` (yang
   menandai dibelanjakan, ADR 0035), cadangannya pembuat realisasi.
   **PIHAK KEDUA — Petugas Persediaan**: `procurement_receipts.received_by`.
@@ -498,7 +567,8 @@ nomor realisasi, penyedia, status, nomor BAST) diulang pada tiap baris.
 
 ### Notifikasi baru
 
-`BastBelumDiunggah` (keadaan, ke Pengelola Gudang + Admin): muncul bila
+`BastBelumDiunggah` (keadaan, ke Pengelola Gudang + Admin; sejak ADR 0051
+hanya untuk BAST lama): muncul bila
 penerimaan sudah dikonfirmasi lebih dari **3 hari** lalu tetapi berkas BAST
 belum diunggah, dan menutup dirinya sendiri begitu berkasnya masuk. Inilah
 imbangan dari kelonggaran ADR 0018 — penerimaan sengaja tidak menunggu berkas
@@ -550,10 +620,13 @@ Sejak ADR 0035 ada status keenam, `ProsesBelanja`, di antara persetujuan dan
 - Agregat memperlakukan `Ditolak` sama dengan `Dibatalkan`: ditampilkan, tidak
   pernah dihitung (`ProcurementStatus::takPernahJadiTransaksi()`). Invarian rekap
   menjadi `total = menunggu_persetujuan + menunggu + diterima`.
-- Tempat kerjanya adalah grup menu **Persetujuan** berisi tautan ke
-  `/pengadaan?status=menunggu_persetujuan`, bukan layar tersendiri. Keputusannya
-  diambil dari halaman detail realisasi, pola yang sama dengan cara Pejabat
-  Pengadaan memutuskan usulan.
+- Tidak ada layar tersendiri. Keputusannya diambil dari halaman detail
+  realisasi, pola yang sama dengan cara Pejabat Pengadaan memutuskan usulan.
+  Grup menu **Persetujuan** yang dulu menaut ke
+  `/pengadaan?status=menunggu_persetujuan` dihapus 9 November 2026
+  ([ADR 0054](../keputusan/0054-grup-menu-persetujuan-dihapus.md)): Kasubbag
+  memakai Pengadaan › Realisasi Pengadaan, atau baris antrean dasbor
+  "Realisasi menunggu persetujuan" yang membawa penyaring yang sama.
 
 ## Mengubah realisasi
 
@@ -724,6 +797,15 @@ Ditambahkan 16 September 2026, menjawab permintaan kedua Kasubbag Umum dan TI:
 Pejabat Pengadaan perlu dapat mengadakan barang yang belum ada di master barang.
 Rincian keputusan: [ADR 0032](../keputusan/0032-usulan-barang-baru.md).
 
+**Sejak 9 November 2026 tidak ada lagi halaman Usulan Barang Baru**
+([ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)).
+Usulan hanya lahir dari Permohonan (fitur Alma): siapa pun memohon barang baru,
+Pengelola Gudang menyetujui permohonannya, dan setiap baris barang baru menjadi
+satu `item_proposals`. Daftarkan dan Tolak ada di kolom Tindak Lanjut rincian
+permohonan itu. `ItemProposal::tautan()` menentukan ke mana pengalihan,
+tombol Batal, notifikasi, dan log aktivitas menaut: permohonan asal → barang →
+daftar permohonan.
+
 Barangnya **harus** menjadi baris `items` lebih dulu — stok tidak bisa diposting
 ke sebuah nama bebas. Sementara kode barang dan batas stok adalah wewenang
 Pengelola Gudang, dan langkahnya yang paling bernilai justru **pemeriksaan
@@ -731,20 +813,21 @@ duplikat**: satu barang fisik dengan dua baris di master membuat batas minimum,
 stok opname, dan kartu persediaannya berhenti bisa dipercaya.
 
 ```
-Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
-       │                        │                                    │
-  Usulan barang ──▶ Setujui & Buat Barang ──▶ items (stok 0) ──▶ Realisasi
-       │                        │
-       └──────── Tolak (alasan wajib) ─────────┘
+Pemohon (siapa pun)      Pengelola Gudang (rincian permohonan)        Pejabat Pengadaan
+       │                        │                                            │
+  Permohonan ──▶ Setujui ──▶ usulan ──▶ Daftarkan ──▶ items (stok 0) ──▶ Realisasi
+                                  │
+                                  └──▶ Tolak (alasan wajib)
 ```
 
 | Metode | URL | Nama | Gate |
 |---|---|---|---|
-| GET | `usulan-barang` | `item-proposals.index` | `akses-pengadaan` |
-| GET | `usulan-barang/create` | `item-proposals.create` | `kelola-pengadaan` |
-| POST | `usulan-barang` | `item-proposals.store` | `kelola-pengadaan` |
 | PATCH | `usulan-barang/{itemProposal}/tolak` | `item-proposals.reject` | `kelola-gudang` |
-| GET | `usulan-barang/{itemProposal}` | `item-proposals.show` | `akses-pengadaan` |
+| GET | `barang/create?item_proposal_id=…` | `items.create` | `kelola-gudang` |
+| POST | `barang` (dengan `item_proposal_id`) | `items.store` | `kelola-gudang` |
+
+Rute `item-proposals.index`, `.create`, `.store`, dan `.show` dihapus
+(ADR 0053).
 
 **Aturan.**
 
@@ -752,8 +835,11 @@ Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
   tombolnya menuju `items.create?item_proposal_id=…`, dan
   `ItemController::store()` yang menutup usulannya — di dalam transaksi yang
   sama, sehingga tidak mungkin ada usulan `Disetujui` tanpa barang.
-- Pengusul mengisi nama bebas, satuan, dan kegunaan yang **wajib**. Kode barang
-  serta batas minimum/maksimum tetap diisi Pengelola Gudang.
+- Pemohon mengisi nama bebas, satuan, dan kegunaan yang **wajib** di
+  formulir permohonan. Kode barang serta batas minimum/maksimum tetap diisi
+  Pengelola Gudang.
+- Alasan penolakan tampil di baris permohonannya, jadi tetap terbaca setelah
+  notifikasinya terhapus.
 - Penolakan wajib berketerangan. Penolakan tersering adalah "barangnya sudah ada,
   pakai ATK-014", dan tanpa keterangan itu pengusul akan mengusulkan hal yang
   sama lagi.
@@ -769,18 +855,21 @@ Pejabat Pengadaan        Pengelola Gudang                    Pejabat Pengadaan
 | Tipe | Sifat | Penerima |
 |---|---|---|
 | `UsulanBarangMenungguKeputusan` | keadaan | Pengelola Gudang dan Admin |
-| `UsulanBarangDisetujui` | peristiwa | pengusul |
-| `UsulanBarangDitolak` | peristiwa | pengusul, memuat keterangan penolakan |
+| `UsulanBarangDisetujui` | peristiwa | pengusul (pemohon) |
+| `UsulanBarangDitolak` | peristiwa | pengusul (pemohon), memuat keterangan penolakan |
+
+Ketiganya menaut ke rincian permohonan. `UsulanBarangDisetujui` dulu menaut ke
+halaman barang, yang butuh `akses-gudang` dan berujung 403 bagi pengusulnya.
 
 **Konsekuensi yang perlu diingat.** Barang hasil usulan lahir berstok nol,
 sehingga `StokHabis` langsung berlaku dan draf usulan otomatis menyedotnya.
 Bukan kerusakan — stoknya memang habis — dan keduanya melepas sendiri begitu
 barangnya diterima gudang.
 
-**Batas kerja.** Tabel `item_proposals` sengaja netral peran supaya sub sistem
-permintaan barang dapat memakainya kelak tanpa perubahan skema, tetapi yang
-dibangun sekarang hanya pintu Pengadaan dan layar keputusan Gudang. Tidak ada
-berkas sub sistem permintaan yang disentuh.
+**Batas kerja.** Tabel `item_proposals` sengaja netral peran, dan sejak
+ADR 0033 memang dipakai bersama sub sistem permintaan barang. Sejak ADR 0053
+pintunya tinggal Permohonan, dan layar keputusannya ada di halaman Alma
+(`request/applications/show.blade.php`), yang disunting sempit untuk itu.
 
 ## Tahap belanja dan foto belanja
 
@@ -868,7 +957,209 @@ laptop maupun server.
 
 ---
 
+## Sumber per barang
+
+Ditambahkan 8 November 2026. Rincian keputusan:
+[ADR 0044](../keputusan/0044-sumber-usulan-pengadaan-per-barang.md).
+
+Satu draf menampung barang dari tiga jalur sekaligus, jadi sumber dicatat
+per baris pada `procurement_request_details.source`, bukan per dokumen:
+
+| Sumber | Label | Ditetapkan oleh | Alasannya ada di |
+|---|---|---|---|
+| `dari_permohonan` | Permohonan Pengguna | `ItemApplicationWorkflowService` saat permohonan disetujui — juga mengambil alih baris yang sudah ada | Tautan nomor permohonan, pemohon, dan jumlahnya |
+| `manual` | Manual | Formulir usulan manual; barang baru yang ditambahkan di halaman draf | `note`, opsional, maks. 500 karakter |
+| `pemantauan_stok` | Pemantauan Stok Otomatis | `ProcurementDraftScanner` | Stok di bawah minimum |
+
+**Aturan.**
+
+- Sumber **tidak pernah diterima dari kiriman**. Baris draf yang sudah ada
+  mempertahankan sumbernya walau jumlahnya disunting.
+- `note` hanya disimpan untuk baris `Manual`
+  (`ProcurementRequestSource::bolehBerketerangan()`); kiriman `note` pada
+  baris lain diabaikan. Keterangan yang sudah ada tetap tampil walau barisnya
+  kemudian diambil alih permohonan.
+- `ProcurementRequest::jumlahPerSumber()` memberi hitungan per sumber untuk
+  chip ringkasan di detail usulan, halaman draf, dan banner draf.
+
+**Tampilan.**
+
+- Formulir manual dan draf memakai satu komponen,
+  `x-pengadaan.editor-barang`: panel Tambah Barang (pemilih barang
+  `x-request.pemilih-barang`, stepper jumlah, keterangan) dan daftar barang
+  dengan stepper per baris. Keterangan **menempel** setelah barang
+  ditambahkan, keterangan yang sudah dipakai muncul sebagai saran sekali
+  klik, "Pakai untuk N barang tanpa keterangan" mengisi baris manual yang
+  masih kosong, dan keterangan tiap baris dapat disunting di tempat. Enter di
+  kolom jumlah atau keterangan menambahkan barang, bukan mengirim formulir.
+- Detail usulan punya kolom Sumber (`x-pengadaan.sumber-barang`), garis kiri
+  berwarna sumber, dan chip penyaring bila usulannya bercampur. Baris yang
+  disembunyikan penyaring tetap terkirim saat disetujui.
+- Draf: "Ajukan Usulan Ini" nonaktif selama ada perubahan yang belum
+  disimpan.
+
+## Kiriman ulang dan halaman draf yang usang
+
+Ditambahkan 8 November 2026 setelah laporan bug: tombol Kembali setelah
+mengajukan usulan memulihkan formulir lengkap, dan mengirimnya lagi
+melahirkan usulan kembar tanpa batas. Rincian keputusan:
+[ADR 0045](../keputusan/0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md).
+
+**Aturan.**
+
+- Formulir usulan manual, realisasi, dan unggah berkas membawa token dari
+  `x-form.token-kiriman` yang baru tiap kali tampil. Token yang sudah dipakai
+  tidak membuat dokumen, tidak dicatat di log, dan diarahkan ke dokumen yang
+  sudah ada. Dicatat di `form_submissions` lewat
+  `App\Support\KirimanFormulir` (ADR 0046).
+- Simpan, ajukan, dan buang draf membawa `draft_id` halaman pengirim dan
+  hanya berlaku pada draf itu. Draf yang sudah diajukan mengarahkan ke
+  usulannya; draf yang dibuang atau sudah berganti kembali ke halaman draf
+  dengan pesan. `update()` tidak lagi membuat draf baru.
+- `x-form.sekali-kirim` memuat ulang halaman bila dipulihkan dari
+  back-forward cache setelah salah satu formulirnya terkirim, dan
+  menonaktifkan tombol kirim setelah terkirim.
+
+## Ekspor Excel usulan
+
+Ditambahkan 8 November 2026 atas permintaan klien. Rincian keputusan:
+[ADR 0048](../keputusan/0048-ekspor-excel-usulan-pengadaan.md).
+
+**Dua pintu.**
+
+- **Ekspor Excel** di daftar usulan, dua lembar dengan kop yang sama
+  (judul, periode, status bila disaring, pencetak):
+  - **Ringkasan**: ringkasan per status, lalu satu baris per usulan: No,
+    Nomor Usulan, Tanggal Diajukan, Pengaju, Jumlah Barang, Status.
+  - **Rekap Barang** (ADR 0050): satu baris per barang dari semua usulan
+    yang sama: No, Kode Barang, Nama Barang, Satuan, Jumlah Usulan,
+    Diminta, Disetujui, Belum Diputuskan. Urutannya yang paling sering
+    diusulkan di atas.
+- **Unduh Excel** di detail usulan: kop, identitas usulan, lalu satu baris
+  per barang: No, Kode Barang, Nama Barang, Sumber, Permohonan, Keterangan,
+  Diminta, Disetujui, Satuan.
+
+**Aturan.**
+
+- Isinya sama dengan tabel di layar. Tidak ada kolom realisasi, rupiah,
+  atau stok, dan tidak ada migrasi.
+- Tanggal diajukan adalah `created_at`, sama dengan yang tampil di layar.
+  Untuk usulan dari draf otomatis, `finalize()` mengisinya dengan waktu
+  pengajuan, bukan waktu draf dibuat (ADR 0049).
+- Penyaring Tanggal Awal dan Tanggal Akhir di daftar usulan dipakai
+  bersama layar dan ekspor (`ProcurementRequest::scopeFilter`). Tautan
+  ekspor membawa penyaring yang aktif. Tanggal yang tidak sah dibuang.
+- Daftar diurutkan menaik (kronologi). Ringkasan dihitung dari usulan
+  yang tersaring. Draf tidak pernah ikut, dan ekspor satu draf
+  menghasilkan 404.
+- Berkas .xlsx dibuat `App\Support\LaporanUsulanPengadaan` lewat
+  `phpoffice/phpspreadsheet`. Teks selalu ditulis sebagai string, supaya
+  keterangan berawalan `=` tidak menjadi rumus dan kode `0012` tidak
+  menjadi `12`.
+- Aksi baca, jadi tidak dicatat di log aktivitas.
+
+## BAST digital dengan TTE QR
+
+[ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md),
+9 November 2026. Stok pengadaan baru masuk setelah BAST ditandatangani
+elektronik oleh kedua pihak. Seluruh logikanya ada di
+`App\Support\BastPengadaan`.
+
+**Empat langkah, semuanya selama `MenungguPenerimaan`** (tanpa status baru):
+
+| # | Langkah | Oleh | Catatan |
+|---|---|---|---|
+| 1 | Hasil pemeriksaan | Pengelola Gudang | Tanggal diterima, jumlah per barang, catatan. Draf `procurement_receipts` + `amount_checked`; stok belum berubah |
+| 2 | Nomor BAST | Pejabat Pengadaan / Pengelola Gudang | Setelah langkah 1; unik, tanpa saran |
+| 3 | TTE Pihak Pertama | Pejabat Pengadaan | Pelaksana Belanja |
+| 4 | TTE Pihak Kedua | Pengelola Gudang | Petugas Persediaan. Urutan 3 dan 4 bebas |
+
+TTE yang terakhir memasukkan stok di transaksi yang sama:
+
+- jumlahnya dari isi yang ditandatangani;
+- mutasi dicatat atas nama penanda tangan Pihak Kedua;
+- `reference_number` diisi nomor BAST;
+- status menjadi `Diterima`.
+
+**Aturan.**
+
+- Pihak diturunkan dari peran di server (`PihakBast::dariPeran()`). Pejabat
+  Pengadaan mana pun boleh menjadi Pihak Pertama, dan identitas yang tercetak
+  mengikuti penanda tangan. Admin ditolak (`tte-bast`), dan Kasubbag hanya
+  membaca.
+- Tanpa kata sandi; cukup dialog konfirmasi (keputusan Narendra).
+- Isi BAST dibekukan saat TTE pertama (`content`/`content_hash`, kunci JSON
+  diurutkan sebelum di-hash). Sesudahnya PDF dan halaman verifikasi dibaca dari
+  salinan itu.
+- Mengubah hasil pemeriksaan, nomor, atau realisasi — termasuk
+  membatalkannya — setelah ada TTE akan:
+  - **mencabut** TTE itu, beserta alasannya;
+  - mengosongkan snapshot;
+  - menyebut pencabutan itu di kalimat audit aksinya.
+
+  Mengirim nilai yang sama tidak mencabut apa pun. Realisasi yang diubah
+  mempertahankan hasil pemeriksaannya. Setelah kedua TTE lengkap, semuanya
+  terkunci.
+- Satu baris audit untuk setiap aksi:
+
+  | Aksi | Audit |
+  |---|---|
+  | Pemeriksaan | `Penerimaan`/`Tambah` atau `Ubah` |
+  | Nomor | `Penerimaan`/`Ubah` |
+  | TTE yang bukan terakhir | `Penerimaan`/`TandaTangan` |
+  | TTE terakhir | `Penerimaan`/`Terima` |
+
+**Kartu "Berita Acara Serah Terima"** (`pages/procurements/_bast.blade.php`)
+selebar penuh di atas halaman detail:
+
+- chip kemajuan, nomor, serta tombol **Lihat BAST** dan **Unduh BAST Kosong**
+  yang selalu tampil;
+- stepper empat langkah yang mendatar di layar lebar dan menurun di ponsel.
+  Tiap peran hanya melihat tombol langkahnya; peran lain melihat siapa yang
+  ditunggu;
+- dialog TTE berisi ringkasan, tautan "Periksa BAST", dan peringatan pada TTE
+  terakhir;
+- daftar realisasi menampilkan kemajuan di bawah status, ditambah penyaring
+  **TTE BAST**.
+
+**PDF.**
+
+- Yang belum terisi dicetak titik-titik, sehingga BAST bisa dilihat di setiap
+  tahap.
+- Kolom yang sudah ber-TTE berisi QR ±1,9 cm saja. Waktu TTE tidak dicetak;
+  halaman verifikasi menampilkannya
+  ([ADR 0052](../keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md)).
+- Bila ada TTE, catatan "Dokumen ini ditandatangani secara elektronik…"
+  tercetak di kaki halaman 1, tidak di lampiran.
+- Versi kosong sama persis tanpa QR.
+
+**Verifikasi QR** — `GET /verifikasi/bast/{kode}`, publik, `throttle:60,1`:
+
+| Keadaan | Isi |
+|---|---|
+| Sah | Penanda tangan, dokumen, status kedua pihak, rincian barang, total, sidik |
+| Tidak berlaku | Dicabut beserta alasannya, atau isi tidak cocok dengan sidik; isinya tidak ditampilkan |
+| Tidak dikenal | 404 |
+
+Alamatnya dibangun dari `APP_URL`, yang di server wajib bisa dijangkau ponsel.
+
+**Notifikasi dan dasbor.**
+
+- `RealisasiMenungguPenerimaan` hanya sampai hasil pemeriksaan lengkap.
+- Keadaan baru `BastMenungguTandaTangan` dikirim per pihak, ke pemegang
+  perannya saja, tanpa Admin.
+- Antrean dasbor "BAST menunggu TTE Anda" hanya muncul bagi penanda tangan.
+- Ketiganya memakai definisi yang sama: `Procurement::menungguTte()` /
+  `scopeMenungguTte()`.
+
+**BAST lama** (`Procurement::bastLama()`: `Diterima` tanpa baris TTE) tetap
+memakai kartu, cetak, nomor, dan `BastBelumDiunggah` ala ADR 0042.
+
 ## Butir yang masih menunggu lapangan
+
+**Uji pindai QR dengan ponsel** belum dilakukan. Mesin pengembang dan server
+perlu `APP_URL` berupa alamat yang bisa dibuka ponsel (mis. IP LAN), karena
+QR dari data contoh menunjuk `http://localhost`.
 
 **Label "Proses Belanja"** perlu dikonfirmasi ke Pejabat Pengadaan. Bila istilah
 lapangannya lain ("Sedang Dibelanjakan", "Menunggu Dibelanjakan"), cukup ganti

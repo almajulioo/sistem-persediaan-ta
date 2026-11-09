@@ -2,7 +2,19 @@
 
 @section('content')
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Draf Usulan Pengadaan</h2>
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Draf Usulan Pengadaan</h2>
+            @if ($draft)
+                <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ \App\Enums\ProcurementRequestStatus::Draf->badgeClass() }}">
+                        {{ \App\Enums\ProcurementRequestStatus::Draf->label() }}
+                    </span>
+                    <span class="text-theme-sm text-gray-500 dark:text-gray-400">
+                        Dibuat otomatis {{ $draft->created_at->translatedFormat('d M Y, H:i') }}
+                    </span>
+                </div>
+            @endif
+        </div>
 
         <a href="{{ route('procurement-requests.index') }}"
             class="text-theme-sm rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
@@ -12,6 +24,17 @@
 
     <x-ui.flash />
 
+    @if ($errors->any())
+        <div class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mb-6 rounded-lg px-4 py-3 text-sm"
+            role="alert" aria-live="assertive">
+            <ul class="list-disc space-y-1 pl-5">
+                @foreach ($errors->all() as $message)
+                    <li>{{ $message }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     @if (! $draft)
         <div class="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-gray-800 dark:bg-white/[0.03]">
             <p class="text-theme-sm text-gray-500 dark:text-gray-400">
@@ -19,272 +42,123 @@
             </p>
         </div>
     @else
-        <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6"
-            x-data="procurementDraftForm()">
-            <div class="mb-5 flex items-center gap-3">
-                <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ \App\Enums\ProcurementRequestStatus::Draf->badgeClass() }}">
-                    {{ \App\Enums\ProcurementRequestStatus::Draf->label() }}
-                </span>
-                <span class="text-theme-sm text-gray-500 dark:text-gray-400">
-                    Dibuat otomatis {{ $draft->created_at->translatedFormat('d M Y, H:i') }}
-                </span>
-                <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $draft->source->badgeClass() }}">
-                    {{ $draft->source->label() }}
-                </span>
-            </div>
-
+        {{-- Ketiga formulir membawa `draft_id`, supaya aksinya berlaku pada
+             draf yang sedang ditampilkan, bukan draf lain yang kebetulan ada
+             sekarang (ADR 0045). --}}
+        <x-form.sekali-kirim>
             <form action="{{ route('procurement-requests.draft.update') }}" method="POST">
                 @csrf
                 @method('PUT')
+                <input type="hidden" name="draft_id" value="{{ $draft->procurement_request_id }}">
 
-                <div class="grid grid-cols-1 gap-5 sm:grid-cols-[1fr_160px_auto] sm:items-end">
-                    {{-- Pemilih barang --}}
-                    <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                            Barang
-                        </label>
+                <x-pengadaan.editor-barang :katalog="$katalog" :subkategori="$subkategori" :baris="$baris"
+                    judul="Barang pada Draf" kosong="Belum ada barang. Menyimpan daftar kosong akan membuang draf ini.">
+                    <x-slot:footer>
+                        <p x-show="dirty" style="display: none;" class="text-theme-xs text-warning-600 dark:text-warning-400">
+                            Ada perubahan yang belum disimpan. Simpan perubahan sebelum mengajukan usulan ini.
+                        </p>
 
-                        <div @click="open = !open"
-                            class="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
-                            <span x-text="selectedItemText || 'Pilih barang'" :class="!selectedItemId ? 'text-gray-400' : ''"></span>
-                            <svg class="size-4 text-gray-500 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            {{-- Kedua tombol ini mengirim formulirnya sendiri di bawah,
+                                 karena formulir tidak boleh bersarang. --}}
+                            <button type="submit" form="buang-draf" :disabled="terkirim"
+                                class="text-theme-sm text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-4 py-2.5 font-medium ring-1 ring-inset transition disabled:cursor-not-allowed disabled:opacity-50">
+                                Buang Draf
+                            </button>
+
+                            <div class="flex flex-wrap gap-3">
+                                <button type="submit" :disabled="terkirim"
+                                    :class="dirty ? 'bg-brand-500 text-white ring-brand-500 hover:bg-brand-600' : 'text-gray-700 ring-gray-300 hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]'"
+                                    class="rounded-lg px-4 py-2.5 text-sm font-medium ring-1 ring-inset transition disabled:cursor-not-allowed disabled:opacity-50">
+                                    Simpan Perubahan
+                                </button>
+                                <button type="submit" form="ajukan-draf" :disabled="dirty || terkirim"
+                                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                                    Ajukan Usulan Ini
+                                    <x-ui.icon name="arrow-right" class="size-4" />
+                                </button>
+                            </div>
                         </div>
-
-                        <div x-show="open" x-transition
-                            class="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900"
-                            style="display: none;">
-                            <div class="p-1">
-                                <input type="text" x-model.debounce.300ms="searchQuery" placeholder="Cari barang..."
-                                    class="h-9 w-full rounded-md border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
-                            </div>
-
-                            <ul class="mt-1 max-h-48 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800">
-                                <template x-for="item in filteredItems" :key="item.item_id">
-                                    <li @click="selectItem(item); open = false"
-                                        class="flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-                                        <span x-text="`${item.item_code} — ${item.item_name}`"></span>
-                                        <span class="text-xs text-gray-400" x-text="`Stok: ${item.stock_current}`"></span>
-                                    </li>
-                                </template>
-
-                                <template x-if="filteredItems.length === 0">
-                                    <li class="px-3 py-2 text-center text-sm text-gray-400">Barang tidak ditemukan.</li>
-                                </template>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <x-form.text-field name="amount_input" label="Jumlah Diminta" type="number" min="1"
-                        x-model="inputAmount" placeholder="0" />
-
-                    <button type="button" @click="addItem"
-                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition disabled:opacity-50">
-                        Tambah
-                    </button>
-                </div>
-
-                <p x-show="errorMessage" x-cloak x-text="errorMessage" class="text-theme-xs text-error-500 mt-2"></p>
-
-                {{-- Daftar barang pada draf --}}
-                <div class="mt-6">
-                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
-                            Barang pada Draf
-                        </label>
-                        {{-- Asal tiap baris: pemindaian stok minimum, permohonan
-                             pengguna yang disetujui, atau tambahan Pengelola Gudang. --}}
-                        <ul class="text-theme-xs flex flex-wrap items-center gap-3 text-gray-500 dark:text-gray-400">
-                            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-gray-400"></span>Otomatis: stok di bawah minimum</li>
-                            <li class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-indigo-500"></span>Permohonan: dari pengguna</li>
-                            <li class="flex items-center gap-1.5"><span class="bg-brand-500 size-2 rounded-full"></span>Manual: ditambahkan Gudang</li>
-                        </ul>
-                    </div>
-
-                    <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
-                        <template x-if="requestedList.length === 0">
-                            <div class="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                Belum ada barang. Menyimpan daftar kosong akan membuang draf ini.
-                            </div>
-                        </template>
-
-                        <template x-if="requestedList.length > 0">
-                            <div class="divide-y divide-gray-200 dark:divide-gray-800">
-                                <template x-for="(row, index) in requestedList" :key="row.item_id">
-                                    <div class="flex items-center justify-between gap-4 bg-white px-4 py-3 dark:bg-gray-900">
-                                        <div class="min-w-0">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <span class="font-medium text-gray-800 dark:text-white/90" x-text="row.item_name"></span>
-                                                <span class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium"
-                                                    :class="sourceClass(row)" x-text="sourceLabel(row)"></span>
-                                            </div>
-                                            {{-- Permohonan yang menyumbang baris ini, supaya Gudang tahu
-                                                 siapa yang membutuhkannya sebelum mengajukan usulan. --}}
-                                            <template x-if="row.permohonan.length > 0">
-                                                <ul class="text-theme-xs mt-1 space-y-0.5 text-gray-500 dark:text-gray-400">
-                                                    <template x-for="permohonan in row.permohonan" :key="permohonan.nomor">
-                                                        <li>
-                                                            <a :href="permohonan.url" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400" x-text="permohonan.nomor"></a>
-                                                            <span x-text="` · ${permohonan.pemohon} · ${permohonan.jumlah}`"></span>
-                                                        </li>
-                                                    </template>
-                                                </ul>
-                                            </template>
-                                            <input type="hidden" :name="`items[${index}][item_id]`" :value="row.item_id">
-                                        </div>
-                                        <div class="flex items-center gap-4">
-                                            <span class="text-sm text-gray-600 dark:text-gray-400" x-text="`Diminta ${row.amount_request}`"></span>
-                                            <input type="hidden" :name="`items[${index}][amount_request]`" :value="row.amount_request">
-                                            <button type="button" @click="removeItem(index)" class="text-error-500 hover:text-error-600 text-sm">
-                                                Hapus
-                                            </button>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <p x-show="dirty" x-cloak class="text-theme-xs text-warning-600 dark:text-warning-400 mt-3">
-                    Ada perubahan yang belum disimpan. Simpan perubahan sebelum mengajukan usulan ini.
-                </p>
-
-                <div class="mt-6 flex flex-wrap justify-end gap-3">
-                    <button type="submit"
-                        class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                        Simpan Perubahan
-                    </button>
-                </div>
+                    </x-slot:footer>
+                </x-pengadaan.editor-barang>
             </form>
 
-            <div class="mt-4 flex flex-wrap justify-end gap-3 border-t border-gray-100 pt-4 dark:border-gray-800">
-                <form method="POST" action="{{ route('procurement-requests.draft.discard') }}"
-                    onsubmit="return confirm('Buang draf ini?')">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit"
-                        class="text-theme-sm text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-4 py-2.5 font-medium ring-1 ring-inset transition">
-                        Buang Draf
-                    </button>
-                </form>
+            <form id="buang-draf" method="POST" action="{{ route('procurement-requests.draft.discard') }}"
+                onsubmit="return confirm('Buang draf ini?')">
+                @csrf
+                @method('DELETE')
+                <input type="hidden" name="draft_id" value="{{ $draft->procurement_request_id }}">
+            </form>
 
-                <form method="POST" action="{{ route('procurement-requests.draft.finalize') }}">
-                    @csrf
-                    <button type="submit"
-                        class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center justify-center rounded-lg px-6 py-2.5 text-sm font-medium text-white transition">
-                        Ajukan Usulan Ini
-                    </button>
-                </form>
+            <form id="ajukan-draf" method="POST" action="{{ route('procurement-requests.draft.finalize') }}">
+                @csrf
+                <input type="hidden" name="draft_id" value="{{ $draft->procurement_request_id }}">
+            </form>
+        </x-form.sekali-kirim>
+    @endif
+
+    {{-- Barang di bawah minimum yang sengaja tidak dimasukkan pemindaian
+         karena pengadaannya sudah berjalan (ADR 0047). Tanpa daftar ini Gudang
+         akan mengira barangnya terlewat lalu menambahkannya manual. --}}
+    @if ($dalamProses->isNotEmpty())
+        <div class="mt-6 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]"
+            x-data="{ buka: false }">
+            <button type="button" @click="buka = ! buka" :aria-expanded="buka" aria-controls="dalam-proses"
+                class="flex w-full items-center justify-between gap-3 px-5 py-4 text-left sm:px-6">
+                <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
+                    Sedang dalam Proses Pengadaan
+                    <span class="text-theme-xs ml-1.5 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 font-medium text-gray-600 dark:bg-gray-500/15 dark:text-gray-400">
+                        {{ $dalamProses->count() }}
+                    </span>
+                </h3>
+                <x-ui.icon name="chevron-right" class="size-5 text-gray-500 transition-transform dark:text-gray-400"
+                    ::class="buka && 'rotate-90'" />
+            </button>
+
+            <div id="dalam-proses" x-show="buka" style="display: none;"
+                class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">
+                <table class="w-full min-w-[640px]">
+                    <thead>
+                        <tr class="border-b border-gray-100 dark:border-gray-800">
+                            @foreach (['Barang', 'Stok', 'Dokumen'] as $heading)
+                                <th class="px-5 py-3 text-left sm:px-6">
+                                    <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
+                                </th>
+                            @endforeach
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($dalamProses as $baris)
+                            <tr class="border-b border-gray-100 align-top last:border-b-0 dark:border-gray-800">
+                                <td class="px-5 py-4 sm:px-6">
+                                    <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90">{{ $baris['item']->item_name }}</p>
+                                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $baris['item']->item_code }}</p>
+                                </td>
+                                <td class="px-5 py-4 sm:px-6">
+                                    <p class="text-theme-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                        {{ number_format($baris['item']->stock_current, 0, ',', '.') }} {{ $baris['item']->unit->label() }}
+                                    </p>
+                                </td>
+                                <td class="px-5 py-4 sm:px-6">
+                                    <div class="flex flex-col gap-1.5">
+                                        @foreach ($baris['dokumen'] as $dokumen)
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <a href="{{ $dokumen['url'] }}"
+                                                    class="text-theme-sm text-brand-500 hover:text-brand-600 dark:text-brand-400 font-medium">
+                                                    {{ $dokumen['judul'] }}
+                                                </a>
+                                                <span class="text-theme-xs inline-block rounded-full px-2.5 py-0.5 font-medium {{ $dokumen['status']->badgeClass() }}">
+                                                    {{ $dokumen['status']->label() }}
+                                                </span>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        @php
-            // Dihitung lebih dulu di sini, bukan langsung di dalam @json(),
-            // karena direktif itu memecah argumennya dengan explode(',', ...)
-            // tanpa memperhatikan kurung/array bersarang — ekspresi dengan
-            // banyak koma di dalamnya akan terpotong diam-diam.
-            $permohonanPerBarang = $draft->permohonanPerBarang();
-            $draftInitial = $draft->details->map(fn ($detail) => [
-                'item_id' => $detail->item_id,
-                'item_name' => "{$detail->item->item_code} — {$detail->item->item_name}",
-                'amount_request' => $detail->amount_request,
-                'is_auto' => $detail->is_auto,
-                'permohonan' => $permohonanPerBarang->get($detail->item_id, collect())
-                    ->map(fn ($asal) => [
-                        'nomor' => $asal->application->application_number,
-                        'pemohon' => $asal->application->user?->fullname ?? '-',
-                        'jumlah' => $asal->quantity,
-                        'url' => route('item-applications.show', $asal->application),
-                    ])
-                    ->values()
-                    ->all(),
-            ])->values();
-        @endphp
-
-        <script>
-            function procurementDraftForm() {
-                const initial = @json($draftInitial);
-
-                return {
-                    items: @json($items),
-                    selectedItemId: '',
-                    selectedItemText: '',
-                    searchQuery: '',
-                    inputAmount: '',
-                    errorMessage: '',
-                    requestedList: JSON.parse(JSON.stringify(initial)),
-
-                    get dirty() {
-                        return JSON.stringify(this.requestedList) !== JSON.stringify(initial);
-                    },
-
-                    get filteredItems() {
-                        if (!this.searchQuery) return this.items;
-                        const q = this.searchQuery.toLowerCase();
-                        return this.items.filter(item =>
-                            item.item_name.toLowerCase().includes(q) || item.item_code.toLowerCase().includes(q)
-                        );
-                    },
-
-                    // Permohonan lebih dulu: barisnya ditandai bukan otomatis
-                    // begitu permohonan masuk, tetapi asal itulah yang perlu
-                    // terbaca Gudang.
-                    sourceLabel(row) {
-                        if (row.permohonan.length > 0) return 'Permohonan';
-                        return row.is_auto ? 'Otomatis' : 'Manual';
-                    },
-
-                    sourceClass(row) {
-                        if (row.permohonan.length > 0) return 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400';
-                        return row.is_auto
-                            ? 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400'
-                            : 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400';
-                    },
-
-                    selectItem(item) {
-                        this.selectedItemId = item.item_id;
-                        this.selectedItemText = `${item.item_code} — ${item.item_name}`;
-                    },
-
-                    addItem() {
-                        this.errorMessage = '';
-
-                        if (!this.selectedItemId || !this.inputAmount || this.inputAmount <= 0) {
-                            this.errorMessage = 'Pilih barang dan isi jumlah diminta dengan benar.';
-                            return;
-                        }
-
-                        const selected = this.items.find(i => i.item_id === this.selectedItemId);
-                        if (!selected) return;
-
-                        const existingIndex = this.requestedList.findIndex(i => i.item_id === selected.item_id);
-                        if (existingIndex !== -1) {
-                            this.requestedList[existingIndex].amount_request =
-                                parseInt(this.requestedList[existingIndex].amount_request) + parseInt(this.inputAmount);
-                            this.requestedList[existingIndex].is_auto = false;
-                        } else {
-                            this.requestedList.push({
-                                item_id: selected.item_id,
-                                item_name: `${selected.item_code} — ${selected.item_name}`,
-                                amount_request: parseInt(this.inputAmount),
-                                is_auto: false,
-                                permohonan: [],
-                            });
-                        }
-
-                        this.selectedItemId = '';
-                        this.selectedItemText = '';
-                        this.searchQuery = '';
-                        this.inputAmount = '';
-                    },
-
-                    removeItem(index) {
-                        this.requestedList.splice(index, 1);
-                    },
-                };
-            }
-        </script>
     @endif
 @endsection

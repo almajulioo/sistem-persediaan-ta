@@ -28,9 +28,24 @@
         </div>
     @endif
 
+    {{-- Satu draf dalam satu waktu (ADR 0057). Kalimatnya dipertahankan:
+         ia menyatakan halaman ini terkunci dan apa yang perlu dilakukan. --}}
+    @if ($drafAktif)
+        <div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+            <p class="text-sm text-gray-700 dark:text-gray-400">
+                Masih ada draf <span class="font-semibold text-gray-800 dark:text-white/90">{{ $drafAktif->judul() }}</span>
+                yang belum diposting. Posting atau hapus draf itu sebelum memulai opname baru.
+            </p>
+            <a href="{{ route('opname.edit', $drafAktif) }}"
+                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-5 py-3 text-sm font-medium text-white transition">
+                Lanjut Cacah
+            </a>
+        </div>
+    @else
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
         <form method="POST" action="{{ route('opname.store') }}" novalidate>
             @csrf
+            <x-form.token-kiriman />
 
             <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <x-form.select-field name="period_type" label="Jenis Periode"
@@ -69,4 +84,5 @@
             </div>
         </form>
     </div>
+    @endif
 @endsection

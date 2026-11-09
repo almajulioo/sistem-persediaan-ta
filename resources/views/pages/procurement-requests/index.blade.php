@@ -4,15 +4,27 @@
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h2 class="text-xl font-semibold text-gray-800 dark:text-white/90">Usulan Pengadaan</h2>
 
-        @can('kelola-gudang')
-            <a href="{{ route('procurement-requests.create') }}"
-                class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
-                <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+        {{-- Tautan ekspor membawa penyaring yang sedang aktif, supaya isi
+             berkas sama persis dengan yang terlihat di layar (ADR 0048). --}}
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="{{ route('procurement-requests.excel', array_filter($filters)) }}"
+                class="inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2.5a.75.75 0 01.75.75v7.19l2.22-2.22a.75.75 0 111.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06l2.22 2.22V3.25A.75.75 0 0110 2.5zM3.5 13.75a.75.75 0 01.75.75v1.25h11.5V14.5a.75.75 0 011.5 0v1.5a1.25 1.25 0 01-1.25 1.25H4.0A1.25 1.25 0 012.75 16v-1.5a.75.75 0 01.75-.75z" />
                 </svg>
-                Ajukan Usulan
+                Ekspor Excel
             </a>
-        @endcan
+
+            @can('kelola-gudang')
+                <a href="{{ route('procurement-requests.create') }}"
+                    class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
+                    <svg class="size-5 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M10 3.25a.75.75 0 01.75.75v5.25H16a.75.75 0 010 1.5h-5.25V16a.75.75 0 01-1.5 0v-5.25H4a.75.75 0 010-1.5h5.25V4a.75.75 0 01.75-.75z" />
+                    </svg>
+                    Ajukan Usulan
+                </a>
+            @endcan
+        </div>
     </div>
 
     <x-ui.flash />
@@ -20,10 +32,14 @@
     @can('kelola-gudang')
         @if ($draftBanner)
             <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning-200 bg-warning-50 p-4 dark:border-warning-500/30 dark:bg-warning-500/15">
-                <p class="text-theme-sm text-warning-700 dark:text-warning-400">
-                    Draf usulan otomatis:
-                    <strong>{{ $draftBanner->details_count }} barang</strong> di bawah stok minimum.
-                </p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-theme-sm text-warning-700 dark:text-warning-400">
+                        Draf usulan: <strong>{{ $draftBanner->details->count() }} barang</strong>
+                    </p>
+                    @foreach ($draftBanner->jumlahPerSumber() as ['sumber' => $sumber, 'jumlah' => $jumlah])
+                        <x-ui.pill :warna="$sumber->warna()" :ikon="$sumber->icon()">{{ $jumlah }} {{ $sumber->label() }}</x-ui.pill>
+                    @endforeach
+                </div>
                 <a href="{{ route('procurement-requests.draft.edit') }}"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Tinjau Draf
@@ -51,21 +67,21 @@
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         {{-- Penyaring --}}
         <form method="GET" action="{{ route('procurement-requests.index') }}"
-            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 dark:border-gray-800 sm:p-6">
+            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-3 dark:border-gray-800 sm:p-6">
             <x-form.select-field name="status" label="Status Usulan"
                 :options="\App\Enums\ProcurementRequestStatus::options()" :selected="$filters['status']"
                 placeholder="Semua status" />
 
-            <x-form.select-field name="source" label="Sumber Usulan"
-                :options="\App\Enums\ProcurementRequestSource::options()" :selected="$filters['source']"
-                placeholder="Semua sumber" />
+            <x-form.text-field name="from" label="Tanggal Awal" type="date" :value="$filters['from']" />
 
-            <div class="flex items-center gap-3 sm:col-span-2">
+            <x-form.text-field name="to" label="Tanggal Akhir" type="date" :value="$filters['to']" />
+
+            <div class="flex items-center gap-3 sm:col-span-3">
                 <button type="submit"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Terapkan
                 </button>
-                @if ($filters['status'] !== '' || $filters['source'] !== '')
+                @if (collect($filters)->filter()->isNotEmpty())
                     <a href="{{ route('procurement-requests.index') }}"
                         class="text-theme-sm inline-flex items-center rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                         Reset
@@ -76,10 +92,10 @@
 
         {{-- Tabel --}}
         <div class="custom-scrollbar max-w-full overflow-x-auto">
-            <table class="w-full min-w-[900px]">
+            <table class="w-full min-w-[760px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        @foreach (['Usulan', 'Pengaju', 'Sumber', 'Barang', 'Status', 'Aksi'] as $heading)
+                        @foreach (['Usulan', 'Pengaju', 'Barang', 'Status', 'Aksi'] as $heading)
                             <th class="px-5 py-3 text-left sm:px-6">
                                 <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                             </th>
@@ -104,11 +120,6 @@
                                 </p>
                             </td>
                             <td class="px-5 py-4 sm:px-6">
-                                <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $row->source->badgeClass() }}">
-                                    {{ $row->source->label() }}
-                                </span>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                     {{ $row->details->count() }} barang
                                 </p>
@@ -127,7 +138,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-5 py-10 text-center sm:px-6">
+                            <td colspan="5" class="px-5 py-10 text-center sm:px-6">
                                 <p class="text-theme-sm text-gray-500 dark:text-gray-400">
                                     Belum ada usulan pengadaan yang cocok.
                                 </p>

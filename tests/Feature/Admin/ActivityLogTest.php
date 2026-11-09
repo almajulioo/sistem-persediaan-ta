@@ -11,6 +11,7 @@ use App\Enums\UserRole;
 use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Procurement;
+use App\Models\ProcurementRequest;
 use App\Models\StockOpname;
 use App\Models\Supplier;
 use App\Models\User;
@@ -232,7 +233,10 @@ describe('celah pencatatan yang ditutup', function () {
         $opname = opnameDrafLog($petugas, $item);
         $detail = $opname->details->first();
 
+        $waktu = now();
+
         actingAs($petugas)->put("/opname/{$opname->opname_id}", [
+            'dihitung_pada' => dihitungPada($waktu),
             'details' => [
                 $detail->opname_detail_id => [
                     'stock_real' => 8,
@@ -248,7 +252,8 @@ describe('celah pencatatan yang ditutup', function () {
             ->firstOrFail();
 
         expect($log->activity)->toContain('Mengubah hasil cacah')
-            ->and($log->activity)->toContain('1 dari 1 barang tercacah')
+            // Waktu cacah menentukan pembanding tiap baris (ADR 0057).
+            ->and($log->activity)->toContain('1 barang diubah, dihitung pada '.$waktu->translatedFormat('d M Y H:i').', 1 dari 1 barang diisi')
             ->and($log->subject_id)->toBe($opname->opname_id)
             ->and($log->actor_role)->toBe(UserRole::PengelolaGudang);
     });
@@ -258,6 +263,7 @@ describe('celah pencatatan yang ditutup', function () {
         $item = barangDrafLog();
 
         actingAs($petugas)->put('/usulan-pengadaan/draf', [
+            'draft_id' => ProcurementRequest::query()->draf()->value('procurement_request_id'),
             'items' => [['item_id' => $item->item_id, 'amount_request' => 25]],
         ])->assertRedirect();
 
@@ -273,7 +279,7 @@ describe('celah pencatatan yang ditutup', function () {
         $petugas = User::factory()->role(UserRole::PengelolaGudang)->create();
         barangDrafLog();
 
-        actingAs($petugas)->put('/usulan-pengadaan/draf', ['items' => []])->assertRedirect();
+        actingAs($petugas)->put('/usulan-pengadaan/draf', ['draft_id' => ProcurementRequest::query()->draf()->value('procurement_request_id'), 'items' => []])->assertRedirect();
 
         $log = AuditLog::where('module', AuditModule::UsulanPengadaan)
             ->latest('timestamp')
@@ -292,6 +298,7 @@ describe('celah pencatatan yang ditutup', function () {
         $procurement = realisasiBerkasLog($pejabat);
 
         actingAs($pejabat)->post("/pengadaan/{$procurement->procurement_id}/dokumen", [
+            'submission_token' => tokenKiriman(),
             'type' => 'spk_kontrak',
             'file' => UploadedFile::fake()->create('kontrak-final.pdf', 10, 'application/pdf'),
         ])->assertRedirect();

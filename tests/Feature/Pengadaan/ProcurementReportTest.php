@@ -5,13 +5,13 @@ use App\Models\Item;
 use App\Models\Procurement;
 use App\Models\Supplier;
 use App\Models\User;
-use App\Support\ProcurementReceiptPoster;
 
 /**
  * Realisasi satu barang dengan angka yang ditentukan, supaya isi laporan dapat
  * diperiksa persis. Nama pembantu unik: berkas Pest berbagi ruang nama global.
  *
- * `diterima` yang null berarti penerimaannya belum dikonfirmasi.
+ * `diterima` yang null berarti penerimaannya belum dikonfirmasi. Penerimaan
+ * dituntaskan lewat alur BAST digital (ADR 0051).
  */
 function realisasiLaporan(
     User $pejabat,
@@ -40,16 +40,13 @@ function realisasiLaporan(
     ]);
 
     if ($diterima !== null) {
-        ProcurementReceiptPoster::post(
-            procurement: $procurement,
-            diterima: [$procurement->details->first()->procurement_detail_id => $diterima],
-            actor: $petugas,
-            receivedAt: now(),
+        terimaLewatTte(
+            $procurement,
+            $petugas,
+            $pejabat,
+            jumlah: [$procurement->details->first()->procurement_detail_id => $diterima],
+            nomor: $bastNumber,
         );
-
-        // Nomor BAST diisi saat cetak pertama (ADR 0042); laporan dan BAST di
-        // berkas ini mengandaikan nomornya sudah ada.
-        $procurement->fresh()->receipt->update(['bast_number' => $bastNumber]);
     }
 
     return $procurement->fresh(['details', 'receipt']);
@@ -94,13 +91,14 @@ describe('BAST pengadaan', function () {
         }
     });
 
-    it('belum dapat dicetak sebelum penerimaan dikonfirmasi', function () {
+    it('sudah dapat dilihat selama menunggu penerimaan, sebelum ditandatangani', function () {
+        // ADR 0051: BAST bisa dilihat di setiap tahap, termasuk sebelum
+        // pemeriksaan maupun TTE.
         $procurement = realisasiLaporan($this->pejabat, $this->petugas, $this->item, $this->supplier);
 
         $this->actingAs($this->petugas)
             ->get("/pengadaan/{$procurement->procurement_id}/bast")
-            ->assertRedirect("/pengadaan/{$procurement->procurement_id}")
-            ->assertSessionHas('error');
+            ->assertOk();
     });
 
     it('tetap terbit untuk kiriman yang kurang dari pesanan', function () {

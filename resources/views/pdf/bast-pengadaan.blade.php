@@ -1,27 +1,68 @@
 {{-- Berita Acara Serah Terima Barang Persediaan dengan format resmi BPK
      Perwakilan Provinsi Lampung (ADR 0042). Halaman 1 menyalin format aslinya
      persis, kalimatnya juga; rincian barang ada di lampiran halaman 2.
-     Dicetak untuk ditandatangani, dipindai, lalu diunggah kembali (ADR 0018).
 
-     Serah terimanya internal: PIHAK PERTAMA adalah Pelaksana Belanja — yang
-     menandai realisasi dibelanjakan (ADR 0035) — dan PIHAK KEDUA adalah
-     Petugas Persediaan yang mengonfirmasi penerimaan. Penyedia tidak ikut
-     menandatangani.
+     Sejak ADR 0051 ditandatangani elektronik: kolom tanda tangan yang sudah
+     dibubuhkan TTE berisi QR yang menunjuk halaman verifikasi. Datanya datang
+     dari satu view-model (`BastPengadaan::untukCetak()`): data hidup selama
+     belum ada TTE, isi yang dibekukan setelahnya. Versi "kosong" memakai
+     template yang sama tanpa QR, untuk tanda tangan basah.
 
-     Seluruh jumlah di lampiran adalah `amount_received` — yang benar-benar
-     datang — bukan `amount` yang dipesan (ADR 0017).
+     Serah terimanya internal: PIHAK PERTAMA adalah Pelaksana Belanja dan PIHAK
+     KEDUA adalah Petugas Persediaan. Penyedia tidak ikut menandatangani.
+
+     Seluruh jumlah di lampiran adalah yang benar-benar datang, bukan `amount`
+     yang dipesan (ADR 0017). Yang belum terisi — nomor, tanggal, jumlah —
+     dicetak sebagai titik-titik, supaya BAST tetap bisa dilihat di setiap
+     tahap dan tetap bisa diisi tangan.
 
      CSS-nya sengaja berdiri sendiri, bukan `pdf._style`: dokumen dinas ini
      memakai Times 12 pt dan margin resmi, sedangkan `_style` melayani laporan
      (dan BAST permintaan milik Alma masih bergantung padanya). Times di sini
      adalah font inti PDF bawaan dompdf, yang metriknya sama dengan Times New
      Roman — tidak perlu menyematkan berkas font. --}}
+@php
+    $isi = $bast['isi'];
+    $kosong = '..............................................';
+    $titik = '..........';
+
+    $nomor = $isi['nomor'] ?? null;
+    $tanggal = \App\Support\BastPengadaan::tanggal($isi['tanggal'] ?? null);
+    $tanggalRealisasi = \App\Support\BastPengadaan::tanggal($isi['realisasi']['tanggal'] ?? null);
+
+    $kalimatTanggal = $tanggal === null
+        ? "{$titik} tanggal {$titik} bulan {$titik} tahun {$titik}"
+        : sprintf(
+            '%s tanggal %s bulan %s tahun %s',
+            $tanggal->translatedFormat('l'),
+            ucfirst(\App\Support\Terbilang::angka($tanggal->day)),
+            $tanggal->translatedFormat('F'),
+            ucfirst(\App\Support\Terbilang::angka($tanggal->year)),
+        );
+
+    $pihak = [
+        ['nomor' => '1.', 'data' => $bast['pihak']['pertama']],
+        ['nomor' => '2.', 'data' => $bast['pihak']['kedua']],
+    ];
+
+    // Data URI, bukan path berkas: dompdf membatasi berkas lokal pada
+    // chroot-nya, dan data URI tidak bergantung pada konfigurasi itu.
+    $logo = 'data:image/jpeg;base64,'.base64_encode(file_get_contents(public_path('images/logo_bpk_kop.jpeg')));
+
+    $rincian = collect($isi['rincian'] ?? []);
+    // Sebelum hasil pemeriksaan lengkap, seluruh barang dicantumkan dengan
+    // jumlah kosong. Sesudahnya, hanya barang yang memang datang (ADR 0042).
+    $terisi = $rincian->isNotEmpty() && $rincian->every(fn (array $baris) => $baris['diterima'] !== null);
+    $baris = $terisi ? $rincian->filter(fn (array $baris) => $baris['diterima'] > 0)->values() : $rincian;
+    $kurangKirim = $terisi ? $rincian->filter(fn (array $baris) => $baris['diterima'] < $baris['dipesan']) : collect();
+    $total = $terisi ? $rincian->sum(fn (array $baris) => $baris['diterima'] * $baris['harga']) : null;
+@endphp
 <!DOCTYPE html>
 <html lang="id">
 
 <head>
     <meta charset="utf-8">
-    <title>BAST {{ $receipt->bast_number }}</title>
+    <title>BAST {{ $nomor ?? $isi['realisasi']['judul'] }}</title>
     <style>
         @page { margin: 1.5cm 2cm; }
 
@@ -59,7 +100,22 @@
         table.ttd { width: 100%; border-collapse: collapse; }
         table.ttd td { width: 50%; padding: 0; text-align: center; vertical-align: top; }
         table.ttd .ruang { height: 2.5cm; }
+        /* QR TTE muat di ruang tanda tangan yang sama, supaya tata letak
+           halaman 1 tidak bergeser antara BAST kosong dan yang ber-TTE. */
+        table.ttd .qr { width: 1.9cm; height: 1.9cm; margin-top: 0.1cm; }
         .nama-ttd { font-weight: bold; text-decoration: underline; }
+        /* Kaki halaman 1 saja. `position: fixed` akan mengulanginya di setiap
+           halaman, lampiran ikut; `absolute` di dalam alur halaman 1 menempel
+           ke dasar halaman itu saja. */
+        .catatan-tte {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            font-size: 9pt;
+            font-style: italic;
+            text-align: center;
+        }
 
         /* --- Lampiran --- */
         .lampiran { page-break-before: always; }
@@ -86,41 +142,6 @@
 </head>
 
 <body>
-    @php
-        // Pelaksana Belanja adalah yang menandai realisasi dibelanjakan. Realisasi
-        // sebelum ADR 0035 belum punya `purchased_by`; pembuatnya, yang juga
-        // Pejabat Pengadaan, menjadi cadangan.
-        $pihakPertama = $procurement->purchasedBy ?? $procurement->user;
-        $pihakKedua = $receipt->receivedBy;
-
-        // Kolom kosong dicetak sebagai titik-titik untuk diisi tangan, supaya
-        // dokumennya tetap bisa ditandatangani hari itu juga.
-        $kosong = '..............................................';
-
-        $pihak = [
-            ['nomor' => '1.', 'user' => $pihakPertama],
-            ['nomor' => '2.', 'user' => $pihakKedua],
-        ];
-
-        $tanggal = $receipt->received_at;
-        $kalimatTanggal = sprintf(
-            '%s tanggal %s bulan %s tahun %s',
-            $tanggal->translatedFormat('l'),
-            ucfirst(\App\Support\Terbilang::angka($tanggal->day)),
-            $tanggal->translatedFormat('F'),
-            ucfirst(\App\Support\Terbilang::angka($tanggal->year)),
-        );
-
-        // Data URI, bukan path berkas: dompdf membatasi berkas lokal pada
-        // chroot-nya, dan data URI tidak bergantung pada konfigurasi itu.
-        $logo = 'data:image/jpeg;base64,'.base64_encode(file_get_contents(public_path('images/logo_bpk_kop.jpeg')));
-
-        $diterima = $procurement->details
-            ->filter(fn ($detail) => ($detail->amount_received ?? 0) > 0)
-            ->values();
-        $kurangKirim = $procurement->details->filter(fn ($detail) => $detail->kurangKirim() > 0);
-    @endphp
-
     {{-- ============================ Halaman 1 ============================ --}}
     <div class="kop">
         <img src="{{ $logo }}" alt="Logo BPK">
@@ -131,35 +152,35 @@
     <div class="garis-kop"></div>
 
     <p class="judul">BERITA ACARA SERAH TERIMA BARANG PERSEDIAAN</p>
-    <p class="tengah">Nomor : {{ $receipt->bast_number }}</p>
+    <p class="tengah">Nomor : {{ $nomor ?? $kosong }}</p>
 
     {{-- Teks isi, dari "Pada hari ini" sampai "sebagaimana mestinya.", berspasi 1,15. --}}
     <div class="isi">
     <p class="blok">
         {{-- Tanggal angkanya tidak boleh terpotong di tanda hubung. --}}
-        Pada hari ini, {{ $kalimatTanggal }} <span class="utuh">({{ $tanggal->format('d-m-Y') }}),</span>
+        Pada hari ini, {{ $kalimatTanggal }} <span class="utuh">({{ $tanggal?->format('d-m-Y') ?? $titik }}),</span>
         yang bertanda tangan di bawah ini :
     </p>
 
-    @foreach ($pihak as $baris)
+    @foreach ($pihak as $p)
         <table class="pihak blok">
             <tr>
-                <td class="no">{{ $baris['nomor'] }}</td>
+                <td class="no">{{ $p['nomor'] }}</td>
                 <td class="label">Nama</td>
                 <td class="titik">:</td>
-                <td>{{ $baris['user']?->fullname ?? $kosong }}</td>
+                <td>{{ $p['data']['nama'] ?? $kosong }}</td>
             </tr>
             <tr>
                 <td></td>
                 <td class="label">NIP</td>
                 <td class="titik">:</td>
-                <td>{{ $baris['user']?->nip ?? $kosong }}</td>
+                <td>{{ $p['data']['nip'] ?? $kosong }}</td>
             </tr>
             <tr>
                 <td></td>
                 <td class="label">Jabatan</td>
                 <td class="titik">:</td>
-                <td>{{ $baris['user']?->position ?? $kosong }}</td>
+                <td>{{ $p['data']['jabatan'] ?? $kosong }}</td>
             </tr>
         </table>
 
@@ -184,22 +205,37 @@
 
     <table class="ttd blok">
         <tr>
-            <td>Pelaksana Belanja</td>
-            <td>Petugas Persediaan</td>
+            @foreach ($pihak as $p)
+                <td>{{ $p['data']['sebutan'] }}</td>
+            @endforeach
         </tr>
         <tr>
-            <td class="ruang"></td>
-            <td class="ruang"></td>
+            @foreach ($pihak as $p)
+                <td class="ruang">
+                    @if ($p['data']['tte'])
+                        <img class="qr" src="{{ $p['data']['tte']['qr'] }}" alt="QR TTE {{ $p['data']['sebutan'] }}">
+                    @endif
+                </td>
+            @endforeach
         </tr>
         <tr>
-            <td><span class="nama-ttd">{{ $pihakPertama?->fullname ?? $kosong }}</span></td>
-            <td><span class="nama-ttd">{{ $pihakKedua?->fullname ?? $kosong }}</span></td>
+            @foreach ($pihak as $p)
+                <td><span class="nama-ttd">{{ $p['data']['nama'] ?? $kosong }}</span></td>
+            @endforeach
         </tr>
         <tr>
-            <td><strong>NIP {{ $pihakPertama?->nip ?? $kosong }}</strong></td>
-            <td><strong>NIP {{ $pihakKedua?->nip ?? $kosong }}</strong></td>
+            @foreach ($pihak as $p)
+                <td><strong>NIP {{ $p['data']['nip'] ?? $kosong }}</strong></td>
+            @endforeach
         </tr>
     </table>
+
+    @if ($bast['adaTte'])
+        <p class="catatan-tte">
+            Dokumen ini ditandatangani secara elektronik. Keaslian tanda tangan dapat diperiksa
+            dengan memindai kode QR.
+        </p>
+    @endif
 
     {{-- ============================ Lampiran ============================= --}}
     <div class="lampiran">
@@ -214,12 +250,12 @@
                         <tr>
                             <td class="label">Nomor</td>
                             <td class="titik">:</td>
-                            <td>{{ $receipt->bast_number }}</td>
+                            <td>{{ $nomor ?? $kosong }}</td>
                         </tr>
                         <tr>
                             <td class="label">Tanggal</td>
                             <td class="titik">:</td>
-                            <td>{{ $tanggal->translatedFormat('j F Y') }}</td>
+                            <td>{{ $tanggal?->translatedFormat('j F Y') ?? $kosong }}</td>
                         </tr>
                     </table>
                 </td>
@@ -232,12 +268,12 @@
             <tr>
                 <td class="label">Dasar</td>
                 <td class="titik">:</td>
-                <td>{{ $procurement->judul() }} tanggal {{ $procurement->procurement_date->translatedFormat('j F Y') }}</td>
+                <td>{{ $isi['realisasi']['judul'] }} tanggal {{ $tanggalRealisasi?->translatedFormat('j F Y') }}</td>
             </tr>
             <tr>
                 <td class="label">Penyedia</td>
                 <td class="titik">:</td>
-                <td>{{ $procurement->supplier?->supplier_name ?? '-' }}</td>
+                <td>{{ $isi['penyedia'] ?? '-' }}</td>
             </tr>
         </table>
 
@@ -256,15 +292,15 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse ($diterima as $i => $detail)
+                @forelse ($baris as $i => $detail)
                     <tr>
                         <td class="tengah">{{ $i + 1 }}</td>
-                        <td>{{ $detail->item?->item_code ?? '-' }}</td>
-                        <td>{{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}</td>
-                        <td class="angka">{{ number_format($detail->amount_received, 0, ',', '.') }}</td>
-                        <td>{{ $detail->item?->unit->label() ?? '-' }}</td>
-                        <td class="angka">{{ number_format($detail->unit_price, 0, ',', '.') }}</td>
-                        <td class="angka">{{ number_format($detail->amount_received * $detail->unit_price, 0, ',', '.') }}</td>
+                        <td>{{ $detail['kode'] ?? '-' }}</td>
+                        <td>{{ $detail['nama'] }}</td>
+                        <td class="angka">{{ $detail['diterima'] === null ? '' : number_format($detail['diterima'], 0, ',', '.') }}</td>
+                        <td>{{ $detail['satuan'] ?? '-' }}</td>
+                        <td class="angka">{{ number_format($detail['harga'], 0, ',', '.') }}</td>
+                        <td class="angka">{{ $detail['diterima'] === null ? '' : number_format($detail['diterima'] * $detail['harga'], 0, ',', '.') }}</td>
                     </tr>
                 @empty
                     <tr>
@@ -273,7 +309,7 @@
                 @endforelse
                 <tr class="jumlah">
                     <td colspan="6" class="angka">Jumlah</td>
-                    <td class="angka">{{ number_format($procurement->nilaiDiterima(), 0, ',', '.') }}</td>
+                    <td class="angka">{{ $total === null ? '' : number_format($total, 0, ',', '.') }}</td>
                 </tr>
             </tbody>
         </table>
@@ -283,15 +319,15 @@
                 Catatan: jumlah yang diterima kurang dari pesanan untuk {{ $kurangKirim->count() }} jenis
                 barang, yaitu
                 @foreach ($kurangKirim as $detail)
-                    {{ $detail->item?->item_name }} kurang
-                    {{ number_format($detail->kurangKirim(), 0, ',', '.') }} {{ $detail->item?->unit->label() }}{{ $loop->last ? '.' : ',' }}
+                    {{ $detail['nama'] }} kurang
+                    {{ number_format($detail['dipesan'] - $detail['diterima'], 0, ',', '.') }} {{ $detail['satuan'] }}{{ $loop->last ? '.' : ',' }}
                 @endforeach
                 Kekurangan tersebut belum termasuk dalam serah terima ini.
             </p>
         @endif
 
-        @if ($receipt->notes)
-            <p class="blok rata">Keterangan: {{ $receipt->notes }}</p>
+        @if (! empty($isi['catatan']))
+            <p class="blok rata">Keterangan: {{ $isi['catatan'] }}</p>
         @endif
     </div>
 </body>

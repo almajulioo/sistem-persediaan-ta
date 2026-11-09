@@ -68,7 +68,8 @@ describe('hak akses ubah realisasi', function () {
             ->get("{$this->url}/edit")
             ->assertOk()
             ->assertSee('Ubah '.$this->procurement->judul())
-            ->assertSee($this->procurement->procurementRequest->judul());
+            ->assertSee($this->procurement->procurementRequest->judul())
+            ->assertSee('pemilihBarang(', escape: false);
     });
 
     it('mengizinkan Admin', function () {
@@ -266,6 +267,29 @@ describe('mengubah realisasi', function () {
         $this->actingAs($this->pejabat)
             ->put($this->url, ubahPayload($this->procurement, ['supplier_id' => $arsip->supplier_id]))
             ->assertSessionHasErrors('supplier_id');
+    });
+
+    it('mempertahankan barang tambahan baru setelah galat validasi', function () {
+        $tambahan = Item::factory()->create();
+
+        $this->actingAs($this->pejabat)
+            ->from("{$this->url}/edit")
+            ->put($this->url, ubahPayload($this->procurement, [
+                'supplier_id' => Supplier::factory()->create(['is_active' => false])->supplier_id,
+                'items' => [
+                    [
+                        'procurement_detail_id' => $this->procurement->details->first()->procurement_detail_id,
+                        'amount' => 10,
+                        'unit_price' => 10000,
+                    ],
+                    ['item_id' => $tambahan->item_id, 'amount' => 4, 'unit_price' => 8000],
+                ],
+            ]))
+            ->assertSessionHasErrors('supplier_id');
+
+        // Barang baru belum punya rincian, jadi namanya dicari di katalog.
+        $this->get("{$this->url}/edit")
+            ->assertSee('"item_name":'.json_encode("{$tambahan->item_code} — {$tambahan->item_name}", JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), escape: false);
     });
 });
 

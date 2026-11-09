@@ -4,6 +4,8 @@
 
 Diterima — 3 September 2026
 
+Sebagian digantikan oleh [ADR 0051](0051-bast-pengadaan-digital-dengan-tte-qr.md) — 9 November 2026: konfirmasi penerimaan oleh gudang kini berupa hasil pemeriksaan ditambah TTE Pihak Kedua pada BAST digital, dan stok baru masuk setelah kedua pihak bertanda tangan.
+
 ## Konteks
 
 Rancangan awal menyebut Pengelola Gudang hanya sampai usulan pengadaan,

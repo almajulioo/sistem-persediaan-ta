@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Usulan barang baru — pintu depan katalog (ADR 0032).
@@ -113,5 +114,33 @@ class ItemProposal extends Model
     public function requestDetails(): HasMany
     {
         return $this->hasMany(RequestDetail::class, 'item_proposal_id', 'item_proposal_id');
+    }
+
+    /**
+     * Baris permohonan yang melahirkan usulan ini. Satu usulan lahir dari
+     * tepat satu baris barang baru (ItemApplicationWorkflowService::approve()).
+     */
+    public function applicationDetail(): HasOne
+    {
+        return $this->hasOne(ItemApplicationDetail::class, 'item_proposal_id', 'item_proposal_id');
+    }
+
+    /**
+     * Halaman tempat usulan ini dilihat dan diputuskan.
+     *
+     * Usulan barang tidak lagi punya halaman sendiri: tombol daftarkan dan
+     * tolaknya ada di rincian permohonan asalnya (ADR 0053), dan pemohonnya
+     * pun boleh membuka halaman itu. Usulan lama yang lahir di luar permohonan
+     * jatuh ke barangnya bila sudah terdaftar, atau ke daftar permohonan.
+     */
+    public function tautan(bool $absolut = true): string
+    {
+        $permohonan = $this->applicationDetail?->item_application_id;
+
+        return match (true) {
+            $permohonan !== null => route('item-applications.show', $permohonan, $absolut),
+            $this->item !== null => route('items.show', $this->item, $absolut),
+            default => route('item-applications.index', [], $absolut),
+        };
     }
 }

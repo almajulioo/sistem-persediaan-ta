@@ -129,6 +129,52 @@ class StockLedger
     }
 
     /**
+     * Stok tiap barang pada menit `$waktu`, dibaca mundur dari buku mutasi:
+     * stok kini dikurangi seluruh mutasi yang tercatat sesudah menit itu.
+     *
+     * Mutasi yang tercatat di dalam menit itu sendiri dihitung sudah terjadi
+     * — "dihitung pukul 08:30" berarti keadaan sampai pukul 08:30 lewat.
+     * Karena buku mutasi immutable dan diurutkan menurut waktu catat (ADR
+     * 0005), stok pada menit yang sudah lewat tidak berubah lagi: mutasi baru
+     * selalu tercatat sesudahnya, sehingga menambah stok kini dan jumlah
+     * pengurangnya sama besar. Dipakai stok opname untuk membandingkan hasil
+     * cacah di lembar kertas dengan stok pada saat barang dihitung (ADR 0057).
+     *
+     * Dengan `$kunci`, baris barang dikunci lebih dulu supaya stok kini dan
+     * jumlah mutasinya terbaca dari keadaan yang sama; panggil di dalam
+     * transaksi.
+     *
+     * @param  list<string>  $itemIds
+     * @return array<string, int> item_id => stok
+     */
+    public static function stokPada(array $itemIds, CarbonInterface $waktu, bool $kunci = false): array
+    {
+        $sesudah = $waktu->copy()->startOfMinute()->addMinute();
+        $stok = [];
+
+        // Dipecah supaya jumlah parameter kueri tetap di bawah batas SQLite.
+        foreach (array_chunk(array_values(array_unique($itemIds)), 500) as $potongan) {
+            $kini = Item::query()
+                ->whereIn('item_id', $potongan)
+                ->when($kunci, fn ($query) => $query->lockForUpdate())
+                ->pluck('stock_current', 'item_id');
+
+            $berikutnya = StockMutation::query()
+                ->whereIn('item_id', $potongan)
+                ->where('created_at', '>=', $sesudah)
+                ->groupBy('item_id')
+                ->selectRaw('item_id, SUM(amount) as jumlah')
+                ->pluck('jumlah', 'item_id');
+
+            foreach ($kini as $id => $nilai) {
+                $stok[$id] = (int) $nilai - (int) ($berikutnya[$id] ?? 0);
+            }
+        }
+
+        return $stok;
+    }
+
+    /**
      * Ubah jumlah mentah menjadi nilai bertanda sesuai jenis mutasi.
      */
     private static function signedAmount(MutationType $type, int $amount): int

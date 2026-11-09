@@ -84,7 +84,8 @@ class AuditLog extends Model
             // satunya layar detail akun yang tersedia.
             'pengguna' => route('users.edit', $this->subject),
             'penyedia' => route('suppliers.show', $this->subject),
-            'usulan_barang' => route('item-proposals.show', $this->subject),
+            // Tanpa layar sendiri sejak ADR 0053: diputuskan di permohonannya.
+            'usulan_barang' => $this->subject->tautan(),
             'usulan_pengadaan' => route('procurement-requests.show', $this->subject),
             'pengadaan' => route('procurements.show', $this->subject),
             'opname' => route('opname.show', $this->subject),

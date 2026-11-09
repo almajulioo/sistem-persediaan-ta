@@ -22,6 +22,8 @@
 /vendor
 # Konteks Claude Code milik masing-masing pengembang, tidak dibagi lewat repo.
 /CLAUDE.md
+# Bahan kerja infografis panduan pengguna, hanya disimpan lokal.
+/naren-documentations/panduan-pengguna/desain-isi-infografis.md
 Homestead.json
 Homestead.yaml
 Thumbs.db

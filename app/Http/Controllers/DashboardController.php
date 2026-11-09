@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ItemApplicationStatus;
-use App\Enums\ItemProposalStatus;
 use App\Enums\ModulPengajuan;
 use App\Enums\MutationType;
 use App\Enums\OpnameStatus;
+use App\Enums\PihakBast;
 use App\Enums\ProcurementRequestStatus;
 use App\Enums\ProcurementStatus;
 use App\Enums\SatuanBarang;
@@ -14,7 +14,6 @@ use App\Enums\StockStatus;
 use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\ItemApplication;
-use App\Models\ItemProposal;
 use App\Models\Procurement;
 use App\Models\ProcurementRequest;
 use App\Models\Request as ModelsRequest;
@@ -102,7 +101,6 @@ class DashboardController extends Controller
             ['Stok Opname', 'opname.index', 'akses-gudang', 'clipboard-check', 'orange'],
             ['Usulan Pengadaan', 'procurement-requests.index', 'akses-pengadaan', 'file-plus', 'purple'],
             ['Realisasi Pengadaan', 'procurements.index', 'akses-pengadaan', 'cart', 'amber'],
-            ['Usulan Barang Baru', 'item-proposals.index', 'akses-pengadaan', 'package-plus', 'pink'],
             // Bukan toska: toska warna identitas Permintaan.
             ['Penyedia Barang', 'suppliers.index', 'akses-penyedia', 'building', 'sky'],
             ['Manajemen Pengguna', 'users.index', 'kelola-pengguna', 'users', 'rose'],
@@ -341,15 +339,22 @@ class DashboardController extends Controller
             $tugas[] = $this->tugasRealisasi('Belum dibelanjakan', ProcurementStatus::ProsesBelanja, 'bag', 'amber');
         }
 
+        // TTE BAST hanya bagi penanda tangannya sendiri — Admin dan Kasubbag
+        // tidak menandatangani, jadi "Anda" tidak berlaku bagi mereka. Angkanya
+        // dari `Procurement::scopeMenungguTte()`, definisi yang sama dengan
+        // penyaring `tte` yang dituju dan notifikasinya (ADR 0051).
+        if ($user->can('tte-bast') && ($pihak = PihakBast::dariPeran($user->role)) !== null) {
+            $tugas[] = [
+                'label' => 'BAST menunggu TTE Anda',
+                'jumlah' => Procurement::query()->menungguTte($pihak)->count(),
+                'url' => route('procurements.index', ['tte' => $pihak->nilaiPenyaring()]),
+                'ikon' => 'pen-line',
+                'warna' => 'brand',
+            ];
+        }
+
         if ($user->can('kelola-gudang')) {
             $tugas[] = $this->tugasRealisasi('Barang menunggu penerimaan', ProcurementStatus::MenungguPenerimaan, 'truck', 'amber');
-            $tugas[] = [
-                'label' => 'Usulan barang baru',
-                'jumlah' => ItemProposal::query()->where('status', ItemProposalStatus::Diajukan)->count(),
-                'url' => route('item-proposals.index', ['status' => ItemProposalStatus::Diajukan->value]),
-                'ikon' => 'package-plus',
-                'warna' => 'pink',
-            ];
             // Jumlah barang di dalam draf, bukan jumlah dokumen: draf selalu
             // tunggal (ADR 0027), yang berarti bagi Pengelola Gudang adalah
             // berapa barang yang menunggu diusulkan.

@@ -53,13 +53,12 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Diajukan,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(2)])->save();
 
         if ($item = Item::where('item_code', 'ATK-010')->first()) {
-            $usulan->details()->create(['item_id' => $item->item_id, 'amount_request' => 80]);
+            $usulan->details()->create(['item_id' => $item->item_id, 'source' => ProcurementRequestSource::PemantauanStok, 'amount_request' => 80]);
         }
     }
 
@@ -71,7 +70,6 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(10)])->save();
@@ -79,6 +77,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-003')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::Manual,
                 'amount_request' => 40,
                 'amount_granted' => 40,
             ]);
@@ -87,6 +86,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-004')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::Manual,
                 'amount_request' => 40,
                 'amount_granted' => 20,
             ]);
@@ -101,7 +101,6 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::Ditolak,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(5)])->save();
@@ -109,6 +108,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-009')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::Manual,
                 'amount_request' => 10,
                 'amount_granted' => 0,
             ]);
@@ -125,7 +125,6 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill(['created_at' => now()->subDays(1)])->save();
@@ -133,6 +132,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-012')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::PemantauanStok,
                 'amount_request' => 20,
                 'amount_granted' => 20,
             ]);
@@ -156,7 +156,6 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill([
@@ -167,6 +166,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-007')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::Manual,
                 'amount_request' => 15,
                 'amount_granted' => 15,
             ]);
@@ -192,7 +192,6 @@ class ProcurementRequestSeeder extends Seeder
         $usulan = ProcurementRequest::create([
             'procurement_request_id' => (string) Str::uuid(),
             'user_id' => $pengaju->user_id,
-            'source' => ProcurementRequestSource::Manual,
             'status' => ProcurementRequestStatus::DisetujuiMenungguRealisasi,
         ]);
         $usulan->forceFill([
@@ -203,6 +202,7 @@ class ProcurementRequestSeeder extends Seeder
         if ($item = Item::where('item_code', 'ATK-005')->first()) {
             $usulan->details()->create([
                 'item_id' => $item->item_id,
+                'source' => ProcurementRequestSource::Manual,
                 'amount_request' => 25,
                 'amount_granted' => 25,
             ]);

@@ -33,8 +33,10 @@ tidak tampil baginya ([ADR 0041](../keputusan/0041-kasubbag-pengawas-baca-saja.m
 `/barang` menerima penyaring `category` (`ATK`/`ARTK`) dan `subcategory`
 (`subcategory_id`) di samping `q`, `unit`, `stock`, dan `status`.
 
-Rute usulan barang baru tidak ada di tabel ini karena gate-nya berbeda-beda —
-lihat [modul Pengadaan](pengadaan.md#usulan-barang-baru).
+`/barang/create?item_proposal_id=…` dipakai untuk mendaftarkan usulan barang
+baru dari rincian permohonan. Penolakan usulan memakai
+`PATCH /usulan-barang/{itemProposal}/tolak` — lihat
+[modul Pengadaan](pengadaan.md#usulan-barang-baru).
 
 ## Aturan bisnis
 
@@ -48,8 +50,9 @@ lihat [modul Pengadaan](pengadaan.md#usulan-barang-baru).
 - `stock_max = 0` berarti **tanpa batas atas** — barang tidak akan pernah
   berstatus Berlebih.
 - **Hanya Pengelola Gudang yang mendaftarkan barang.** Peran lain yang
-  membutuhkan barang belum terdaftar mengusulkannya lewat Usulan Barang Baru
-  ([ADR 0032](../keputusan/0032-usulan-barang-baru.md)); yang paling bernilai
+  membutuhkan barang belum terdaftar memohonkannya lewat Permohonan
+  ([ADR 0032](../keputusan/0032-usulan-barang-baru.md),
+  [ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)); yang paling bernilai
   dari langkah ini bukan pengisian formulirnya, melainkan pemeriksaan duplikat.
 
 ## Kategori dan sub kategori
@@ -113,7 +116,9 @@ Yang perlu diketahui dari sisi master barang:
 
 - `items.create` menerima `?item_proposal_id=` dan **mengisi** `item_name` serta
   `unit` dari usulannya. Kode barang dan batas minimum/maksimum tetap diisi
-  Pengelola Gudang — hanya dia yang mengenal penamaan bakunya.
+  Pengelola Gudang — hanya dia yang mengenal penamaan bakunya. Tombolnya
+  ("Daftarkan") ada di rincian permohonan; Batal dan pengalihan setelah simpan
+  kembali ke permohonan itu (`ItemProposal::tautan()`, ADR 0053).
 - `items.store` menutup usulannya **di dalam transaksi yang sama** dengan
   pembuatan barang: mengisi `item_proposals.item_id`, `status = Disetujui`,
   `decided_by`, dan `decided_at`. Tidak ada jalur pembuatan barang kedua, dan
@@ -143,10 +148,9 @@ Yang perlu diketahui dari sisi master barang:
 | [app/Enums/SatuanBarang.php](../../app/Enums/SatuanBarang.php) | Daftar satuan |
 | [app/Enums/StockStatus.php](../../app/Enums/StockStatus.php) | Status kecukupan stok |
 | [app/Http/Controllers/Gudang/ItemController.php](../../app/Http/Controllers/Gudang/ItemController.php) | Seluruh aksi |
-| [app/Http/Controllers/Gudang/ItemProposalController.php](../../app/Http/Controllers/Gudang/ItemProposalController.php) | Usulan barang baru: ajukan, baca, tolak |
+| [app/Http/Controllers/Gudang/ItemProposalController.php](../../app/Http/Controllers/Gudang/ItemProposalController.php) | Usulan barang baru: tolak saja (ADR 0053) |
 | [app/Http/Requests/Gudang/](../../app/Http/Requests/Gudang/) | `StoreItemRequest`, `UpdateItemRequest`, `ItemFormRules` |
 | [resources/views/pages/items/](../../resources/views/pages/items/) | `index`, `create`, `edit`, `show`, `_form` |
-| [resources/views/pages/item-proposals/](../../resources/views/pages/item-proposals/) | `index`, `create`, `show` |
 | [database/seeders/ItemSeeder.php](../../database/seeders/ItemSeeder.php) | 1.801 barang kantor dari `data/barang.csv` + saldo awal 120 barang dari `data/saldo_awal_2026_10_01.csv` |
 | [database/seeders/ItemProposalSeeder.php](../../database/seeders/ItemProposalSeeder.php) | 3 usulan barang contoh |
 

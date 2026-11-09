@@ -394,7 +394,7 @@ describe('keputusan akhir', function () {
 
         expect($application->status)->toBe(ItemApplicationStatus::Disetujui)
             ->and($application->decided_by)->toBe($this->kasubbag->user_id)
-            ->and($draft->source)->toBe(ProcurementRequestSource::DariPermohonan)
+            ->and($line->source)->toBe(ProcurementRequestSource::DariPermohonan)
             ->and($line->amount_request)->toBe(20)
             ->and($line->is_auto)->toBeFalse()
             ->and($proposal->status)->toBe(ItemProposalStatus::Diajukan)
@@ -424,27 +424,28 @@ describe('keputusan akhir', function () {
             ->assertSee($application->application_number)
             ->assertSee($this->pemohon->fullname);
 
-        $this->post(route('procurement-requests.draft.finalize'));
+        $this->post(route('procurement-requests.draft.finalize'), ['draft_id' => ProcurementRequest::query()->draf()->value('procurement_request_id')]);
         $usulan = ProcurementRequest::query()->bukanDraf()->sole();
 
-        expect($usulan->source)->toBe(ProcurementRequestSource::DariPermohonan);
+        expect($usulan->details()->sole()->source)->toBe(ProcurementRequestSource::DariPermohonan);
 
         $this->get(route('procurement-requests.show', $usulan))
             ->assertOk()
+            ->assertSee('Permohonan Pengguna')
             ->assertSee($application->application_number);
-
-        $this->get(route('procurement-requests.index', ['source' => 'dari_permohonan']))
-            ->assertOk()
-            ->assertSee($usulan->judul());
     });
 
     it('menjumlahkan ke baris draf yang sudah ada untuk barang yang sama', function () {
         $draft = ProcurementRequest::create([
             'user_id' => null,
-            'source' => ProcurementRequestSource::PemantauanStok,
             'status' => ProcurementRequestStatus::Draf,
         ]);
-        $draft->details()->create(['item_id' => $this->item->item_id, 'amount_request' => 7, 'is_auto' => true]);
+        $draft->details()->create([
+            'item_id' => $this->item->item_id,
+            'source' => ProcurementRequestSource::PemantauanStok,
+            'amount_request' => 7,
+            'is_auto' => true,
+        ]);
 
         $application = ajukanPermohonan($this->pemohon, [barisTambahStokPermohonan($this->item, 5)]);
         setujuiPermohonan($application, $this->kepala, $this->gudang, $this->kasubbag);
@@ -453,7 +454,8 @@ describe('keputusan akhir', function () {
 
         expect(ProcurementRequest::count())->toBe(1)
             ->and($line->amount_request)->toBe(12)
-            ->and($line->is_auto)->toBeFalse();
+            ->and($line->is_auto)->toBeFalse()
+            ->and($line->source)->toBe(ProcurementRequestSource::DariPermohonan);
     });
 
     it('tidak dapat diputuskan dua kali', function () {

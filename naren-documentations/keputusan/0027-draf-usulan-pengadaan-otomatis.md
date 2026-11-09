@@ -4,6 +4,18 @@
 
 Diterima — 13 September 2026
 
+Sebagian digantikan oleh [ADR 0044](0044-sumber-usulan-pengadaan-per-barang.md):
+draf tidak lagi bersumber `PemantauanStok` sebagai dokumen — tiap barisnya
+membawa sumbernya sendiri, dan `is_auto` tidak lagi dipakai menebak asal baris.
+
+Sebagian digantikan oleh [ADR 0045](0045-kiriman-ulang-formulir-usulan-dan-draf-usang.md):
+menyimpan, mengajukan, dan membuang draf kini terikat ke `draft_id` halaman
+pengirim; `update()` tidak lagi membuat draf baru bila draf itu sudah tidak ada.
+
+Sebagian digantikan oleh [ADR 0047](0047-barang-dalam-proses-pengadaan-tidak-diusulkan-ulang.md):
+barang yang sudah punya usulan atau realisasi berjalan tidak lagi dimasukkan
+pemindaian, walau stoknya masih di bawah minimum.
+
 ## Konteks
 
 Sebelum keputusan ini, ketika stok sebuah barang turun ke atau di bawah

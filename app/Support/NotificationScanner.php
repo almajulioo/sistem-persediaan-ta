@@ -6,6 +6,7 @@ use App\Enums\ItemApplicationStatus;
 use App\Enums\MutationType;
 use App\Enums\NotificationType;
 use App\Enums\PeriodeOpname;
+use App\Enums\PihakBast;
 use App\Enums\RequestHistoryAction;
 use App\Enums\StockStatus;
 use App\Enums\UnitKerja;
@@ -234,7 +235,12 @@ class NotificationScanner
 
     /**
      * Keadaan tiap dokumen opname: siap diposting, atau menggantung terlalu
-     * lama. Opname yang sudah selesai menutup keduanya.
+     * lama. Opname yang sudah selesai atau dihapus menutup keduanya.
+     *
+     * "Siap diposting" hanya untuk opname yang mewajibkan setiap barang diisi
+     * (ADR 0057). Pada opname insidental barang kosong sah, jadi sistem tidak
+     * dapat tahu kapan pencacahannya usai; yang tersisa baginya hanyalah
+     * pengingat bahwa drafnya belum juga diposting (ADR 0056).
      */
     public static function periksaOpname(): void
     {
@@ -243,45 +249,38 @@ class NotificationScanner
 
         StockOpname::query()->with('user')->chunk(100, function ($opnames) use ($admin, $batas) {
             foreach ($opnames as $opname) {
-                $siap = $opname->siapDiposting();
-
-                // Menggantung dan siap diposting dibuat saling eksklusif: draf
-                // yang sudah lengkap butuh satu ajakan yang jelas, bukan dua
-                // notifikasi tentang dokumen yang sama.
-                $menggantung = $opname->isDraf() && ! $siap && $opname->created_at->lt($batas);
-
                 $pembuat = $opname->user;
-                $penerimaSiap = $pembuat !== null ? new EloquentCollection([$pembuat]) : new EloquentCollection;
-                $penerimaMenggantung = $pembuat !== null
-                    ? $admin->concat([$pembuat])->unique('user_id')
-                    : $admin;
-
-                $tautan = route('opname.edit', $opname, false);
+                $ringkasan = $opname->ringkasan();
+                $siap = $opname->siapDiposting();
 
                 Notifier::terapkanKeadaan(
                     berlaku: $siap,
-                    penerima: $penerimaSiap,
+                    penerima: $pembuat !== null ? new EloquentCollection([$pembuat]) : new EloquentCollection,
                     type: NotificationType::OpnameSiapDiposting,
                     dedupKey: NotificationType::OpnameSiapDiposting->dedupKey($opname->opname_id),
                     title: "Siap diposting: {$opname->judul()}",
-                    body: "Seluruh barang pada {$opname->judul()} sudah dicacah. Periksa sekali lagi lalu posting supaya penyesuaian masuk ke buku mutasi.",
-                    actionUrl: $tautan,
+                    body: "Seluruh barang pada {$opname->judul()} sudah diisi. Periksa sekali lagi lalu posting supaya penyesuaian masuk ke buku mutasi.",
+                    actionUrl: route('opname.edit', $opname, false),
                     subject: $opname,
                 );
 
+                // Menggantung dan siap diposting saling eksklusif: draf yang
+                // sudah lengkap butuh satu ajakan yang jelas, bukan dua
+                // notifikasi tentang dokumen yang sama.
                 Notifier::terapkanKeadaan(
-                    berlaku: $menggantung,
-                    penerima: $penerimaMenggantung,
+                    berlaku: $opname->isDraf() && ! $siap && $opname->created_at->lt($batas),
+                    penerima: $pembuat !== null ? $admin->concat([$pembuat])->unique('user_id') : $admin,
                     type: NotificationType::OpnameDrafMenggantung,
                     dedupKey: NotificationType::OpnameDrafMenggantung->dedupKey($opname->opname_id),
                     title: "Draf menggantung: {$opname->judul()}",
                     body: sprintf(
-                        'Draf %s dibuat %s dan masih menyisakan %d barang yang belum dicacah. Lanjutkan pencacahan atau hapus drafnya.',
+                        'Draf %s dibuat %s dan belum diposting (%d dari %d barang diisi). Selesaikan pencacahan lalu posting, atau hapus drafnya.',
                         $opname->judul(),
                         $opname->created_at->diffForHumans(),
-                        $opname->ringkasan()['belum_dicacah'],
+                        $ringkasan['diisi'],
+                        $ringkasan['barang'],
                     ),
-                    actionUrl: $tautan,
+                    actionUrl: route('opname.edit', $opname, false),
                     subject: $opname,
                 );
             }
@@ -470,21 +469,25 @@ class NotificationScanner
      *
      * Keempat keadaan tidak akan pernah berlaku bersamaan: masing-masing
      * menuntut status yang berbeda — MenungguPersetujuan, ProsesBelanja,
-     * MenungguPenerimaan, dan sudah Diterima.
+     * MenungguPenerimaan, dan sudah Diterima. Di dalam MenungguPenerimaan,
+     * tagihan penerimaan berlaku sampai hasil pemeriksaan tercatat lengkap,
+     * lalu digantikan BastMenungguTandaTangan per pihak (ADR 0051).
      *
      * Penerimanya pun berbeda, karena itu tiga koleksi: persetujuan ditagih ke
      * Kasubbag Umum dan TI, belanja ke Pejabat Pengadaan, penerimaan dan berkas
-     * BAST ke pengawas gudang.
+     * BAST ke pengawas gudang. TTE ditagih ke pemegang peran pihaknya saja.
      *
      * @param  EloquentCollection<int, User>|null  $penerima
      * @param  EloquentCollection<int, User>|null  $pemberiPersetujuan
      * @param  EloquentCollection<int, User>|null  $pembelanja
+     * @param  array<string, EloquentCollection<int, User>>|null  $penandaTangan
      */
     public static function periksaRealisasi(
         Procurement $procurement,
         ?EloquentCollection $penerima = null,
         ?EloquentCollection $pemberiPersetujuan = null,
         ?EloquentCollection $pembelanja = null,
+        ?array $penandaTangan = null,
     ): void {
         $penerima ??= self::pengawasGudang();
         $pemberiPersetujuan ??= self::pemberiPersetujuan();
@@ -525,15 +528,16 @@ class NotificationScanner
         // Baru terbit setelah barangnya dibelanjakan, bukan saat disetujui:
         // sebelum ADR 0035 gudang sudah ditagih menunggu barang yang belum
         // dibeli siapa pun. Realisasi lama yang disetujui sebelum ADR itu
-        // tidak punya tanggal belanja, jadi kalimatnya menyesuaikan.
+        // tidak punya tanggal belanja, jadi kalimatnya menyesuaikan. Begitu
+        // hasil pemeriksaan lengkap, tagihannya pindah ke TTE (ADR 0051).
         Notifier::terapkanKeadaan(
-            berlaku: $procurement->isMenungguPenerimaan(),
+            berlaku: $procurement->isMenungguPenerimaan() && ! $procurement->hasilPemeriksaanLengkap(),
             penerima: $penerima,
             type: NotificationType::RealisasiMenungguPenerimaan,
             dedupKey: NotificationType::RealisasiMenungguPenerimaan->dedupKey($procurement->procurement_id),
             title: "Realisasi menunggu penerimaan: {$judul}",
             body: sprintf(
-                '%s dari %s %s dan menunggu konfirmasi barang diterima. Periksa fisik barang lalu konfirmasi penerimaan supaya stok bertambah.',
+                '%s dari %s %s dan menunggu diperiksa gudang. Periksa fisik barang lalu catat hasil pemeriksaannya untuk BAST.',
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia tidak diketahui',
                 $procurement->purchased_at
@@ -544,7 +548,51 @@ class NotificationScanner
             subject: $procurement,
         );
 
+        self::periksaTteBast($procurement, $penandaTangan);
         self::periksaBerkasBast($procurement, $penerima);
+    }
+
+    /**
+     * Keadaan: hasil pemeriksaan sudah lengkap, tetapi satu pihak belum
+     * membubuhkan TTE pada BAST-nya (ADR 0051).
+     *
+     * Satu baris per pihak — dedupKey-nya memuat pihak — supaya TTE Pihak
+     * Pertama menutup tagihan Pejabat Pengadaan tanpa menyentuh tagihan
+     * gudang. Admin tidak ikut menerima: ia tidak pernah menandatangani.
+     * Definisinya `Procurement::menungguTte()`, sama dengan antrean dasbor.
+     *
+     * @param  array<string, EloquentCollection<int, User>>|null  $penandaTangan  Peta nilai pihak => penerima.
+     */
+    private static function periksaTteBast(Procurement $procurement, ?array $penandaTangan = null): void
+    {
+        $procurement->loadMissing('receipt.signatures', 'details');
+        $nomor = $procurement->receipt?->bast_number;
+
+        foreach (PihakBast::cases() as $pihak) {
+            Notifier::terapkanKeadaan(
+                berlaku: $procurement->menungguTte($pihak),
+                penerima: $penandaTangan[$pihak->value] ?? Notifier::penerimaBerperan($pihak->peran()),
+                type: NotificationType::BastMenungguTandaTangan,
+                dedupKey: NotificationType::BastMenungguTandaTangan->dedupKey("{$procurement->procurement_id}:{$pihak->value}"),
+                title: "BAST menunggu TTE Anda: {$procurement->judul()}",
+                body: $nomor === null
+                    ? sprintf(
+                        'Hasil pemeriksaan %s sudah dicatat. Isi nomor BAST, lalu bubuhkan TTE Anda sebagai %s (%s). Stok baru bertambah setelah kedua pihak bertanda tangan.',
+                        $procurement->judul(),
+                        $pihak->label(),
+                        $pihak->jabatanTtd(),
+                    )
+                    : sprintf(
+                        'BAST %s untuk %s menunggu TTE Anda sebagai %s (%s). Stok baru bertambah setelah kedua pihak bertanda tangan.',
+                        $nomor,
+                        $procurement->judul(),
+                        $pihak->label(),
+                        $pihak->jabatanTtd(),
+                    ),
+                actionUrl: route('procurements.show', $procurement, false),
+                subject: $procurement,
+            );
+        }
     }
 
     /**
@@ -596,15 +644,17 @@ class NotificationScanner
      * ketiadaan berkas perlu ditagih, kalau tidak kelonggaran itu berubah
      * menjadi kelalaian yang tidak pernah ketahuan.
      *
+     * Hanya untuk BAST lama. BAST digital sudah bertanda tangan elektronik
+     * sebelum stoknya masuk, sehingga pindaiannya opsional (ADR 0051).
+     *
      * @param  EloquentCollection<int, User>  $penerima
      */
     private static function periksaBerkasBast(Procurement $procurement, EloquentCollection $penerima): void
     {
-        $procurement->loadMissing('receipt');
+        $procurement->loadMissing('receipt.signatures');
         $receipt = $procurement->receipt;
 
-        $terlambat = $procurement->isDiterima()
-            && $receipt !== null
+        $terlambat = $procurement->bastLama()
             && $receipt->received_at->lt(now()->subDays(self::HARI_BAST_BELUM_DIUNGGAH))
             && ! $procurement->bastSudahDiunggah();
 
@@ -637,32 +687,35 @@ class NotificationScanner
         $penerima = self::pengawasGudang();
         $pemberiPersetujuan = self::pemberiPersetujuan();
         $pembelanja = self::pejabatPengadaan();
+        $penandaTangan = collect(PihakBast::cases())
+            ->mapWithKeys(fn (PihakBast $pihak) => [$pihak->value => Notifier::penerimaBerperan($pihak->peran())])
+            ->all();
 
         // `details` ikut dimuat karena isi notifikasi persetujuan menyebut nilai
         // total realisasinya.
         Procurement::query()
-            ->with('supplier', 'receipt', 'details')
-            ->chunk(100, function ($procurements) use ($penerima, $pemberiPersetujuan, $pembelanja) {
+            ->with('supplier', 'receipt.signatures', 'details')
+            ->chunk(100, function ($procurements) use ($penerima, $pemberiPersetujuan, $pembelanja, $penandaTangan) {
                 foreach ($procurements as $procurement) {
-                    self::periksaRealisasi($procurement, $penerima, $pemberiPersetujuan, $pembelanja);
+                    self::periksaRealisasi($procurement, $penerima, $pemberiPersetujuan, $pembelanja, $penandaTangan);
                 }
             });
     }
 
     /**
      * Peristiwa: penerimaan barang pengadaan dikonfirmasi, sehingga stok
-     * sudah bertambah.
+     * sudah bertambah. Sejak ADR 0051 terjadi saat TTE kedua dibubuhkan.
      *
      * Penerimanya adalah Pejabat Pengadaan yang merealisasi (`Procurement::user_id`),
      * bukan pengaju usulan — ia yang paling berkepentingan tahu barang yang
-     * direalisasikannya sudah sampai. Pelakunya sendiri (Pengelola Gudang yang
-     * mengonfirmasi) tidak diberi tahu.
+     * direalisasikannya sudah sampai. Pelakunya sendiri (yang melengkapi TTE)
+     * tidak diberi tahu.
      */
     public static function catatPenerimaanDikonfirmasi(Procurement $procurement, User $pelaku): void
     {
         self::periksaRealisasi($procurement);
 
-        $procurement->loadMissing('user', 'supplier');
+        $procurement->loadMissing('user', 'supplier', 'receipt');
         $perealisasi = $procurement->user;
 
         if ($perealisasi === null || $perealisasi->user_id === $pelaku->user_id) {
@@ -677,8 +730,9 @@ class NotificationScanner
             dedupKey: NotificationType::PenerimaanDikonfirmasi->dedupKey($procurement->procurement_id),
             title: "Barang {$judul} sudah diterima",
             body: sprintf(
-                '%s mengonfirmasi penerimaan %s dari %s. Stok sudah bertambah.',
+                '%s melengkapi TTE BAST %s. Penerimaan %s dari %s tuntas dan stok sudah bertambah.',
                 $pelaku->fullname,
+                $procurement->receipt?->bast_number ?? '-',
                 $judul,
                 $procurement->supplier?->supplier_name ?? 'penyedia',
             ),
@@ -815,7 +869,7 @@ class NotificationScanner
                 $proposal->item_name,
                 $proposal->unit->label(),
             ),
-            actionUrl: route('item-proposals.show', $proposal, false),
+            actionUrl: $proposal->tautan(false),
             subject: $proposal,
         );
     }
@@ -830,7 +884,8 @@ class NotificationScanner
         $penerima = self::pengawasGudang();
 
         ItemProposal::query()
-            ->with('proposedBy')
+            // `applicationDetail` dan `item` untuk ItemProposal::tautan().
+            ->with(['proposedBy', 'applicationDetail', 'item'])
             ->chunk(100, function ($usulan) use ($penerima) {
                 foreach ($usulan as $proposal) {
                     self::periksaUsulanBarang($proposal, $penerima);
@@ -869,9 +924,10 @@ class NotificationScanner
                     $proposal->item_name,
                     $proposal->item?->item_code ?? 'barang baru',
                 ),
-                actionUrl: $proposal->item === null
-                    ? route('item-proposals.show', $proposal, false)
-                    : route('items.show', $proposal->item, false),
+                // Ke permohonannya, bukan ke halaman barang: pemohon umumnya
+                // tidak punya `akses-gudang`, sedangkan permohonannya sendiri
+                // selalu boleh ia buka dan memuat kode barang yang terdaftar.
+                actionUrl: $proposal->tautan(false),
                 subject: $proposal,
             );
 
@@ -890,7 +946,7 @@ class NotificationScanner
                     $proposal->item_name,
                     $proposal->decision_note ?? 'tidak dicatat',
                 ),
-                actionUrl: route('item-proposals.show', $proposal, false),
+                actionUrl: $proposal->tautan(false),
                 subject: $proposal,
             );
         }
@@ -1301,10 +1357,14 @@ class NotificationScanner
             dedupKey: NotificationType::OpnameDiposting->dedupKey($opname->opname_id),
             title: "{$opname->judul()} telah diposting",
             body: sprintf(
-                '%s memposting %s: %d barang dicacah, %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
+                '%s memposting %s: %s; %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
                 $pelaku->fullname,
                 $opname->judul(),
-                $ringkasan['dicacah'],
+                // Hanya opname insidental yang bisa menyisakan barang kosong
+                // (ADR 0057).
+                $ringkasan['tidak_diisi'] > 0
+                    ? "{$ringkasan['diisi']} dari {$ringkasan['barang']} barang diisi, sisanya mengikuti stok sistem"
+                    : "{$ringkasan['barang']} barang dicacah",
                 $ringkasan['selisih'],
                 number_format($ringkasan['lebih'], 0, ',', '.'),
                 number_format($ringkasan['kurang'], 0, ',', '.'),

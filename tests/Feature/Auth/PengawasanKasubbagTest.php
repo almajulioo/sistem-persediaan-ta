@@ -105,11 +105,10 @@ describe('Kasubbag membaca', function () {
             '/opname',
             "/opname/{$this->draf->opname_id}",
             "/opname/{$this->selesai->opname_id}",
-            "/opname/{$this->selesai->opname_id}/cetak",
+            "/opname/{$this->selesai->opname_id}/excel",
             '/penyedia',
             "/penyedia/{$this->supplier->supplier_id}",
             '/usulan-pengadaan',
-            '/usulan-barang',
             '/pengadaan',
             "/pengadaan/{$this->procurement->procurement_id}",
         ];
@@ -140,7 +139,6 @@ describe('Kasubbag tidak bisa mengubah', function () {
             "/penyedia/{$this->supplier->supplier_id}/edit",
             '/usulan-pengadaan/create',
             '/usulan-pengadaan/draf',
-            '/usulan-barang/create',
             '/pengadaan/create',
             "/pengadaan/{$this->procurement->procurement_id}/edit",
             "/pengadaan/{$this->procurement->procurement_id}/penerimaan/create",
@@ -168,7 +166,6 @@ describe('Kasubbag tidak bisa mengubah', function () {
             ['post', '/opname'],
             ['put', "/opname/{$draf}"],
             ['delete', "/opname/{$draf}"],
-            ['post', "/opname/{$draf}/posting"],
             ['post', '/penyedia'],
             ['put', "/penyedia/{$supplier}"],
             ['delete', "/penyedia/{$supplier}"],
@@ -193,6 +190,7 @@ describe('Kasubbag tidak bisa mengubah', function () {
     it('menolak Kasubbag mengunggah berkas ke realisasi yang ia nilai', function () {
         $this->actingAs($this->kasubbag)
             ->post("/pengadaan/{$this->procurement->procurement_id}/dokumen", [
+                'submission_token' => tokenKiriman(),
                 'type' => 'bast',
                 'file' => UploadedFile::fake()->create('bast.pdf', 10, 'application/pdf'),
             ])
@@ -205,6 +203,7 @@ describe('Kasubbag tidak bisa mengubah', function () {
     it('tetap mengizinkan pelaksana mengunggah berkas', function () {
         $this->actingAs($this->petugas)
             ->post("/pengadaan/{$this->procurement->procurement_id}/dokumen", [
+                'submission_token' => tokenKiriman(),
                 'type' => 'spk_kontrak',
                 'file' => UploadedFile::fake()->create('spk.pdf', 10, 'application/pdf'),
             ])
@@ -235,7 +234,7 @@ describe('tampilan baca-saja', function () {
 
         $this->get('/opname')
             ->assertSee(route('opname.show', $this->draf), false)
-            ->assertSee(route('opname.pdf', $this->selesai), false)
+            ->assertSee(route('opname.excel', $this->selesai), false)
             ->assertDontSee(route('opname.create'), false)
             ->assertDontSee(route('opname.edit', $this->draf), false);
 
@@ -263,8 +262,9 @@ describe('tampilan baca-saja', function () {
             ->assertSee(route('items.create'), false)
             ->assertSee(route('items.edit', $this->item), false);
         $this->get('/mutasi')->assertSee(route('mutations.create'), false);
+        // Selama ada draf, "Mulai Opname" diganti "Lanjut Cacah" (ADR 0057).
         $this->get('/opname')
-            ->assertSee(route('opname.create'), false)
+            ->assertDontSee(route('opname.create'), false)
             ->assertSee(route('opname.edit', $this->draf), false);
         $this->get("/pengadaan/{$this->procurement->procurement_id}")
             ->assertSee('action="'.route('procurement-documents.store', $this->procurement).'"', false);
@@ -290,7 +290,7 @@ describe('menu samping', function () {
             ->assertSee('href="/mutasi"', false)
             ->assertSee('href="/opname"', false)
             ->assertSee('href="/penyedia"', false)
-            ->assertSee('href="/pengadaan?status=menunggu_persetujuan"', false)
+            ->assertSee('href="/pengadaan"', false)
             ->assertDontSee('href="/pengguna"', false)
             ->assertDontSee('href="/log-aktivitas"', false);
     });
@@ -298,7 +298,7 @@ describe('menu samping', function () {
     it('tidak menampilkan tautan pengadaan dua kali', function (UserRole $role) {
         $html = $this->actingAs(penggunaPengawasan($role))->get('/dasbor')->getContent();
 
-        foreach (['href="/usulan-pengadaan"', 'href="/usulan-barang"', 'href="/pengadaan"'] as $tautan) {
+        foreach (['href="/usulan-pengadaan"', 'href="/pengadaan"'] as $tautan) {
             expect(substr_count($html, $tautan))->toBe(1);
         }
     })->with([

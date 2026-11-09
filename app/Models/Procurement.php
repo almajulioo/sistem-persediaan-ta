@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AlasanPembatalan;
 use App\Enums\AlasanPengadaan;
+use App\Enums\PihakBast;
 use App\Enums\ProcurementDocumentType;
 use App\Enums\ProcurementStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -187,6 +188,13 @@ class Procurement extends Model
                     ? $query->whereNull('procurement_request_id')
                     : $query->whereNotNull('procurement_request_id'),
             )
+            // BAST yang menunggu TTE satu pihak — tautan antrean dasbor
+            // (ADR 0051). Definisinya `scopeMenungguTte()`, sama dengan
+            // notifikasinya, supaya angka dasbor sama dengan isi daftar.
+            ->when(
+                PihakBast::dariPenyaring(trim((string) ($filters['tte'] ?? ''))),
+                fn (Builder $query, PihakBast $pihak) => $query->menungguTte($pihak),
+            )
             ->when(
                 trim((string) ($filters['supplier'] ?? '')),
                 fn (Builder $query, string $supplier) => $query->where('supplier_id', $supplier),
@@ -251,13 +259,75 @@ class Procurement extends Model
     /**
      * Apakah nomor BAST masih boleh diisi atau dikoreksi.
      *
-     * Terkunci begitu BAST bertanda tangan diunggah, karena nomornya sudah
-     * tercetak pada bukti yang diarsipkan — dan terbuka lagi bila berkas itu
-     * dihapus. Lihat ADR 0042.
+     * BAST digital (ADR 0051): selama realisasi menunggu penerimaan dan hasil
+     * pemeriksaannya sudah dicatat. Setelah kedua pihak bertanda tangan,
+     * realisasinya `Diterima` dan nomornya terkunci bersama isinya. Mengubah
+     * nomor yang sudah ditandatangani satu pihak mencabut TTE itu.
+     *
+     * BAST lama (sudah diterima sebelum ADR 0051, tanpa TTE): seperti
+     * ADR 0042, terkunci begitu pindaian bertanda tangan diunggah dan terbuka
+     * lagi bila berkas itu dihapus.
      */
     public function nomorBastDapatDiubah(): bool
     {
-        return $this->receipt !== null && ! $this->bastSudahDiunggah();
+        if ($this->receipt === null) {
+            return false;
+        }
+
+        if ($this->isMenungguPenerimaan()) {
+            return true;
+        }
+
+        return $this->bastLama() && ! $this->bastSudahDiunggah();
+    }
+
+    /**
+     * BAST yang diterima sebelum ADR 0051: tanpa TTE, ditandatangani basah lalu
+     * dipindai. Penerimaan di alur baru tidak mungkin `Diterima` tanpa dua
+     * TTE, jadi ketiadaan baris tanda tangan cukup untuk mengenalinya.
+     */
+    public function bastLama(): bool
+    {
+        return $this->isDiterima()
+            && $this->receipt !== null
+            && ! $this->receipt->bertandaTanganElektronik();
+    }
+
+    /**
+     * Seluruh barang sudah punya jumlah hasil pemeriksaan — syarat nomor BAST
+     * dan TTE (ADR 0051). Barang tambahan dari realisasi yang diubah sesudah
+     * pemeriksaan membuatnya belum lengkap lagi.
+     */
+    public function hasilPemeriksaanLengkap(): bool
+    {
+        return $this->receipt !== null
+            && $this->details->isNotEmpty()
+            && $this->details->every(fn (ProcurementDetail $detail) => $detail->sudahDiperiksa());
+    }
+
+    /**
+     * BAST ini menunggu TTE satu pihak: hasil pemeriksaannya lengkap dan pihak
+     * itu belum bertanda tangan. Nomor yang belum diisi tidak mengecualikan —
+     * kedua pihak sama-sama boleh mengisinya. Pasangan kuerinya
+     * `scopeMenungguTte()`; keduanya harus selalu sama.
+     */
+    public function menungguTte(PihakBast $pihak): bool
+    {
+        return $this->isMenungguPenerimaan()
+            && $this->hasilPemeriksaanLengkap()
+            && $this->receipt->tteAktif($pihak) === null;
+    }
+
+    public function scopeMenungguTte(Builder $query, PihakBast $pihak): Builder
+    {
+        return $query
+            ->where('status', ProcurementStatus::MenungguPenerimaan)
+            ->whereHas('receipt', fn (Builder $receipt) => $receipt->whereDoesntHave(
+                'signatures',
+                fn (Builder $ttd) => $ttd->where('party', $pihak)->whereNull('revoked_at'),
+            ))
+            ->whereHas('details')
+            ->whereDoesntHave('details', fn (Builder $detail) => $detail->whereNull('amount_checked'));
     }
 
     public function procurementRequest(): BelongsTo

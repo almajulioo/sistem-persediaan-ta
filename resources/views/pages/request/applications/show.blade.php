@@ -194,14 +194,44 @@
                                                 · {{ $detail->procurementRequest->status->label() }}
                                             @endif
                                         @elseif ($detail->itemProposal)
-                                            @can('akses-pengadaan')
-                                                <a href="{{ route('item-proposals.show', $detail->itemProposal) }}" class="text-brand-600 hover:text-brand-700 dark:text-brand-400">Usulan barang baru</a>
-                                            @else
-                                                Usulan barang baru
-                                            @endcan
-                                            · {{ $detail->itemProposal->status->label() }}
-                                            @if ($detail->itemProposal->item)
-                                                <span class="block text-theme-xs text-gray-500 dark:text-gray-400">Terdaftar sebagai {{ $detail->itemProposal->item->item_code }}</span>
+                                            {{-- Usulan barang tidak punya halaman sendiri: didaftarkan
+                                                 atau ditolak dari sini (ADR 0053). Menyetujui berarti
+                                                 mendaftarkan barangnya lewat formulir barang yang sudah
+                                                 terisi, bukan aksi tersendiri (ADR 0032). --}}
+                                            {{-- Bentuk blok, bukan bentuk sebaris: berkas ini juga
+                                                 memuat blok php, dan Blade menelan isi di antara
+                                                 bentuk sebaris dan penutup blok pertama sesudahnya. --}}
+                                            @php
+                                                $usulan = $detail->itemProposal;
+                                            @endphp
+                                            Usulan barang baru · {{ $usulan->status->label() }}
+                                            @if ($usulan->item)
+                                                <span class="block text-theme-xs text-gray-500 dark:text-gray-400">
+                                                    Terdaftar sebagai
+                                                    @can('akses-gudang')
+                                                        <a href="{{ route('items.show', $usulan->item) }}" class="text-brand-600 hover:text-brand-700 dark:text-brand-400">{{ $usulan->item->item_code }}</a>
+                                                    @else
+                                                        {{ $usulan->item->item_code }}
+                                                    @endcan
+                                                </span>
+                                            @endif
+                                            @if ($usulan->isDitolak() && $usulan->decision_note)
+                                                <span class="block text-theme-xs whitespace-pre-line text-gray-500 dark:text-gray-400">{{ $usulan->decision_note }}</span>
+                                            @endif
+                                            @if ($usulan->isDiajukan())
+                                                @can('kelola-gudang')
+                                                    <div class="mt-2 flex flex-wrap gap-2">
+                                                        <a href="{{ route('items.create', ['item_proposal_id' => $usulan->item_proposal_id]) }}"
+                                                            class="bg-brand-500 hover:bg-brand-600 text-theme-xs inline-flex items-center rounded-lg px-3 py-1.5 font-medium text-white transition">
+                                                            Daftarkan
+                                                        </a>
+                                                        <button type="button" x-data
+                                                            @click="$dispatch('buka-tolak-usulan-barang', @js(['id' => $usulan->item_proposal_id, 'nama' => $usulan->item_name, 'aksi' => route('item-proposals.reject', $usulan)]))"
+                                                            class="text-error-500 hover:bg-error-50 ring-error-300 dark:ring-error-500/30 dark:hover:bg-error-500/10 text-theme-xs inline-flex items-center rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                                            Tolak
+                                                        </button>
+                                                    </div>
+                                                @endcan
                                             @endif
                                         @endif
                                     </td>
@@ -268,7 +298,7 @@
                                 </span>
                                 <div class="min-w-0">
                                     <p class="text-sm font-medium text-gray-800 dark:text-white/90">{{ $barangBaru->count() }} usulan barang baru dibuat</p>
-                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">Diputuskan lagi lewat Usulan Barang Baru: daftarkan ke master barang atau tolak.</p>
+                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">Didaftarkan ke master barang atau ditolak dari halaman ini.</p>
                                     <ul class="text-theme-xs mt-2 space-y-0.5 text-gray-600 dark:text-gray-300">
                                         @foreach ($barangBaru as $detail)
                                             <li>{{ $detail->namaBarang() }} — {{ number_format($detail->quantity, 0, ',', '.') }} {{ $detail->satuan()?->label() }}</li>
@@ -333,5 +363,65 @@
                 </div>
             </form>
         </x-ui.modal>
+    @endif
+
+    @php
+        $usulanMenunggu = $application->details->pluck('itemProposal')->filter(fn ($usulan) => $usulan?->isDiajukan());
+    @endphp
+
+    {{-- Penolakan usulan barang baru (ADR 0053). Satu modal untuk semua
+         baris; barisnya dikirim lewat event. Hanya ada setelah permohonan
+         disetujui, jadi tidak pernah bersamaan dengan modal tolak permohonan
+         di atas walau sama-sama memakai `decision_note`. Terbuka sendiri bila
+         validasinya gagal supaya pesan galatnya tidak tersembunyi. --}}
+    @if ($usulanMenunggu->isNotEmpty())
+        @can('kelola-gudang')
+            @php
+                $usulanGagal = $errors->has('decision_note')
+                    ? $usulanMenunggu->firstWhere('item_proposal_id', old('item_proposal_id'))
+                    : null;
+                $usulanAwal = $usulanGagal === null
+                    ? ['id' => '', 'nama' => '', 'aksi' => '']
+                    : ['id' => $usulanGagal->item_proposal_id, 'nama' => $usulanGagal->item_name, 'aksi' => route('item-proposals.reject', $usulanGagal)];
+            @endphp
+
+            <div x-data="{ usulan: @js($usulanAwal) }">
+                <x-ui.modal @buka-tolak-usulan-barang.window="usulan = $event.detail; open = true" :isOpen="$usulanGagal !== null" class="max-w-[520px]">
+                    <form method="POST" :action="usulan.aksi" class="p-6 sm:p-8">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="item_proposal_id" :value="usulan.id">
+
+                        <p class="text-sm font-medium text-error-500">Tolak usulan <span x-text="usulan.nama"></span></p>
+                        <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Tolak usulan barang ini?</h3>
+                        <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                            Barangnya tidak akan didaftarkan ke master barang. Alasannya dikirim ke pemohon.
+                        </p>
+
+                        <label for="decision_note_usulan" class="mt-5 mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+                            Alasan Penolakan<span class="text-error-500">*</span>
+                        </label>
+                        <textarea id="decision_note_usulan" name="decision_note" rows="3" required maxlength="500"
+                            placeholder="mis. barangnya sudah terdaftar sebagai ATK-014 Spidol Permanen Emas"
+                            class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30">{{ $usulanGagal ? old('decision_note') : '' }}</textarea>
+                        @if ($usulanGagal)
+                            @error('decision_note')
+                                <p class="text-theme-xs text-error-500 mt-1.5">{{ $message }}</p>
+                            @enderror
+                        @endif
+
+                        <div class="mt-6 flex justify-end gap-3">
+                            <button type="button" @click="open = false"
+                                class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">
+                                Batal
+                            </button>
+                            <button type="submit" class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white">
+                                Ya, Tolak
+                            </button>
+                        </div>
+                    </form>
+                </x-ui.modal>
+            </div>
+        @endcan
     @endif
 @endsection

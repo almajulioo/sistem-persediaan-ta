@@ -73,7 +73,7 @@ justru dicari pemeriksa akan tenggelam. Daftarnya hidup di
 | Autentikasi | Masuk, keluar |
 | Manajemen Pengguna | Tambah, ubah (termasuk penanda ganti kata sandi), ubah status, hapus |
 | Master Barang | Tambah, ubah, ubah status, hapus |
-| Usulan Barang Baru | Ajukan (dua pintu), setuju (lewat pendaftaran barang), tolak |
+| Usulan Barang Baru | Setuju (lewat pendaftaran barang), tolak. Sejak [ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md) usulan hanya lahir dari persetujuan permohonan, yang tercatat di modul Permohonan; baris "ajukan" lama tetap tersimpan |
 | Mutasi Stok | Catat mutasi manual |
 | Stok Opname | Buat draf, **ubah hasil cacah**, posting, hapus draf |
 | Penyedia Barang | Tambah, ubah, ubah status, hapus |

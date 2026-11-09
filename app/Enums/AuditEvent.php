@@ -24,6 +24,9 @@ enum AuditEvent: string
     case Batal = 'batal';
     case Posting = 'posting';
     case Terima = 'terima';
+    // TTE pada BAST pengadaan yang belum melengkapi keduanya. TTE terakhir,
+    // yang sekaligus memasukkan stok, dicatat sebagai Terima (ADR 0051).
+    case TandaTangan = 'tanda_tangan';
     case Unggah = 'unggah';
     case Unduh = 'unduh';
 
@@ -42,6 +45,7 @@ enum AuditEvent: string
             self::Batal => 'Membatalkan',
             self::Posting => 'Memposting',
             self::Terima => 'Mengonfirmasi Penerimaan',
+            self::TandaTangan => 'Menandatangani',
             self::Unggah => 'Mengunggah',
             self::Unduh => 'Mengunduh',
         };
@@ -57,7 +61,7 @@ enum AuditEvent: string
             self::Hapus, self::Tolak, self::Batal => 'bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500',
             self::Ubah, self::UbahStatus => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
             self::Unggah, self::Unduh => 'bg-info-50 text-info-600 dark:bg-info-500/15 dark:text-info-400',
-            self::Ajukan => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
+            self::Ajukan, self::TandaTangan => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
             self::Keluar => 'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
         };
     }

@@ -40,7 +40,8 @@ class StockOpnameSeeder extends Seeder
     }
 
     /**
-     * Opname triwulan lalu: sebagian barang berselisih dan sudah diposting.
+     * Opname triwulan lalu, sudah diposting. Opname berkala wajib mengisi
+     * setiap barang (ADR 0057): tiga berselisih, sisanya dicacah sesuai.
      */
     private function opnameSelesai(User $petugas): void
     {
@@ -84,7 +85,7 @@ class StockOpnameSeeder extends Seeder
     }
 
     /**
-     * Opname triwulan berjalan: masih draf, baru sebagian dicacah.
+     * Opname triwulan berjalan: masih draf, baru sebagian diisi.
      */
     private function opnameDraf(User $petugas): void
     {
@@ -100,7 +101,7 @@ class StockOpnameSeeder extends Seeder
         ]);
 
         foreach ($barang as $i => $item) {
-            // Lima barang pertama sudah dicacah tanpa selisih, sisanya belum.
+            // Lima barang pertama sudah diisi tanpa selisih, sisanya belum.
             $sudahDicacah = $i < 5;
 
             $opname->details()->create([
@@ -112,6 +113,6 @@ class StockOpnameSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info("Opname contoh berstatus draf: {$opname->judul()} (5 dari {$barang->count()} barang dicacah).");
+        $this->command?->info("Opname contoh berstatus draf: {$opname->judul()} (5 dari {$barang->count()} barang diisi).");
     }
 }

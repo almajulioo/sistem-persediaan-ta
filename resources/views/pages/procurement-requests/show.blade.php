@@ -4,6 +4,7 @@
     @php
         // Permohonan pengguna yang menyumbang tiap barang usulan ini.
         $permohonanPerBarang = $procurementRequest->permohonanPerBarang();
+        $jumlahPerSumber = $procurementRequest->jumlahPerSumber();
     @endphp
 
     <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -25,10 +26,18 @@
             </nav>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
             <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $procurementRequest->status->badgeClass() }}">
                 {{ $procurementRequest->status->label() }}
             </span>
+
+            <a href="{{ route('procurement-requests.excel-detail', $procurementRequest) }}"
+                class="text-theme-sm inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                <svg class="size-4 fill-current" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2.5a.75.75 0 01.75.75v7.19l2.22-2.22a.75.75 0 111.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06l2.22 2.22V3.25A.75.75 0 0110 2.5zM3.5 13.75a.75.75 0 01.75.75v1.25h11.5V14.5a.75.75 0 011.5 0v1.5a1.25 1.25 0 01-1.25 1.25H4.0A1.25 1.25 0 012.75 16v-1.5a.75.75 0 01.75-.75z" />
+                </svg>
+                Unduh Excel
+            </a>
 
             @if ($procurementRequest->isDisetujuiMenungguRealisasi())
                 @can('kelola-pengadaan')
@@ -72,7 +81,6 @@
                 <dl class="space-y-3">
                     @foreach ([
                         'Pengaju' => $procurementRequest->user?->fullname ?? '—',
-                        'Sumber' => $procurementRequest->source->label(),
                         'Diajukan' => $procurementRequest->created_at->translatedFormat('d F Y, H:i'),
                     ] as $label => $value)
                         <div class="flex items-start justify-between gap-4">
@@ -86,9 +94,26 @@
 
         {{-- Rincian barang --}}
         <div class="col-span-12 xl:col-span-8">
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="px-5 py-5 sm:px-6">
+            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]" x-data="{ saring: '' }">
+                <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-5 sm:px-6">
                     <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Rincian Barang</h3>
+
+                    {{-- Penyaring sumber hanya berarti bila usulannya bercampur.
+                         Baris yang disembunyikan tetap ikut terkirim saat disetujui. --}}
+                    @if (count($jumlahPerSumber) > 1)
+                        <div class="flex flex-wrap gap-1.5" role="group" aria-label="Saring sumber">
+                            @foreach ($jumlahPerSumber as ['sumber' => $sumber, 'jumlah' => $jumlah])
+                                <button type="button" @click="saring = saring === @js($sumber->value) ? '' : @js($sumber->value)"
+                                    :aria-pressed="saring === @js($sumber->value)"
+                                    :class="saring === @js($sumber->value) ? 'ring-2 ring-current ring-offset-1 ring-offset-white dark:ring-offset-gray-900' : (saring ? 'opacity-50 hover:opacity-100' : '')"
+                                    class="text-theme-xs inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition {{ $sumber->badgeClass() }}">
+                                    <x-ui.icon :name="$sumber->icon()" class="size-3.5" />
+                                    {{ $sumber->label() }}
+                                    <span class="tabular-nums">{{ $jumlah }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
 
                 @if ($procurementRequest->isDiajukan() && auth()->user()->can('kelola-pengadaan'))
@@ -97,10 +122,10 @@
                         @method('PATCH')
 
                         <div class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">
-                            <table class="w-full min-w-[560px]">
+                            <table class="w-full min-w-[720px]">
                                 <thead>
                                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                                        @foreach (['Barang', 'Diminta', 'Disetujui'] as $heading)
+                                        @foreach (['Barang', 'Sumber', 'Diminta', 'Disetujui'] as $heading)
                                             <th class="px-5 py-3 text-left sm:px-6">
                                                 <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                                             </th>
@@ -109,21 +134,19 @@
                                 </thead>
                                 <tbody>
                                     @foreach ($procurementRequest->details as $detail)
-                                        <tr class="border-b border-gray-100 dark:border-gray-800">
-                                            <td class="px-5 py-4 sm:px-6">
+                                        <tr class="border-b border-gray-100 align-top dark:border-gray-800"
+                                            x-show="! saring || saring === @js($detail->source->value)">
+                                            <td class="border-l-[3px] px-5 py-4 sm:px-6 {{ \App\Support\Warna::garis($detail->source->warna()) }}">
                                                 <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
                                                     {{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}
                                                 </p>
                                                 <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code }}</p>
-                                                @foreach ($permohonanPerBarang->get($detail->item_id, collect()) as $asal)
-                                                    <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
-                                                        Permohonan <a href="{{ route('item-applications.show', $asal->application) }}" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">{{ $asal->application->application_number }}</a>
-                                                        · {{ $asal->application->user?->fullname ?? '-' }} · {{ $asal->quantity }}
-                                                    </p>
-                                                @endforeach
                                             </td>
                                             <td class="px-5 py-4 sm:px-6">
-                                                <p class="text-theme-sm text-gray-500 dark:text-gray-400">
+                                                <x-pengadaan.sumber-barang :detail="$detail" :permohonan="$permohonanPerBarang->get($detail->item_id, collect())" />
+                                            </td>
+                                            <td class="px-5 py-4 sm:px-6">
+                                                <p class="text-theme-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                                                     {{ number_format($detail->amount_request, 0, ',', '.') }} {{ $detail->item?->unit->label() }}
                                                 </p>
                                             </td>
@@ -164,10 +187,10 @@
                     </form>
                 @else
                     <div class="custom-scrollbar max-w-full overflow-x-auto border-t border-gray-100 dark:border-gray-800">
-                        <table class="w-full min-w-[560px]">
+                        <table class="w-full min-w-[720px]">
                             <thead>
                                 <tr class="border-b border-gray-100 dark:border-gray-800">
-                                    @foreach (['Barang', 'Diminta', 'Disetujui'] as $heading)
+                                    @foreach (['Barang', 'Sumber', 'Diminta', 'Disetujui'] as $heading)
                                         <th class="px-5 py-3 text-left sm:px-6">
                                             <p class="text-theme-xs font-medium text-gray-500 dark:text-gray-400">{{ $heading }}</p>
                                         </th>
@@ -176,21 +199,19 @@
                             </thead>
                             <tbody>
                                 @foreach ($procurementRequest->details as $detail)
-                                    <tr class="border-b border-gray-100 dark:border-gray-800">
-                                        <td class="px-5 py-4 sm:px-6">
+                                    <tr class="border-b border-gray-100 align-top dark:border-gray-800"
+                                        x-show="! saring || saring === @js($detail->source->value)">
+                                        <td class="border-l-[3px] px-5 py-4 sm:px-6 {{ \App\Support\Warna::garis($detail->source->warna()) }}">
                                             <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90">
                                                 {{ $detail->item?->item_name ?? 'Barang tidak dikenal' }}
                                             </p>
                                             <p class="text-theme-xs text-gray-500 dark:text-gray-400">{{ $detail->item?->item_code }}</p>
-                                            @foreach ($permohonanPerBarang->get($detail->item_id, collect()) as $asal)
-                                                <p class="text-theme-xs mt-0.5 text-gray-500 dark:text-gray-400">
-                                                    Permohonan <a href="{{ route('item-applications.show', $asal->application) }}" class="font-medium text-indigo-600 hover:underline dark:text-indigo-400">{{ $asal->application->application_number }}</a>
-                                                    · {{ $asal->application->user?->fullname ?? '-' }} · {{ $asal->quantity }}
-                                                </p>
-                                            @endforeach
                                         </td>
                                         <td class="px-5 py-4 sm:px-6">
-                                            <p class="text-theme-sm text-gray-500 dark:text-gray-400">
+                                            <x-pengadaan.sumber-barang :detail="$detail" :permohonan="$permohonanPerBarang->get($detail->item_id, collect())" />
+                                        </td>
+                                        <td class="px-5 py-4 sm:px-6">
+                                            <p class="text-theme-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                                                 {{ number_format($detail->amount_request, 0, ',', '.') }} {{ $detail->item?->unit->label() }}
                                             </p>
                                         </td>

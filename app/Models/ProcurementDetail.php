@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Dua kolom jumlah, dan perbedaannya penting: `amount` adalah yang **dipesan**,
  * `amount_received` yang **benar-benar datang**. Stok bertambah sebanyak yang
  * kedua, bukan yang pertama — lihat ADR 0017.
+ *
+ * `amount_checked` adalah hasil pemeriksaan gudang yang belum menjadi stok:
+ * diisi saat barang datang, lalu disalin ke `amount_received` begitu kedua
+ * pihak menandatangani BAST (ADR 0051).
  */
 class ProcurementDetail extends Model
 {
@@ -36,6 +40,7 @@ class ProcurementDetail extends Model
             'amount' => 'integer',
             'unit_price' => 'integer',
             'amount_received' => 'integer',
+            'amount_checked' => 'integer',
         ];
     }
 
@@ -50,6 +55,11 @@ class ProcurementDetail extends Model
     public function sudahDiterima(): bool
     {
         return $this->amount_received !== null;
+    }
+
+    public function sudahDiperiksa(): bool
+    {
+        return $this->amount_checked !== null;
     }
 
     /**

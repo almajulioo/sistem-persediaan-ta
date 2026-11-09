@@ -10,6 +10,7 @@ use App\Models\Procurement;
 use App\Models\ProcurementDocument;
 use App\Support\AuditLogger;
 use App\Support\DocumentStorage;
+use App\Support\KirimanFormulir;
 use App\Support\NotificationScanner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,7 @@ class ProcurementDocumentController extends Controller
         $file = $request->file('file');
         $jenis = $request->jenis();
 
-        $document = $procurement->documents()->create([
+        [$document, $ulang] = KirimanFormulir::sekali($request, fn () => $procurement->documents()->create([
             'type' => $jenis,
             'file_path' => DocumentStorage::simpan($file, $procurement),
             'original_name' => $file->getClientOriginalName(),
@@ -38,7 +39,11 @@ class ProcurementDocumentController extends Controller
             'mime_type' => $file->getMimeType(),
             'uploaded_by' => $request->user()->user_id,
             'notes' => $request->input('notes'),
-        ]);
+        ]));
+
+        if ($ulang) {
+            return redirect()->route('procurements.show', $procurement)->with('status', 'Berkas ini sudah diunggah sebelumnya.');
+        }
 
         AuditLogger::record(
             user: $request->user(),

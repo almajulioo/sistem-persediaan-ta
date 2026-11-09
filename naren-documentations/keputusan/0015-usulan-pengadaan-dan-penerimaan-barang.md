@@ -4,6 +4,11 @@
 
 Diterima — 5 September 2026
 
+Sebagian digantikan oleh [ADR 0044](0044-sumber-usulan-pengadaan-per-barang.md):
+sumber usulan kini dicatat per barang pada `procurement_request_details`;
+`procurement_requests.source`, `reference_type`, `reference_id`, dan sumber
+`DariPermintaan` dibuang.
+
 ## Konteks
 
 Sebelum modul Pengadaan mulai dibangun, migrasi warisan ERD-nya (satu commit,

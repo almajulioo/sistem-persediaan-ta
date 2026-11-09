@@ -63,32 +63,67 @@ class StockOpname extends Model
     }
 
     /**
+     * Barang yang tidak diisi boleh diposting dan mengikuti stok sistem —
+     * hanya pada opname insidental (ADR 0057).
+     */
+    public function bolehKosong(): bool
+    {
+        return $this->period_type->bolehKosong();
+    }
+
+    /**
+     * Draf yang setiap barangnya sudah diisi, pada opname yang mewajibkan
+     * itu. Opname insidental tidak pernah "siap" dalam arti ini: barang
+     * kosongnya sah, jadi sistem tidak dapat tahu kapan pencacahannya usai.
+     */
+    public function siapDiposting(): bool
+    {
+        return $this->isDraf()
+            && ! $this->bolehKosong()
+            && $this->details()->whereNull('stock_real')->doesntExist();
+    }
+
+    /**
+     * Barang yang tidak diisi pada opname ini mengikuti stok sistem: opname
+     * insidental yang sudah diposting, atau opname lama yang diposting di
+     * bawah ADR 0056 dengan baris kosong. Selain itu barang kosong hanyalah
+     * "belum diisi".
+     */
+    public function kosongMengikutiStokSistem(): bool
+    {
+        if (! $this->isSelesai()) {
+            return false;
+        }
+
+        $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
+
+        return $this->bolehKosong() || $details->contains(fn (OpnameDetail $d) => $d->mengikutiStokSistem());
+    }
+
+    /**
      * Ringkasan hasil pencacahan.
      *
-     * @return array<string, int>
+     * `tidak_diisi` adalah barang yang tidak diketik petugas: pada draf ia
+     * belum diisi, pada opname insidental yang selesai ia sudah mengikuti
+     * stok sistem (ADR 0056, 0057).
+     *
+     * @return array{barang: int, diisi: int, tidak_diisi: int, selisih: int, lebih: int, kurang: int}
      */
     public function ringkasan(): array
     {
         $details = $this->relationLoaded('details') ? $this->details : $this->details()->get();
 
+        $diisi = $details->filter(fn (OpnameDetail $d) => $d->diisiPetugas())->count();
         $dicacah = $details->filter(fn (OpnameDetail $d) => $d->sudahDicacah());
 
         return [
             'barang' => $details->count(),
-            'dicacah' => $dicacah->count(),
-            'belum_dicacah' => $details->count() - $dicacah->count(),
+            'diisi' => $diisi,
+            'tidak_diisi' => $details->count() - $diisi,
             'selisih' => $dicacah->filter(fn (OpnameDetail $d) => $d->adaSelisih())->count(),
             'lebih' => (int) $dicacah->where('difference', '>', 0)->sum('difference'),
             'kurang' => (int) abs($dicacah->where('difference', '<', 0)->sum('difference')),
         ];
-    }
-
-    /**
-     * Apakah seluruh barang sudah dicacah — syarat untuk diposting.
-     */
-    public function siapDiposting(): bool
-    {
-        return $this->isDraf() && $this->details()->whereNull('stock_real')->doesntExist();
     }
 
     public function scopeFilter(Builder $query, array $filters): Builder

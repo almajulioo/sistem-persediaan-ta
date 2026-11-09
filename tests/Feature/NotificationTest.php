@@ -209,6 +209,7 @@ describe('pemicu dari alur aplikasi', function () {
         $item = Item::factory()->create(['stock_current' => 5, 'stock_min' => 1, 'stock_max' => 0]);
 
         $this->actingAs($petugas)->post('/mutasi', [
+            'submission_token' => tokenKiriman(),
             'item_id' => $item->item_id,
             'mutation_type' => MutationType::BarangRusak->value,
             'amount' => 5,
@@ -225,6 +226,7 @@ describe('pemicu dari alur aplikasi', function () {
         $item = Item::factory()->create(['stock_current' => 50, 'stock_min' => 1, 'stock_max' => 0]);
 
         $this->actingAs($petugas)->post('/mutasi', [
+            'submission_token' => tokenKiriman(),
             'item_id' => $item->item_id,
             'mutation_type' => MutationType::BarangHilang->value,
             'amount' => 10,
@@ -243,6 +245,7 @@ describe('pemicu dari alur aplikasi', function () {
         $item = Item::factory()->create(['stock_current' => 50, 'stock_min' => 1, 'stock_max' => 0]);
 
         $this->actingAs($petugas)->post('/mutasi', [
+            'submission_token' => tokenKiriman(),
             'item_id' => $item->item_id,
             'mutation_type' => MutationType::HibahMasuk->value,
             'amount' => 10,

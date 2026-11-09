@@ -45,16 +45,17 @@ penerimanya sudah ditendang keluar sesi.
 | Stok Berlebih | Info | Gudang + Admin | Tinjau kebutuhan, cegah menumpuk |
 | Barang Tidak Bergerak | Info | Gudang + Admin | Evaluasi atau arsipkan |
 | Draf Usulan Tersedia | Perhatian | Gudang + Admin | Tinjau, sesuaikan jumlah, lalu ajukan |
-| Opname Siap Diposting | Perhatian | Pembuat draf | Periksa lalu posting |
-| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Lanjutkan atau hapus draf |
+| Opname Siap Diposting | Perhatian | Pembuat draf | Draf selain insidental yang setiap barangnya sudah diisi: periksa lalu posting. Dihapus [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md), dipulihkan [ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md) — opname insidental tidak mendapatkannya karena barang kosongnya sah |
+| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Draf belum diposting &gt;7 hari: selesaikan lalu posting, atau hapus draf. Saling eksklusif dengan "Opname Siap Diposting" |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
 | Usulan Disetujui Belum Direalisasi | Perhatian | Pejabat Pengadaan + Admin | Tekan Realisasikan, atau tinjau ulang kebutuhannya |
 | Realisasi Menunggu Persetujuan | Perhatian | Kasubbag Umum dan TI + Admin | Periksa penyedia, barang, dan harganya; setujui atau tolak sebelum barang dipesan |
 | Realisasi Belum Dibelanjakan | Perhatian | Pejabat Pengadaan + Admin | Sudah &gt;7 hari disetujui; tandai sudah dibelanjakan beserta fotonya, atau batalkan |
-| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Barang sudah dibelanjakan; periksa fisiknya, konfirmasi penerimaan |
-| BAST Belum Diunggah | Perhatian | Gudang + Admin | Cetak BAST, mintakan tanda tangan, unggah pindaiannya |
+| Realisasi Menunggu Penerimaan | Perhatian | Gudang + Admin | Barang sudah dibelanjakan; periksa fisiknya, catat hasil pemeriksaannya. Berhenti begitu hasil pemeriksaan lengkap (ADR 0051) |
+| BAST Menunggu TTE | Perhatian | Pemegang peran pihak yang belum bertanda tangan — Pejabat Pengadaan (Pihak Pertama) atau Pengelola Gudang (Pihak Kedua); **tanpa Admin** | Isi nomor bila belum ada, lalu bubuhkan TTE. Satu baris per pihak (dedupKey `{id}:{pihak}`), tertutup begitu pihak itu ber-TTE ([ADR 0051](../keputusan/0051-bast-pengadaan-digital-dengan-tte-qr.md)) |
+| BAST Belum Diunggah | Perhatian | Gudang + Admin | **Hanya BAST lama** (diterima sebelum ADR 0051): cetak BAST, mintakan tanda tangan, unggah pindaiannya |
 | Usulan Barang Baru Menunggu Keputusan | Perhatian | Gudang + Admin | Periksa apakah barangnya benar-benar belum ada, lalu daftarkan atau tolak |
 
 ### Peristiwa
@@ -78,7 +79,11 @@ Tiga baris realisasi milik
 — Menunggu Persetujuan, Disetujui, dan Ditolak — baru dicatat di katalog ini
 pada 16 September 2026; tipenya sendiri sudah hidup sejak ADR 0030 dibangun.
 Dua baris Usulan Barang Baru berasal dari
-[ADR 0032](../keputusan/0032-usulan-barang-baru.md). Realisasi Belum
+[ADR 0032](../keputusan/0032-usulan-barang-baru.md). Sejak
+[ADR 0053](../keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md)
+ketiga notifikasi usulan barang menaut ke rincian permohonan asalnya
+(`ItemProposal::tautan()`), karena halaman usulan barang sudah tidak ada dan
+pengusul tidak punya akses ke halaman barang. Realisasi Belum
 Dibelanjakan berasal dari
 [ADR 0035](../keputusan/0035-tahap-belanja-dan-foto-belanja-realisasi.md), yang
 sekaligus menggeser Realisasi Menunggu Penerimaan: kini ia baru terbit setelah
@@ -91,6 +96,12 @@ instansi pemeriksa, justru inilah yang paling layak diketahui Admin.
 **Stok Bergerak Setelah Dicacah** memakai `OpnameDetail::stokBerubahSejakDicacah()`
 yang sudah ada sejak modul opname tetapi **tidak pernah ditampilkan kepada
 siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md).
+Sejak [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md)
+hanya baris yang diisi petugas yang dihitung: baris yang mengikuti stok sistem
+tidak punya hasil cacah yang bisa berbeda dari stok akhirnya. Sejak
+[ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md) "dicacah" berarti
+jam "Dihitung Pada" di lembar cacah, sehingga lembar yang diketik belakangan
+untuk barang yang sempat dilayani juga menimbulkan peristiwa ini.
 
 ## Ambang batas
 
@@ -171,7 +182,8 @@ lama dipakai ulang lewat `resolved_at`; hasilnya sama, kodenya lebih banyak.)
 | `ProcurementController::cancel()` | `catatRealisasiDibatalkan()`, yang ikut menutup keadaan menunggu penerimaan maupun belum dibelanjakan |
 | `ProcurementApprovalController::approve()` / `reject()` | `catatRealisasiDiputuskan()` |
 | `ProcurementPurchaseController::store()` | `periksaRealisasi()` — menutup belum dibelanjakan, menerbitkan menunggu penerimaan |
-| `ProcurementReceiptPoster::post()` | `catatPenerimaanDikonfirmasi()`, di luar transaksi |
+| `BastPengadaan::catatPemeriksaan()` / `isiNomor()` / `tandatangani()` | `periksaRealisasi()` — tagihan penerimaan pindah ke `BastMenungguTandaTangan` per pihak (ADR 0051) |
+| `ProcurementReceiptPoster::setelahPosting()` (TTE terakhir) | `catatPenerimaanDikonfirmasi()` + `periksaBarang()` per barang + `ProcurementDraftScanner::perbaruiBarangDokumen()`, di luar transaksi |
 | `ProcurementDocumentController::store()` | `periksaRealisasi()` — berkas BAST menutup keadaannya |
 | `ProcurementDocumentController::destroy()` | `periksaRealisasi()` — keadaannya berlaku lagi |
 | `ItemProposalController::store()` | `periksaUsulanBarang()` — menagih keputusan Pengelola Gudang |

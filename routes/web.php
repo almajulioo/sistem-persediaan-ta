@@ -10,6 +10,7 @@ use App\Http\Controllers\Gudang\ItemSubcategoryController;
 use App\Http\Controllers\Gudang\StockMutationController;
 use App\Http\Controllers\Gudang\StockOpnameController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\Pengadaan\BastVerificationController;
 use App\Http\Controllers\Pengadaan\ProcurementApprovalController;
 use App\Http\Controllers\Pengadaan\ProcurementController;
 use App\Http\Controllers\Pengadaan\ProcurementDocumentController;
@@ -53,6 +54,15 @@ Route::get('/verifikasi/bast/{requestHistory}', [RequestController::class, 'veri
     ->middleware('signed:relative')
     ->name('request.bast.verify');
 
+// Verifikasi TTE BAST pengadaan dari QR (ADR 0051). Publik: pemeriksa dan
+// auditor tidak punya akun. Kodenya 40 karakter acak, jadi `throttle` bukan
+// pertahanan utama — hanya meredam pemindaian beruntun. Tanpa batasan pola:
+// kode yang salah ketik pun harus mendapat halaman "tidak ditemukan" yang
+// jelas, bukan 404 bawaan.
+Route::get('/verifikasi/bast/{kode}', BastVerificationController::class)
+    ->middleware('throttle:60,1')
+    ->name('bast.verify');
+
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
@@ -94,7 +104,8 @@ Route::middleware('auth')->group(function () {
     // controller). Memutuskan tanpa gate rute karena pemutusnya berganti per
     // tahap; otorisasinya di ItemApplicationWorkflowService. Barang baru yang
     // disetujui menjadi usulan barang dan tetap diputuskan lewat satu jalur
-    // `items.create` / `item-proposals.reject` (ADR 0032/0033).
+    // `items.create` / `item-proposals.reject`, dari halaman rincian
+    // permohonan itu sendiri (ADR 0032/0033/0053).
     Route::get('/permohonan', [ItemApplicationController::class, 'index'])->name('item-applications.index');
     Route::get('/permohonan/create', [ItemApplicationController::class, 'create'])->name('item-applications.create');
     Route::post('/permohonan', [ItemApplicationController::class, 'store'])->name('item-applications.store');
@@ -157,6 +168,11 @@ Route::middleware('auth')->group(function () {
     Route::middleware('can:akses-pengadaan')->group(function () {
         Route::get('usulan-pengadaan', [ProcurementRequestController::class, 'index'])
             ->name('procurement-requests.index');
+        // Wajib terdaftar sebelum "usulan-pengadaan/{procurementRequest}/excel"
+        // di bawah: panjang ruasnya sama, jadi bila urutannya terbalik
+        // "laporan" tertangkap sebagai {procurementRequest}.
+        Route::get('usulan-pengadaan/laporan/excel', [ProcurementRequestController::class, 'exportExcel'])
+            ->name('procurement-requests.excel');
 
         Route::get('pengadaan', [ProcurementController::class, 'index'])
             ->name('procurements.index');
@@ -169,17 +185,26 @@ Route::middleware('auth')->group(function () {
         Route::get('pengadaan/laporan/csv', [ProcurementController::class, 'exportCsv'])
             ->name('procurements.csv');
 
-        // BAST dicetak dari sistem, lalu ditandatangani dan dipindai di luar
-        // sistem. Keduanya boleh dilakukan kedua peran pengadaan (ADR 0018).
+        // BAST bisa dilihat di setiap tahap, dari belum bertanda tangan sampai
+        // lengkap, beserta versi kosongnya tanpa QR untuk tanda tangan basah.
+        // Kasubbag ikut membaca dan mencetak (ADR 0041, ADR 0051).
         Route::get('pengadaan/{procurement}/bast', [ProcurementController::class, 'bast'])
             ->name('procurements.bast');
+        Route::get('pengadaan/{procurement}/bast/kosong', [ProcurementController::class, 'bastKosong'])
+            ->name('procurements.bast-blank');
 
-        // Nomor BAST diisi saat cetak pertama, oleh salah satu penanda
-        // tangannya (ADR 0042). Sama seperti unggah berkas, gate tambahan ini
-        // bagian dari `akses-pengadaan`.
+        // Nomor BAST diisi salah satu penanda tangannya sebelum TTE (ADR 0042,
+        // ADR 0051). Sama seperti unggah berkas, gate tambahan ini bagian dari
+        // `akses-pengadaan`.
         Route::patch('pengadaan/{procurement}/bast', [ProcurementReceiptController::class, 'nomorBast'])
             ->middleware('can:isi-nomor-bast')
             ->name('procurements.bast-number');
+
+        // TTE BAST. Pihaknya diturunkan dari peran di server; Admin tidak
+        // lolos `tte-bast` (ADR 0051).
+        Route::post('pengadaan/{procurement}/bast/tte', [ProcurementReceiptController::class, 'tandatangani'])
+            ->middleware('can:tte-bast')
+            ->name('procurements.bast-sign');
 
         // Berkas pendukung. Tidak ada tautan langsung ke berkasnya: disknya
         // privat, dan seluruh unduhan wajib melewati rute terjaga ini.
@@ -233,7 +258,8 @@ Route::middleware('auth')->group(function () {
 
         // Stok opname. Opname yang sudah diposting bersifat final: rute ubah dan
         // hapus menolaknya di controller, bukan disembunyikan dari daftar rute.
-        Route::post('opname/{opname}/posting', [StockOpnameController::class, 'post'])->name('opname.post');
+        // Posting tidak punya rute sendiri: ia dikirim lewat opname.update
+        // dengan aksi=posting supaya isian di layar ikut tersimpan (ADR 0056).
         Route::resource('opname', StockOpnameController::class)
             ->except(['index', 'show'])
             ->names('opname');
@@ -259,12 +285,15 @@ Route::middleware('auth')->group(function () {
         // Menolak usulan barang baru: master barang milik Pengelola Gudang,
         // jadi dialah yang memutuskan (ADR 0032). Tidak ada rute "setujui" —
         // menyetujui berarti mendaftarkan barangnya lewat `items.store`, dan
-        // persetujuan tanpa baris `items` tidak berarti apa pun.
+        // persetujuan tanpa baris `items` tidak berarti apa pun. Tombolnya ada
+        // di rincian permohonan; usulan barang tidak lagi punya halaman
+        // sendiri (ADR 0053).
         Route::patch('usulan-barang/{itemProposal}/tolak', [ItemProposalController::class, 'reject'])
             ->name('item-proposals.reject');
 
-        // Konfirmasi penerimaan barang: tugas Pengelola Gudang, terpisah dari
-        // yang merealisasi (ADR 0008). Peristiwa sekali jadi, tanpa rute ubah.
+        // Hasil pemeriksaan barang: tugas Pengelola Gudang, terpisah dari yang
+        // merealisasi (ADR 0008). Formulir yang sama untuk mencatat dan
+        // mengubah; stok baru masuk setelah kedua TTE BAST (ADR 0051).
         Route::get('pengadaan/{procurement}/penerimaan/create', [ProcurementReceiptController::class, 'create'])
             ->name('procurement-receipts.create');
         Route::post('pengadaan/{procurement}/penerimaan', [ProcurementReceiptController::class, 'store'])
@@ -294,14 +323,6 @@ Route::middleware('auth')->group(function () {
             ->name('procurement-requests.approve');
         Route::patch('usulan-pengadaan/{procurementRequest}/tolak', [ProcurementRequestController::class, 'reject'])
             ->name('procurement-requests.reject');
-
-        // Mengusulkan barang baru: yang tahu ada barang belum terdaftar adalah
-        // yang mau mengadakannya (ADR 0032). Segmen statis "create" wajib
-        // terdaftar sebelum "usulan-barang/{itemProposal}" di grup penutup.
-        Route::get('usulan-barang/create', [ItemProposalController::class, 'create'])
-            ->name('item-proposals.create');
-        Route::post('usulan-barang', [ItemProposalController::class, 'store'])
-            ->name('item-proposals.store');
 
         // Realisasi: merealisasi adalah tugas Pejabat Pengadaan (ADR 0016).
         // "create" wajib terdaftar sebelum "pengadaan/{procurement}" di bawah
@@ -355,15 +376,10 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('can:akses-pengadaan')->group(function () {
-        // Usulan barang baru dibaca kedua peran: pengusulnya Pejabat Pengadaan,
-        // pemutusnya Pengelola Gudang (ADR 0032).
-        Route::get('usulan-barang', [ItemProposalController::class, 'index'])
-            ->name('item-proposals.index');
-        Route::get('usulan-barang/{itemProposal}', [ItemProposalController::class, 'show'])
-            ->name('item-proposals.show');
-
         Route::get('usulan-pengadaan/{procurementRequest}', [ProcurementRequestController::class, 'show'])
             ->name('procurement-requests.show');
+        Route::get('usulan-pengadaan/{procurementRequest}/excel', [ProcurementRequestController::class, 'exportExcelDetail'])
+            ->name('procurement-requests.excel-detail');
 
         Route::get('pengadaan/{procurement}', [ProcurementController::class, 'show'])
             ->name('procurements.show');
@@ -395,7 +411,7 @@ Route::middleware('auth')->group(function () {
         Route::get('mutasi/cetak/csv', [StockMutationController::class, 'exportCsv'])->name('mutations.csv');
         Route::get('mutasi', [StockMutationController::class, 'index'])->name('mutations.index');
 
-        Route::get('opname/{opname}/cetak', [StockOpnameController::class, 'exportPdf'])->name('opname.pdf');
+        Route::get('opname/{opname}/excel', [StockOpnameController::class, 'exportExcel'])->name('opname.excel');
         Route::resource('opname', StockOpnameController::class)
             ->only(['index', 'show'])
             ->names('opname');

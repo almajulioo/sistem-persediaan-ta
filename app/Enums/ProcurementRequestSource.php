@@ -2,67 +2,69 @@
 
 namespace App\Enums;
 
+use App\Support\Warna;
+
 /**
- * Asal-usul usulan pengadaan, disimpan pada `procurement_requests.source`.
+ * Asal-usul satu barang pada usulan pengadaan, disimpan per baris pada
+ * `procurement_request_details.source` (ADR 0044).
  *
- * Dikonfirmasi narasumber lapangan (Kasubbag Umum dan TI): usulan pengadaan
- * lahir dari tiga jalur berbeda, bukan satu jenis "manual" generik. Hanya
- * `DariPermintaan` yang punya dokumen asal untuk ditunjuk — lihat
- * `reference_type`/`reference_id` pada `ProcurementRequest`.
+ * Dulu disimpan per dokumen pada `procurement_requests.source` (ADR 0015).
+ * Sejak satu draf menampung barang dari ketiga jalur sekaligus (ADR 0027),
+ * sumber dokumen hanya mencatat siapa yang kebetulan membuat draf lebih dulu.
  *
- * Jalur keempat, `DariPermohonan`, lahir dari menu Permohonan sub sistem
- * Permintaan: permohonan tambah stok yang disetujui Pengelola Gudang masuk ke
- * draf usulan. Satu draf bisa menampung beberapa permohonan sekaligus, jadi
- * dokumen asalnya ditunjuk per barang lewat
- * `item_application_details.procurement_request_id`, bukan lewat
- * `reference_type`/`reference_id` yang hanya muat satu dokumen. Sejak jalur
- * ini ada, permintaan tidak lagi meneruskan kekurangan stoknya, sehingga
- * `DariPermintaan` hanya tersisa pada data lama.
+ * Jalur keempat, `dari_permintaan`, dihapus: permintaan tidak lagi meneruskan
+ * kekurangan stoknya sejak ada permohonan, dan baris lamanya dipetakan ke
+ * `DariPermohonan` oleh migrasi.
  */
 enum ProcurementRequestSource: string
 {
-    case DariPermintaan = 'dari_permintaan';
     case DariPermohonan = 'dari_permohonan';
-    case PemantauanStok = 'pemantauan_stok';
     case Manual = 'manual';
+    case PemantauanStok = 'pemantauan_stok';
 
     public function label(): string
     {
         return match ($this) {
-            self::DariPermintaan => 'Dari Permintaan',
             self::DariPermohonan => 'Permohonan Pengguna',
-            self::PemantauanStok => 'Pemantauan Stok',
             self::Manual => 'Manual',
-        };
-    }
-
-    public function description(): string
-    {
-        return match ($this) {
-            self::DariPermintaan => 'Permintaan unit kerja tidak dapat dipenuhi karena stok kurang atau habis.',
-            self::DariPermohonan => 'Permohonan tambah stok dari unit kerja yang sudah disetujui Pengelola Gudang.',
-            self::PemantauanStok => 'Muncul dari notifikasi stok habis atau menipis.',
-            self::Manual => 'Diajukan langsung oleh Pengelola Gudang tanpa pemicu otomatis.',
+            self::PemantauanStok => 'Pemantauan Stok Otomatis',
         };
     }
 
     /**
-     * Apakah sumber ini punya dokumen asal untuk ditunjuk lewat
-     * `reference_type`/`reference_id`.
+     * Nama warna App\Support\Warna. Indigo permohonan sama dengan tautan
+     * nomor permohonan yang sudah tampil di draf dan detail usulan.
      */
-    public function butuhReferensi(): bool
+    public function warna(): string
     {
-        return $this === self::DariPermintaan;
+        return match ($this) {
+            self::DariPermohonan => 'indigo',
+            self::Manual => 'teal',
+            self::PemantauanStok => 'orange',
+        };
+    }
+
+    public function icon(): string
+    {
+        return match ($this) {
+            self::DariPermohonan => 'users',
+            self::Manual => 'pencil',
+            self::PemantauanStok => 'activity',
+        };
     }
 
     public function badgeClass(): string
     {
-        return match ($this) {
-            self::DariPermintaan => 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400',
-            self::DariPermohonan => 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
-            self::PemantauanStok => 'bg-warning-50 text-warning-600 dark:bg-warning-500/15 dark:text-orange-400',
-            self::Manual => 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
-        };
+        return Warna::lembut($this->warna());
+    }
+
+    /**
+     * Keterangan alasan hanya milik baris manual. Dua sumber lainnya sudah
+     * membawa alasannya sendiri: dokumen permohonan, atau stok di bawah minimum.
+     */
+    public function bolehBerketerangan(): bool
+    {
+        return $this === self::Manual;
     }
 
     /**

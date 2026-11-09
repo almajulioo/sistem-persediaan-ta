@@ -36,6 +36,8 @@ enum NotificationType: string
     case BarangTidakBergerak = 'barang_tidak_bergerak';
 
     // --- Keadaan stok opname ---
+    // Hanya untuk opname selain Insidental: di sana setiap barang wajib diisi,
+    // jadi "semua terisi" kembali bermakna (ADR 0057, membalik ADR 0056).
     case OpnameSiapDiposting = 'opname_siap_diposting';
     case OpnameDrafMenggantung = 'opname_draf_menggantung';
     case PeriodeBelumDiopname = 'periode_belum_diopname';
@@ -53,6 +55,7 @@ enum NotificationType: string
     case RealisasiBelumDibelanjakan = 'realisasi_belum_dibelanjakan';
     case RealisasiMenungguPenerimaan = 'realisasi_menunggu_penerimaan';
     case BastBelumDiunggah = 'bast_belum_diunggah';
+    case BastMenungguTandaTangan = 'bast_menunggu_tanda_tangan';
 
     // --- Keadaan usulan barang baru ---
     case UsulanBarangMenungguKeputusan = 'usulan_barang_menunggu_keputusan';
@@ -108,6 +111,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan => 'Realisasi Belum Dibelanjakan',
             self::RealisasiMenungguPenerimaan => 'Realisasi Menunggu Penerimaan',
             self::BastBelumDiunggah => 'BAST Belum Diunggah',
+            self::BastMenungguTandaTangan => 'BAST Menunggu TTE',
             self::UsulanBarangMenungguKeputusan => 'Usulan Barang Baru Menunggu Keputusan',
             self::OpnameDiposting => 'Opname Diposting',
             self::StokBergerakSetelahDicacah => 'Stok Bergerak Setelah Dicacah',
@@ -147,7 +151,7 @@ enum NotificationType: string
             self::StokBerlebih => 'Stok melampaui batas maksimum; berisiko menumpuk dan kedaluwarsa.',
             self::BarangTidakBergerak => 'Tidak ada mutasi apa pun dalam waktu lama; layak dievaluasi atau diarsipkan.',
             self::DraftUsulanTersedia => 'Draf usulan pengadaan otomatis sudah terkumpul dari pemantauan stok, menunggu ditinjau.',
-            self::OpnameSiapDiposting => 'Seluruh barang sudah dicacah dan draf tinggal diposting.',
+            self::OpnameSiapDiposting => 'Seluruh barang sudah diisi dan draf tinggal diposting.',
             self::OpnameDrafMenggantung => 'Draf opname dibiarkan terlalu lama tanpa diselesaikan.',
             self::PeriodeBelumDiopname => 'Periode berjalan hampir berakhir tetapi opname belum dibuat.',
             self::UsulanMenungguPersetujuan => 'Usulan pengadaan baru menunggu keputusan Pejabat Pengadaan.',
@@ -157,6 +161,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan => 'Realisasi pengadaan sudah lama disetujui tetapi belum ditandai sudah dibelanjakan.',
             self::RealisasiMenungguPenerimaan => 'Barang pengadaan sudah dibelanjakan dan menunggu konfirmasi diterima Pengelola Gudang.',
             self::BastBelumDiunggah => 'Barang sudah diterima tetapi berkas BAST bertanda tangan belum diunggah.',
+            self::BastMenungguTandaTangan => 'Hasil pemeriksaan barang sudah dicatat dan BAST menunggu tanda tangan elektronik Anda; stok baru bertambah setelah kedua pihak bertanda tangan.',
             self::UsulanBarangMenungguKeputusan => 'Ada usulan barang baru yang menunggu diperiksa dan didaftarkan Pengelola Gudang.',
             self::OpnameDiposting => 'Penyesuaian hasil opname sudah diterapkan ke stok.',
             self::StokBergerakSetelahDicacah => 'Stok berubah di antara pencacahan dan posting, sehingga penyesuaian berbeda dari hasil cacah.',
@@ -273,6 +278,7 @@ enum NotificationType: string
             self::RealisasiBelumDibelanjakan,
             self::RealisasiMenungguPenerimaan,
             self::BastBelumDiunggah,
+            self::BastMenungguTandaTangan,
             self::UsulanBarangMenungguKeputusan,
             self::UsulanBarangDitolak,
             self::UsulanDitolak,

@@ -89,7 +89,7 @@
     <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         {{-- Penyaring --}}
         <form method="GET" action="{{ route('procurements.index') }}"
-            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-5 dark:border-gray-800 sm:p-6">
+            class="grid grid-cols-1 gap-4 border-b border-gray-100 p-5 sm:grid-cols-2 xl:grid-cols-6 dark:border-gray-800 sm:p-6">
             <x-form.select-field name="status" label="Status Realisasi"
                 :options="\App\Enums\ProcurementStatus::options()" :selected="$filters['status']"
                 placeholder="Semua status" />
@@ -102,11 +102,15 @@
             <x-form.select-field name="supplier" label="Penyedia" :options="$suppliers"
                 :selected="$filters['supplier']" placeholder="Semua penyedia" />
 
+            {{-- Tujuan tautan antrean dasbor "BAST menunggu TTE Anda" (ADR 0051). --}}
+            <x-form.select-field name="tte" label="TTE BAST" :options="$opsiTte"
+                :selected="$filters['tte']" placeholder="Semua" />
+
             <x-form.text-field name="from" label="Tanggal Awal" type="date" :value="$filters['from']" />
 
             <x-form.text-field name="to" label="Tanggal Akhir" type="date" :value="$filters['to']" />
 
-            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-5">
+            <div class="flex items-center gap-3 sm:col-span-2 xl:col-span-6">
                 <button type="submit"
                     class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                     Terapkan
@@ -171,6 +175,12 @@
                                 <span class="text-theme-xs inline-block rounded-full px-2.5 py-1 font-medium {{ $row->status->badgeClass() }}">
                                     {{ $row->status->label() }}
                                 </span>
+                                {{-- Kemajuan BAST digital selama menunggu penerimaan (ADR 0051). --}}
+                                @if ($row->isMenungguPenerimaan())
+                                    <span class="text-theme-xs mt-1 block text-gray-500 dark:text-gray-400">
+                                        {{ \App\Support\BastPengadaan::tahap($row) }}
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <a href="{{ route('procurements.show', $row) }}"

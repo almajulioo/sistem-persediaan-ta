@@ -7,7 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Nomor BAST pengadaan, diisi saat BAST dicetak pertama kali.
+ * Nomor BAST pengadaan. Pada BAST digital diisi setelah hasil pemeriksaan
+ * dicatat dan sebelum TTE (ADR 0051); pada BAST lama diisi saat cetak pertama
+ * (ADR 0042).
  *
  * Formatnya tidak divalidasi: nomornya berasal dari agenda kantor, dan
  * formatnya bergantung pada mekanisme pembayaran (mis. UP/TUP), bukan pada

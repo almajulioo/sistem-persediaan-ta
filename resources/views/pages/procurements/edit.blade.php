@@ -14,12 +14,6 @@
 
         // Dihitung dulu di @php, bukan langsung di dalam @json() — lihat
         // catatan yang sama pada procurements/create.blade.php.
-        $itemPicker = $items->map(fn ($item) => [
-            'item_id' => $item->item_id,
-            'item_code' => $item->item_code,
-            'item_name' => $item->item_name,
-        ])->values();
-
         $usulanItemIds = $usulanDetails->pluck('item_id')->values();
 
         $tambahanAwal = old('items') !== null
@@ -35,16 +29,17 @@
 
                     return $detail !== null && ! $disetujui->has($detail->item_id);
                 })
-                ->map(function ($baris) use ($procurement, $items) {
+                ->map(function ($baris) use ($procurement, $katalog) {
                     $detailId = $baris['procurement_detail_id'] ?? null;
                     $detail = $detailId ? $procurement->details->firstWhere('procurement_detail_id', $detailId) : null;
                     $itemId = $detail?->item_id ?? ($baris['item_id'] ?? null);
-                    $item = $detail?->item ?? $items->firstWhere('item_id', $itemId);
+                    // Model Item dari rincian, atau baris katalog (array) untuk barang baru.
+                    $item = $detail?->item ?? $katalog->firstWhere('item_id', $itemId);
 
                     return [
                         'procurement_detail_id' => $detailId,
                         'item_id' => $itemId,
-                        'item_name' => $item ? "{$item->item_code} — {$item->item_name}" : 'Barang tidak dikenal',
+                        'item_name' => $item ? data_get($item, 'item_code').' — '.data_get($item, 'item_name') : 'Barang tidak dikenal',
                         'amount' => $baris['amount'] ?? '',
                         'unit_price' => $baris['unit_price'] ?? '',
                     ];
@@ -185,45 +180,19 @@
                 </label>
 
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px_160px_auto] sm:items-end">
-                    <div class="relative" x-data="{ open: false }" @click.outside="open = false">
-                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Barang</label>
-
-                        <div @click="open = !open"
-                            class="flex h-11 w-full cursor-pointer items-center justify-between rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs dark:border-gray-700 dark:bg-gray-900 dark:text-white/90">
-                            <span x-text="selectedItemText || 'Pilih barang'" :class="!selectedItemId ? 'text-gray-400' : ''"></span>
-                            <svg class="size-4 text-gray-500 transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </div>
-
-                        <div x-show="open" x-transition
-                            class="absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900"
-                            style="display: none;">
-                            <div class="p-1">
-                                <input type="text" x-model.debounce.300ms="searchQuery" placeholder="Cari barang..."
-                                    class="h-9 w-full rounded-md border border-gray-300 bg-transparent px-3 text-sm text-gray-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-gray-700 dark:text-white/90" />
-                            </div>
-
-                            <ul class="mt-1 max-h-48 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-800">
-                                <template x-for="item in filteredItems" :key="item.item_id">
-                                    <li @click="selectItem(item); open = false"
-                                        class="cursor-pointer rounded-md px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-                                        <span x-text="`${item.item_code} — ${item.item_name}`"></span>
-                                    </li>
-                                </template>
-
-                                <template x-if="filteredItems.length === 0">
-                                    <li class="px-3 py-2 text-center text-sm text-gray-400">
-                                        Barang tidak ditemukan.
-                                        <a href="{{ route('item-proposals.create') }}" target="_blank" rel="noopener"
-                                            class="text-brand-500 hover:text-brand-600 dark:text-brand-400 mt-1 block">
-                                            Usulkan barang baru
-                                        </a>
-                                    </li>
-                                </template>
-                            </ul>
-                        </div>
-                    </div>
+                    {{-- Barang yang sudah ada di daftar tetap tampil, tetapi tidak dapat dipilih lagi. --}}
+                    <x-request.pemilih-barang :subkategori="$subkategori" class="min-w-0" pilih="selectItem(item)" nonaktif="sudahDipakai(item)">
+                        <x-slot:badge>
+                            <span class="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                                x-text="sudahDipakai(item) ? 'Sudah di daftar' : `Stok ${item.stock_current}`"></span>
+                        </x-slot:badge>
+                        <x-slot:kosong>
+                            <a href="{{ route('item-applications.create') }}" target="_blank" rel="noopener"
+                                class="mt-1 block font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+                                Ajukan permohonan barang baru
+                            </a>
+                        </x-slot:kosong>
+                    </x-request.pemilih-barang>
 
                     <div>
                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Jumlah</label>
@@ -295,40 +264,32 @@
 
     <script>
         function realisasiEditForm() {
-            const items = @json($itemPicker);
+            const items = @json($katalog);
             const usulanItemIds = @json($usulanItemIds);
             const tambahanAwal = @json($tambahanAwal);
 
             return {
                 items,
                 usulanCount: {{ $usulanDetails->count() }},
-                selectedItemId: '',
-                selectedItemText: '',
-                searchQuery: '',
+                selectedItem: null,
                 inputAmount: '',
                 inputPrice: '',
                 errorMessage: '',
                 tambahan: tambahanAwal,
 
-                get filteredItems() {
-                    const dipakai = new Set([...usulanItemIds, ...this.tambahan.map(row => row.item_id)]);
-                    const q = this.searchQuery.toLowerCase();
-
-                    return this.items.filter(item =>
-                        !dipakai.has(item.item_id) &&
-                        (!q || item.item_name.toLowerCase().includes(q) || item.item_code.toLowerCase().includes(q))
-                    );
+                sudahDipakai(item) {
+                    return usulanItemIds.includes(item.item_id) || this.tambahan.some(row => row.item_id === item.item_id);
                 },
 
                 selectItem(item) {
-                    this.selectedItemId = item.item_id;
-                    this.selectedItemText = `${item.item_code} — ${item.item_name}`;
+                    this.selectedItem = item;
+                    this.errorMessage = '';
                 },
 
                 addItem() {
                     this.errorMessage = '';
 
-                    if (!this.selectedItemId) {
+                    if (!this.selectedItem) {
                         this.errorMessage = 'Pilih barang yang akan ditambahkan.';
                         return;
                     }
@@ -345,15 +306,13 @@
 
                     this.tambahan.push({
                         procurement_detail_id: null,
-                        item_id: this.selectedItemId,
-                        item_name: this.selectedItemText,
+                        item_id: this.selectedItem.item_id,
+                        item_name: `${this.selectedItem.item_code} — ${this.selectedItem.item_name}`,
                         amount: parseInt(this.inputAmount),
                         unit_price: parseInt(this.inputPrice),
                     });
 
-                    this.selectedItemId = '';
-                    this.selectedItemText = '';
-                    this.searchQuery = '';
+                    this.selectedItem = null;
                     this.inputAmount = '';
                     this.inputPrice = '';
                 },
