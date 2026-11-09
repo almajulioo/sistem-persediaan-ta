@@ -29,6 +29,11 @@ use Illuminate\Support\Facades\DB;
  * Bila tidak ada transaksi di antara pencacahan dan posting, keduanya
  * menghasilkan angka yang sama. Bila ada, `stock_at_posting` akan berbeda dari
  * `stock_stored` dan baris itu ditandai pada laporan. Lihat ADR 0010.
+ *
+ * `stock_stored` adalah stok sistem pada waktu barang itu dihitung, bukan saat
+ * draf dibuat (ADR 0057): mutasi di antara pembuatan draf dan penghitungan
+ * sudah tercermin di dalamnya, jadi tidak muncul sebagai selisih palsu yang
+ * lalu diterapkan dua kali.
  */
 class OpnamePoster
 {
@@ -76,9 +81,18 @@ class OpnamePoster
             throw OpnameTidakSiapException::bukanDraf();
         }
 
-        // Barang yang belum diisi tidak lagi menghalangi posting: ia mengikuti
-        // stok sistem (ADR 0056, menggantikan syarat "seluruh barang sudah
-        // dicacah" pada ADR 0010).
+        // Opname berkala wajib memastikan setiap barang secara fisik, jadi
+        // barang kosong menghalangi posting (ADR 0010, dipulihkan ADR 0057).
+        // Hanya opname insidental yang barang kosongnya mengikuti stok sistem
+        // (ADR 0056).
+        if (! $opname->bolehKosong()) {
+            $kosong = $opname->details()->whereNull('stock_real')->count();
+
+            if ($kosong > 0) {
+                throw OpnameTidakSiapException::masihAdaYangBelumDiisi($kosong);
+            }
+        }
+
         $tanpaAlasan = $opname->details()
             ->with('item')
             ->where('difference', '!=', 0)
@@ -103,15 +117,17 @@ class OpnamePoster
 
         $stokSaatPosting = $item->stock_current;
 
-        // Barang yang tidak diisi petugas dianggap sesuai stok sistem (ADR
-        // 0056). Hasil cacahnya disamakan dengan stok tercatat — bukan dengan
-        // stok saat posting, yang akan menerapkan ulang mutasi sah sejak draf
-        // dibuat — sehingga selisihnya nol dan stok akhirnya tetap stok sistem
-        // pada detik ini. `counted_at` sengaja dibiarkan kosong: tidak ada yang
-        // menghitungnya, dan itulah penanda baris ini di layar dan laporan.
+        // Barang yang tidak diisi petugas — hanya mungkin pada opname
+        // insidental, pastikanSiap() menolak yang lain — dianggap sesuai stok
+        // sistem (ADR 0056). Pembanding dan hasil cacahnya disamakan dengan
+        // stok saat posting, sehingga selisihnya nol, stok akhirnya tetap stok
+        // sistem detik ini, dan "Stok Sistem" di laporan bukan salinan basi
+        // dari saat draf dibuat (ADR 0057). `counted_at` sengaja dibiarkan
+        // kosong: tidak ada yang menghitungnya, dan itulah penanda baris ini.
         if (! $detail->sudahDicacah()) {
             $detail->forceFill([
-                'stock_real' => $detail->stock_stored,
+                'stock_stored' => $stokSaatPosting,
+                'stock_real' => $stokSaatPosting,
                 'difference' => 0,
             ]);
         }

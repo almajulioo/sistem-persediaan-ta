@@ -17,6 +17,18 @@ class OpnameTidakSiapException extends RuntimeException
         return new self('Stok opname ini sudah diposting dan tidak dapat diproses ulang.');
     }
 
+    /**
+     * Opname berkala yang masih menyisakan barang kosong (ADR 0057). Hanya
+     * opname insidental yang boleh memposting barang kosong.
+     */
+    public static function masihAdaYangBelumDiisi(int $jumlah): self
+    {
+        return new self(sprintf(
+            'Masih ada %d barang yang belum diisi. Lengkapi seluruh hasil cacah sebelum memposting.',
+            $jumlah,
+        ));
+    }
+
     public static function selisihTanpaAlasan(string $itemCode): self
     {
         return new self(sprintf(

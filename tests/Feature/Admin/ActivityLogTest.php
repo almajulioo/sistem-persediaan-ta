@@ -233,7 +233,10 @@ describe('celah pencatatan yang ditutup', function () {
         $opname = opnameDrafLog($petugas, $item);
         $detail = $opname->details->first();
 
+        $waktu = now();
+
         actingAs($petugas)->put("/opname/{$opname->opname_id}", [
+            'dihitung_pada' => dihitungPada($waktu),
             'details' => [
                 $detail->opname_detail_id => [
                     'stock_real' => 8,
@@ -249,7 +252,8 @@ describe('celah pencatatan yang ditutup', function () {
             ->firstOrFail();
 
         expect($log->activity)->toContain('Mengubah hasil cacah')
-            ->and($log->activity)->toContain('1 barang diubah, 1 dari 1 barang diisi')
+            // Waktu cacah menentukan pembanding tiap baris (ADR 0057).
+            ->and($log->activity)->toContain('1 barang diubah, dihitung pada '.$waktu->translatedFormat('d M Y H:i').', 1 dari 1 barang diisi')
             ->and($log->subject_id)->toBe($opname->opname_id)
             ->and($log->actor_role)->toBe(UserRole::PengelolaGudang);
     });

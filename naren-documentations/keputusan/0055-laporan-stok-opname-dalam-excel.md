@@ -8,6 +8,11 @@ Menggantikan sebagian [ADR 0009](0009-laporan-pdf-dan-csv.md): Laporan Stok
 Opname tidak lagi dibuat sebagai PDF. Laporan PDF lain (riwayat mutasi, kartu
 persediaan, laporan pengadaan, BAST) dan ekspor CSV tidak berubah.
 
+Sebagian digantikan oleh [ADR 0057](0057-prosedur-lapangan-stok-opname.md)
+— 9 November 2026: Excel opname yang sudah diposting ditutup satu ruang tanda
+tangan "Mengetahui" Kepala Subbagian Umum dan TI, namanya titik-titik untuk
+ditulis tangan; label "Mengikuti Stok Sistem" hanya pada opname insidental.
+
 ## Konteks
 
 Narendra meminta: "ubah laporan stok opname yang dicetak dari pdf menjadi

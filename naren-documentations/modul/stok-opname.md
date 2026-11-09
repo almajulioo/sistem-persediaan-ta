@@ -8,11 +8,16 @@ Modul terakhir sub sistem manajemen gudang. Seluruh penyesuaiannya mengalir
 lewat `StockLedger`, sehingga hasil opname tampil sebagai baris **Penyesuaian
 Opname** di riwayat mutasi dan menunjuk balik ke dokumen opname-nya.
 
-Sejak 9 November 2026 petugas **cukup mengisi barang yang jumlahnya berbeda**;
-barang yang dikosongkan mengikuti stok sistem saat diposting
-([ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md)), dan
-laporannya berkas Excel, bukan PDF
-([ADR 0055](../keputusan/0055-laporan-stok-opname-dalam-excel.md)).
+Sejak 9 November 2026 ([ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md)):
+
+- opname berkala (triwulan, semester, tahunan) **wajib mengisi setiap barang**;
+  hanya opname **insidental** yang barang kosongnya mengikuti stok sistem saat
+  diposting ([ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md));
+- hasil cacah dibandingkan dengan **stok sistem pada waktu barang dihitung** —
+  jam "Dihitung Pada" dari lembar cacah — bukan dengan salinan saat draf dibuat;
+- hanya **satu draf** boleh berjalan dalam satu waktu;
+- laporannya berkas Excel ([ADR 0055](../keputusan/0055-laporan-stok-opname-dalam-excel.md)),
+  ditutup ruang tanda tangan Kepala Subbagian Umum dan TI setelah diposting.
 
 ## Rute
 
@@ -26,12 +31,12 @@ Pengadaan menerima 403 dan menunya tidak muncul.
 
 | Metode | URL | Nama | Aksi |
 |---|---|---|---|
-| GET | `/opname` | `opname.index` | Daftar + 3 penyaring + kartu rekap |
-| GET | `/opname/create` | `opname.create` | Formulir mulai opname |
-| POST | `/opname` | `opname.store` | Buat draf + snapshot seluruh barang aktif |
+| GET | `/opname` | `opname.index` | Daftar + 3 penyaring + kartu rekap; "Lanjut Cacah" menggantikan "Mulai Opname" selama ada draf |
+| GET | `/opname/create` | `opname.create` | Formulir mulai opname; selama ada draf, tombol "Lanjut Cacah" |
+| POST | `/opname` | `opname.store` | Buat draf berisi seluruh barang aktif; ditolak selama ada draf |
 | GET | `/opname/{opname}` | `opname.show` | Hasil opname dan rincian; penyaring `?baris=diisi\|berselisih\|tidak_diisi` |
 | GET | `/opname/{opname}/edit` | `opname.edit` | Layar pencacahan — draf saja |
-| PUT | `/opname/{opname}` | `opname.update` | Simpan baris yang berubah; dengan `aksi=posting` sekaligus posting |
+| PUT | `/opname/{opname}` | `opname.update` | Simpan baris yang berubah (+ `dihitung_pada`); dengan `aksi=posting` sekaligus posting |
 | GET | `/opname/{opname}/excel` | `opname.excel` | Laporan Stok Opname (.xlsx) |
 | DELETE | `/opname/{opname}` | `opname.destroy` | Hapus **draf saja** |
 
@@ -41,19 +46,25 @@ sudah tidak ada sejak ADR 0056 dan 0055.
 ## Alur
 
 ```
-Draf  ──simpan baris yang berubah (berkali-kali)──►  Draf
+Draf  ──simpan baris yang berubah + "Dihitung Pada" (berkali-kali)──►  Draf
   │
   └──posting (isian di layar ikut tersimpan)──►  Selesai  ──►  unduh Excel
 ```
 
-**Draf.** Dibuat dengan menyalin seluruh barang aktif beserta stok tercatatnya ke
-`opname_details.stock_stored`. Barang yang didaftarkan setelah draf dibuat tidak
-ikut — opname mencakup barang yang ada saat pencacahan dimulai. Draf dapat
-disimpan sebagian dan dapat dihapus, karena belum menyentuh stok sama sekali.
+**Draf.** Dibuat dengan menyalin seluruh barang aktif ke `opname_details`.
+Barang yang didaftarkan setelah draf dibuat tidak ikut — opname mencakup barang
+yang ada saat pencacahan dimulai. Draf dapat disimpan sebagian dan dapat
+dihapus, karena belum menyentuh stok sama sekali. **Hanya satu draf** boleh ada:
+`store()` memeriksanya di dalam transaksi `KirimanFormulir::sekali()` — sesudah
+pemeriksaan token, sehingga formulir yang terkirim dua kali tetap diarahkan ke
+draf yang dibuatnya — dan menolak dengan arahan ke draf yang masih berjalan
+(`DrafOpnameMasihAdaException`). Periode yang sama tetap boleh diopname
+berulang, asal berurutan.
 
 Setiap penyimpanan yang **benar-benar mengubah** baris menulis satu baris
-`audit_logs`, lengkap dengan kemajuannya ("3 barang diubah, 7 dari 120 barang
-diisi") supaya pengisian awal dapat dibedakan dari koreksi menjelang posting
+`audit_logs`, lengkap dengan waktu cacah dan kemajuannya ("3 barang diubah,
+dihitung pada 09 Nov 2026 08:30, 7 dari 120 barang diisi") supaya pengisian
+awal dapat dibedakan dari koreksi menjelang posting
 ([ADR 0034](../keputusan/0034-log-aktivitas-terstruktur.md)). Kiriman tanpa
 perubahan tidak dicatat.
 
@@ -61,40 +72,74 @@ perubahan tidak dicatat.
 disimpan dulu, lalu `OpnamePoster` dijalankan. Posting ditolak bila:
 
 1. Dokumen bukan lagi draf;
-2. Ada baris berselisih tanpa alasan **dan** keterangan.
+2. Opname **bukan insidental** dan masih ada barang yang belum diisi ("Masih ada
+   N barang yang belum diisi…");
+3. Ada baris berselisih tanpa alasan **dan** keterangan.
 
-Barang yang **belum diisi tidak lagi menghalangi posting** — ia mengikuti stok
-sistem (lihat di bawah). Bila posting gagal, isian yang baru disimpan tetap ada
-di draf.
+Bila posting gagal, isian yang baru disimpan tetap ada di draf.
 
 **Selesai.** Dokumen final: tidak dapat diubah, dihapus, maupun diposting ulang.
 Penyesuaiannya sudah menjadi bagian buku mutasi yang immutable
 ([ADR 0005](../keputusan/0005-buku-mutasi-immutable-dan-urutan-pencatatan.md)).
 Laporan dapat diunduh ulang kapan saja.
 
-Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md)
-dan [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md).
+Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md),
+[ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md), dan
+[ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md).
 
 ## Angka pada satu baris rincian
 
 | Kolom | Arti |
 |---|---|
-| `stock_stored` | Stok tercatat **saat draf dibuat** — "Stok Sistem" di layar |
+| `stock_stored` | **Stok sistem pada waktu barang dihitung** — pembanding; "Stok Sistem" di layar. Saat draf dibuat hanya salinan awal, diganti ketika barisnya diisi |
 | `stock_real` | Hasil cacah fisik; kosong = belum diisi |
-| `counted_at` | Saat petugas **memasukkan** angka itu; kosong = tidak diisi petugas |
+| `counted_at` | Waktu "Dihitung Pada" untuk angka itu (dari lembar cacah); kosong = tidak diisi petugas |
 | `difference` | `stock_real − stock_stored` — selisih yang teramati saat mencacah |
 | `stock_at_posting` | Stok tercatat **pada detik posting** |
 | `adjustment_amount` | Mutasi yang benar-benar diterapkan = `difference` |
 
 `stock_at_posting ≠ stock_stored` pada baris yang **diisi petugas** berarti stok
-bergerak setelah barang dicacah. Baris itu ditandai di layar hasil dan laporan.
+bergerak setelah barang dihitung. Baris itu ditandai di layar hasil dan laporan.
 
-## Barang yang tidak diisi mengikuti stok sistem
+`OpnameDetail::stokSistem()` adalah angka "Stok Sistem" yang ditampilkan:
+pembanding untuk baris yang sudah dicacah, stok kini untuk yang belum.
 
-Saat posting, baris yang `stock_real`-nya kosong diisi `stock_real =
-stock_stored` dan `difference = 0`: tidak ada mutasi, dan stok akhirnya tetap
-stok sistem pada detik posting. `counted_at` dibiarkan kosong — itulah
-penandanya:
+## Waktu cacah ("Dihitung Pada")
+
+Petugas mencacah di **lembar kertas** lalu mengetiknya kemudian. Karena itu
+setiap simpan atau posting yang mengubah angka Stok Fisik wajib membawa
+`dihitung_pada` — tanggal dan jam di lembar itu:
+
+- tanpa isian bawaan, dan kosong lagi setelah setiap simpan;
+- rentang sah: pukul 00:00 Tanggal Cacah sampai saat ini;
+- mengosongkan baris atau mengubah alasan saja tidak memerlukannya.
+
+Pembanding tiap angka baru = stok sistem pada menit itu, dihitung mundur dari
+buku mutasi oleh `StockLedger::stokPada()`: stok kini dikurangi `amount` mutasi
+yang tercatat sesudah menit itu. Mutasi yang tercatat **di dalam** menit itu
+dihitung sudah terjadi. Pembanding dihitung ulang **hanya bila angka barisnya
+berubah**; angka sama dengan jam lain tidak mengubah apa pun.
+
+Contoh yang ditutup aturan ini: draf mencatat 5, pukul 10:15 tiga diserahkan
+(sistem 2). Lembar bertanggal 08:30 berisi 5 → pembanding 5, selisih 0. Lembar
+bertanggal 10:30 berisi 2 → pembanding 2, selisih 0. Dengan salinan saat draf
+dibuat, angka 2 itu dulu menjadi "selisih −3" dan diterapkan dua kali.
+
+Pembanding **tidak pernah diambil dari kiriman**. Layar menghitungnya sendiri
+(data mutasi sejak 00:00 Tanggal Cacah disertakan per baris) dan mengirim
+`stok_sistem` yang ditampilkannya; server menghitung ulang di dalam transaksi
+dengan baris barang terkunci, dan menolak baris yang ternyata berbeda — ada
+mutasi yang tercatat setelah halaman dibuka — dengan pesan yang menyebut angka
+lama dan baru.
+
+## Barang kosong pada opname insidental
+
+`PeriodeOpname::bolehKosong()` — benar hanya untuk `Insidental` — adalah
+satu-satunya tempat aturan ini. Saat posting opname insidental, baris yang
+`stock_real`-nya kosong diisi `stock_stored = stock_real = stock_at_posting` dan
+`difference = 0`: tidak ada mutasi, stok akhirnya tetap stok sistem pada detik
+posting, dan "Stok Sistem" di laporan bukan salinan basi. `counted_at`
+dibiarkan kosong — itulah penandanya:
 
 | Metode `OpnameDetail` | Arti |
 |---|---|
@@ -102,10 +147,12 @@ penandanya:
 | `mengikutiStokSistem()` | `stock_real` terisi, tetapi tidak diisi petugas |
 | `stokBerubahSejakDicacah()` | Hanya baris yang diisi petugas |
 
-Hasil cacahnya disamakan dengan `stock_stored`, bukan `stock_at_posting`: yang
-kedua menerapkan ulang mutasi sah sejak draf dibuat (100 → keluar 20 → 80, lalu
-penyesuaian −20 lagi menjadi 60). `StockOpname::ringkasan()` memuat `barang`,
-`diisi`, `tidak_diisi`, `selisih`, `lebih`, `kurang`.
+`StockOpname::ringkasan()` memuat `barang`, `diisi`, `tidak_diisi`, `selisih`,
+`lebih`, `kurang`. `kosongMengikutiStokSistem()` menentukan label `tidak_diisi`:
+"Mengikuti/Ikut Stok Sistem" pada opname insidental yang selesai (atau opname
+lama yang diposting di bawah ADR 0056 dengan baris kosong), selain itu "Belum
+Diisi". `siapDiposting()` benar untuk draf selain insidental yang setiap
+barangnya terisi.
 
 ## Aturan penyesuaian
 
@@ -141,20 +188,30 @@ Ketentuan lain:
 
 Tabel dirender di klien (Alpine) dari data JSON, 50 baris sekali tampil:
 
-- Kotak **Stok Fisik** ber-placeholder stok sistem; selama kosong, kolom
-  Selisih berlabel **Ikut sistem**. Satu kalimat petunjuk di atas tabel
-  menjelaskan aturannya (permintaan Narendra, pengecualian aturan UI bersih).
+- Isian **Dihitung Pada** (tanggal & jam) di samping Simpan Draf. Selama ada
+  angka baru dan isian ini kosong, isiannya merah dan Simpan Draf terkunci.
+- Kolom **Stok Sistem**: stok pada "Dihitung Pada" untuk angka baru (stok kini
+  selama jamnya kosong), pembanding tersimpan untuk baris yang sudah dicacah;
+  bila stok kini berbeda, ditampilkan di bawahnya ("kini 31"), dan jam cacah
+  tersimpan menjadi tooltip data.
+- Opname **berkala**: kotak Stok Fisik kosong tanpa placeholder; kartu dan chip
+  **Belum Diisi**; modal posting menyebut "Belum diisi: N barang", kotak merah
+  dengan tautan **Tampilkan**, dan "Ya, Posting" terkunci selama ada barang
+  kosong.
+- Opname **insidental**: kotak kosong ber-placeholder stok sistem, label **Ikut
+  sistem**, kartu/chip **Ikut Stok Sistem**, satu kalimat petunjuk di atas tabel
+  (permintaan Narendra, pengecualian aturan UI bersih), dan modal menyebut
+  berapa barang mengikuti stok sistem.
 - Kartu ringkasan berjalan: Total Barang, Diisi (sesuai · berselisih), Selisih
-  Lebih / Kurang, Ikut Stok Sistem.
-- Pencarian kode/nama; penyaring Semua / Diisi / Berselisih / Ikut Stok Sistem
-  / **Perlu Dilengkapi** (angka tidak sah, atau selisih tanpa alasan/keterangan).
+  Lebih / Kurang, Belum Diisi / Ikut Stok Sistem.
+- Pencarian kode/nama; penyaring Semua / Diisi / Berselisih / Belum Diisi (atau
+  Ikut Stok Sistem) / **Perlu Dilengkapi** (angka tidak sah, selisih tanpa
+  alasan/keterangan, atau baris yang ditolak karena stok sistemnya berubah).
   Daftar disaring ulang hanya saat penyaring atau kata kunci berganti.
 - Alasan dan keterangan muncul saat baris berselisih. **Enter** berpindah ke
   alasan → keterangan → baris berikutnya.
 - "N perubahan belum disimpan", **Simpan Draf** nonaktif tanpa perubahan, dan
   peringatan peramban saat meninggalkan halaman dengan perubahan.
-- **Posting Penyesuaian** membuka modal ringkasan yang menyebut berapa barang
-  diisi petugas dan **berapa yang mengikuti stok sistem**.
 - Yang dikirim hanya baris yang berubah, sebagai satu JSON di `hasil_cacah` —
   `max_input_vars` PHP (bawaan 1000) memotong formulir ribuan isian diam-diam.
   `details[...]` biasa tetap diterima server.
@@ -168,8 +225,8 @@ dikosongkan membuang alasan dan keterangannya.
 
 Aturan wajib ini ditegakkan dua kali — di `UpdateOpnameCountRequest` sebagai
 validasi formulir, dan di `OpnamePoster::pastikanSiap()` sebagai penjaga domain.
-Nilai `stock_stored` dibaca dari basis data, bukan dari request, supaya tidak
-dapat dipalsukan. Lihat
+Pembandingnya dihitung server dari buku mutasi, tidak dibaca dari request,
+supaya tidak dapat dipalsukan. Lihat
 [ADR 0011](../keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md).
 
 ## Periode
@@ -180,29 +237,40 @@ dokumen terbentuk sendiri, mis. **"Stok Opname Triwulan III 2026"**, dan judul
 yang sama dipakai sebagai `reference_number` pada mutasi penyesuaian. Lihat
 [ADR 0012](../keputusan/0012-periode-opname-enum-jenis-dan-tahun.md).
 
-Dua opname pada periode yang sama tidak dilarang.
+Dua opname pada periode yang sama tidak dilarang, asal berurutan (satu draf
+dalam satu waktu). Jenis periode juga menentukan apakah barang kosong boleh
+diposting (hanya Insidental).
 
 ## Laporan
 
 Berkas Excel satu lembar, dibangun `App\Support\LaporanStokOpname` dengan
 pembantu bersama `App\Support\LembarExcel` (juga dipakai ekspor usulan
 pengadaan): kop dan nama lembaga, identitas dokumen, rekap (Jumlah Barang,
-Diisi Petugas, Mengikuti Stok Sistem, Barang Berselisih, Selisih Lebih/Kurang),
-tabel rincian (Stok Sistem, Stok Fisik, Selisih, Penyesuaian, Stok Saat Posting,
-Pencacahan, Alasan, Keterangan) dengan judul kolom beku dan dapat disaring,
-dan catatan penjelas bila perlu. Sel Stok Saat Posting
-berwarna bila stok bergerak setelah dicacah. Nama berkas
+Diisi Petugas, Belum Diisi / Mengikuti Stok Sistem, Barang Berselisih, Selisih
+Lebih/Kurang), tabel rincian (Stok Sistem, Stok Fisik, Selisih, Penyesuaian,
+Stok Saat Posting, Pencacahan, Alasan, Keterangan) dengan judul kolom beku dan
+dapat disaring, dan catatan penjelas bila perlu. Sel Stok Saat Posting berwarna
+bila stok bergerak setelah dicacah. Nama berkas
 `laporan-opname-{tahun}-{periode}.xlsx`. Lihat
 [ADR 0055](../keputusan/0055-laporan-stok-opname-dalam-excel.md).
 
+Opname yang **sudah diposting** ditutup satu ruang tanda tangan di kolom
+Pencacahan–Keterangan: "Bandar Lampung, {tanggal posting}", "Mengetahui,",
+"Kepala Subbagian Umum dan TI", ruang kosong, lalu
+"(....................................)". **Namanya ditulis tangan** — tidak
+diambil dari akun mana pun. Draf tidak mendapatnya. Tidak ada tahap persetujuan
+Kasubbag; posting tetap tindakan Pengelola Gudang
+([ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md)).
+
 ## Notifikasi
 
+- **Opname Siap Diposting** (keadaan): draf selain insidental yang setiap
+  barangnya sudah diisi, untuk pembuatnya. Saling eksklusif dengan "menggantung";
+  dipulihkan ADR 0057 setelah dihapus ADR 0056.
 - **Draf Opname Menggantung** (keadaan): draf yang belum diposting lebih dari 7
-  hari, untuk pembuat + Admin.
+  hari dan belum siap diposting, untuk pembuat + Admin.
 - **Opname Diposting** (peristiwa): ringkasan posting untuk Gudang + Admin.
 - **Stok Bergerak Setelah Dicacah** (peristiwa): hanya baris yang diisi petugas.
-
-"Opname Siap Diposting" dihapus sejak ADR 0056.
 
 ## Perbaikan atas activity diagram
 
@@ -212,33 +280,36 @@ berwarna bila stok bergerak setelah dicacah. Nama berkas
 | Tidak ada keadaan draf; diagram menyiratkan sekali jalan | Draf yang dapat disimpan sebagian |
 | Tidak ada konsep periode, padahal laporan diminta per triwulan | Kolom periode terstruktur pada `stock_opnames` |
 | Tidak terlihat risiko stok berubah antara pencacahan dan posting | Selisih hasil cacah diterapkan di dalam kunci transaksi; baris yang berubah ditandai |
+| Tidak terlihat bahwa pencacahan berlangsung berhari-hari sementara gudang melayani | Pembanding = stok sistem pada jam di lembar cacah (ADR 0057) |
 
 ## Berkas terkait
 
 | Berkas | Peran |
 |---|---|
-| [app/Support/OpnamePoster.php](../../app/Support/OpnamePoster.php) | Penerapan hasil opname ke stok, termasuk mengisi barang yang tidak diisi |
-| [app/Support/LaporanStokOpname.php](../../app/Support/LaporanStokOpname.php) | Laporan Stok Opname (.xlsx) |
+| [app/Support/OpnamePoster.php](../../app/Support/OpnamePoster.php) | Penerapan hasil opname ke stok; syarat posting; baris kosong insidental |
+| [app/Support/StockLedger.php](../../app/Support/StockLedger.php) | `stokPada()` — stok pada suatu menit menurut buku mutasi |
+| [app/Support/LaporanStokOpname.php](../../app/Support/LaporanStokOpname.php) | Laporan Stok Opname (.xlsx), termasuk ruang tanda tangan |
 | [app/Support/LembarExcel.php](../../app/Support/LembarExcel.php) | Trait pembantu laporan Excel, bersama ekspor usulan pengadaan |
 | [app/Exceptions/OpnameTidakSiapException.php](../../app/Exceptions/OpnameTidakSiapException.php) | Syarat posting yang tidak terpenuhi |
-| [app/Enums/PeriodeOpname.php](../../app/Enums/PeriodeOpname.php) | Jenis periode |
+| [app/Exceptions/DrafOpnameMasihAdaException.php](../../app/Exceptions/DrafOpnameMasihAdaException.php) | Draf baru ditolak selama ada draf |
+| [app/Enums/PeriodeOpname.php](../../app/Enums/PeriodeOpname.php) | Jenis periode; `bolehKosong()` |
 | [app/Enums/AlasanSelisih.php](../../app/Enums/AlasanSelisih.php) | Alasan selisih baku |
 | [app/Enums/OpnameStatus.php](../../app/Enums/OpnameStatus.php) | Draf / Selesai |
-| [app/Models/StockOpname.php](../../app/Models/StockOpname.php) | `judul()`, `ringkasan()`, `scopeFilter()` |
-| [app/Models/OpnameDetail.php](../../app/Models/OpnameDetail.php) | `sudahDicacah()`, `diisiPetugas()`, `mengikutiStokSistem()`, `adaSelisih()`, `stokBerubahSejakDicacah()` |
-| [app/Http/Controllers/Gudang/StockOpnameController.php](../../app/Http/Controllers/Gudang/StockOpnameController.php) | Delapan aksi modul; posting lewat `update()` |
+| [app/Models/StockOpname.php](../../app/Models/StockOpname.php) | `judul()`, `bolehKosong()`, `siapDiposting()`, `kosongMengikutiStokSistem()`, `ringkasan()`, `scopeFilter()` |
+| [app/Models/OpnameDetail.php](../../app/Models/OpnameDetail.php) | `sudahDicacah()`, `diisiPetugas()`, `mengikutiStokSistem()`, `adaSelisih()`, `stokBerubahSejakDicacah()`, `stokSistem()` |
+| [app/Http/Controllers/Gudang/StockOpnameController.php](../../app/Http/Controllers/Gudang/StockOpnameController.php) | Delapan aksi modul; posting lewat `update()`; satu draf aktif |
 | [app/Http/Requests/Gudang/StoreOpnameRequest.php](../../app/Http/Requests/Gudang/StoreOpnameRequest.php) | Validasi pembuatan draf |
-| [app/Http/Requests/Gudang/UpdateOpnameCountRequest.php](../../app/Http/Requests/Gudang/UpdateOpnameCountRequest.php) | Validasi hasil cacah; membuka JSON `hasil_cacah` |
+| [app/Http/Requests/Gudang/UpdateOpnameCountRequest.php](../../app/Http/Requests/Gudang/UpdateOpnameCountRequest.php) | Validasi hasil cacah; JSON `hasil_cacah`; waktu cacah dan pembanding |
 | [resources/views/pages/opname/](../../resources/views/pages/opname/) | `index`, `create`, `edit`, `show` |
 | [database/seeders/StockOpnameSeeder.php](../../database/seeders/StockOpnameSeeder.php) | Satu opname selesai + satu draf berjalan |
 
 ## Data contoh
 
 `StockOpnameSeeder` menghasilkan satu opname **Triwulan II 2026 berstatus
-selesai** — delapan barang diisi (tiga berselisih beralasan, lima sesuai),
-sisanya dikosongkan sehingga mengikuti stok sistem — dan satu **draf Triwulan
-III 2026** yang baru diisi lima barang. Keduanya melalui `OpnamePoster` dan
-`StockLedger` supaya mutasi penyesuaiannya konsisten dengan buku besar.
+selesai** — setiap barang diisi, tiga berselisih beralasan, sisanya sesuai — dan
+satu **draf Triwulan III 2026** yang baru diisi lima barang (sehingga belum dapat
+diposting). Yang selesai diposting lewat `OpnamePoster` dan `StockLedger` supaya
+mutasi penyesuaiannya konsisten dengan buku besar.
 
 ## Keterbatasan
 
@@ -246,7 +317,10 @@ III 2026** yang baru diisi lima barang. Keduanya melalui `OpnamePoster` dan
   sementara memakai judul opname. Bila BPK memiliki format penomoran baku untuk
   berita acara opname, kolom nomor dokumen dapat ditambahkan menyusul — lihat
   butir terbuka pada [penyelarasan-erd.md](../erd/penyelarasan-erd.md).
-- Sistem tidak dapat membedakan barang yang dicek dan cocok dari barang yang
-  terlewat: memposting adalah pernyataan petugas bahwa yang kosong sesuai.
-  Layar hasil dan laporan menandai setiap baris "Ikut sistem" supaya pembaca
-  tahu angka mana yang diketik dan mana yang diasumsikan.
+- Ketepatan pembanding sebaik jam yang ditulis petugas di lembar cacah. Sistem
+  membatasi rentangnya dan mencatat jam yang dipakai di log aktivitas, tetapi
+  tidak dapat membuktikan jam itu benar.
+- Pada opname insidental sistem tidak dapat membedakan barang yang dicek dan
+  cocok dari barang yang terlewat: memposting adalah pernyataan petugas bahwa
+  yang kosong sesuai. Layar hasil dan laporan menandai setiap baris "Ikut
+  sistem" supaya pembaca tahu angka mana yang diketik dan mana yang diasumsikan.

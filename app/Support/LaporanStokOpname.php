@@ -6,16 +6,22 @@ use App\Models\OpnameDetail;
 use App\Models\StockOpname;
 use App\Models\User;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * Laporan Stok Opname dalam Excel (ADR 0055), menggantikan PDF.
  *
  * Isinya sama dengan laporan PDF sebelumnya — kop, identitas dokumen,
- * rekap, rincian beserta alasan selisih — tanpa ruang tanda tangan, ditambah
- * dua kolom yang dulu hanya berupa catatan kecil di bawah nama barang:
- * stok saat posting dan cara barang dicacah (diisi petugas atau mengikuti
- * stok sistem, ADR 0056).
+ * rekap, rincian beserta alasan selisih — ditambah dua kolom yang dulu hanya
+ * berupa catatan kecil di bawah nama barang: stok saat posting dan cara
+ * barang dicacah (diisi petugas atau mengikuti stok sistem, ADR 0056).
+ *
+ * Opname yang sudah diposting ditutup satu ruang tanda tangan "Mengetahui"
+ * untuk Kepala Subbagian Umum dan TI, dengan nama yang sengaja dibiarkan
+ * titik-titik untuk ditulis tangan (ADR 0057). Draf tidak mendapatkannya:
+ * belum ada yang perlu ditandatangani.
  */
 class LaporanStokOpname
 {
@@ -25,6 +31,9 @@ class LaporanStokOpname
     private const FORMAT_SELISIH = '+#,##0;-#,##0;0';
 
     private const KOLOM_STOK_SAAT_POSTING = 9;
+
+    /** Ruang tanda tangan menempati kolom Pencacahan sampai Keterangan. */
+    private const KOLOM_TANDA_TANGAN = [10, 12];
 
     /**
      * @param  StockOpname  $opname  memuat `user` dan `details.item`
@@ -52,12 +61,12 @@ class LaporanStokOpname
             'Catatan' => $opname->notes,
         ], fn ($nilai) => filled($nilai)));
 
-        // Pada draf, barang yang tidak diisi baru akan mengikuti stok sistem
-        // bila diposting, jadi labelnya belum boleh menyatakan sudah.
+        // Barang kosong baru "mengikuti stok sistem" setelah opname insidental
+        // diposting; selain itu ia belum diisi (ADR 0056, 0057).
         $baris = self::pasangan($sheet, $baris, [
             'Jumlah Barang' => $ringkasan['barang'],
             'Diisi Petugas' => $ringkasan['diisi'],
-            ($opname->isSelesai() ? 'Mengikuti Stok Sistem' : 'Belum Diisi') => $ringkasan['tidak_diisi'],
+            ($opname->kosongMengikutiStokSistem() ? 'Mengikuti Stok Sistem' : 'Belum Diisi') => $ringkasan['tidak_diisi'],
             'Barang Berselisih' => $ringkasan['selisih'],
             'Selisih Lebih' => $ringkasan['lebih'],
             'Selisih Kurang' => $ringkasan['kurang'],
@@ -75,7 +84,7 @@ class LaporanStokOpname
                 $detail->item?->item_code,
                 $detail->item?->item_name ?? 'Barang tidak dikenal',
                 $detail->item?->unit->label(),
-                $detail->stock_stored,
+                $detail->stokSistem(),
                 $detail->stock_real,
                 $detail->difference,
                 $detail->adjustment_amount,
@@ -110,12 +119,45 @@ class LaporanStokOpname
             self::tulis($sheet, [1, $baris++], $teks);
         }
 
+        if ($opname->isSelesai()) {
+            self::tandaTangan($sheet, $baris + 1, $opname);
+        }
+
         return $spreadsheet;
     }
 
     public static function namaBerkas(StockOpname $opname): string
     {
         return 'laporan-opname-'.$opname->period_year.'-'.$opname->period_type->value.'.xlsx';
+    }
+
+    /**
+     * Tempat dan tanggal posting, jabatan, ruang tanda tangan, lalu
+     * titik-titik nama. Nama tidak diambil dari akun mana pun (ADR 0057).
+     */
+    private static function tandaTangan(Worksheet $sheet, int $baris, StockOpname $opname): void
+    {
+        [$awal, $akhir] = self::KOLOM_TANDA_TANGAN;
+
+        $isi = [
+            // posted_at selalu terisi oleh OpnamePoster; titik-titik hanya
+            // penjaga untuk data yang ditulis di luar alur posting.
+            'Bandar Lampung, '.($opname->posted_at?->translatedFormat('j F Y') ?? '....................'),
+            'Mengetahui,',
+            'Kepala Subbagian Umum dan TI',
+            null,
+            null,
+            null,
+            null,
+            '(....................................)',
+        ];
+
+        foreach ($isi as $i => $teks) {
+            $sheet->mergeCells([$awal, $baris + $i, $akhir, $baris + $i]);
+            $sheet->getStyle([$awal, $baris + $i, $akhir, $baris + $i])
+                ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            self::tulis($sheet, [$awal, $baris + $i], $teks);
+        }
     }
 
     private static function pencacahan(OpnameDetail $detail): string

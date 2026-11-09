@@ -40,9 +40,8 @@ class StockOpnameSeeder extends Seeder
     }
 
     /**
-     * Opname triwulan lalu, sudah diposting. Seperti di lapangan (ADR 0056),
-     * petugas hanya mengisi sebagian barang — tiga berselisih, lima sesuai —
-     * dan sisanya dikosongkan sehingga mengikuti stok sistem saat diposting.
+     * Opname triwulan lalu, sudah diposting. Opname berkala wajib mengisi
+     * setiap barang (ADR 0057): tiga berselisih, sisanya dicacah sesuai.
      */
     private function opnameSelesai(User $petugas): void
     {
@@ -57,8 +56,7 @@ class StockOpnameSeeder extends Seeder
             'notes' => 'Opname rutin triwulanan bersama Subbagian Umum dan TU.',
         ]);
 
-        // Selisih hanya pada tiga barang pertama; lima berikutnya diisi dan
-        // cocok; sisanya tidak diisi.
+        // Selisih hanya pada tiga barang pertama; sisanya cocok.
         $selisih = [
             0 => [-2, AlasanSelisih::BarangRusak, 'Dua rim basah terkena rembesan atap gudang.'],
             1 => [-1, AlasanSelisih::BarangHilang, 'Tidak ditemukan saat pencacahan ulang.'],
@@ -66,15 +64,6 @@ class StockOpnameSeeder extends Seeder
         ];
 
         foreach ($barang as $i => $item) {
-            if ($i >= 8) {
-                $opname->details()->create([
-                    'item_id' => $item->item_id,
-                    'stock_stored' => $item->stock_current,
-                ]);
-
-                continue;
-            }
-
             [$delta, $alasan, $keterangan] = $selisih[$i] ?? [0, null, null];
 
             $stokFisik = max(0, $item->stock_current + $delta);

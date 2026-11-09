@@ -4,9 +4,9 @@
     $ringkasan = $opname->ringkasan();
     $adaYangBerubah = $opname->details->contains(fn ($d) => $d->stokBerubahSejakDicacah());
 
-    // Pada draf, barang yang tidak diisi baru akan mengikuti stok sistem bila
-    // diposting (ADR 0056).
-    $labelTidakDiisi = $opname->isSelesai() ? 'Ikut Stok Sistem' : 'Belum Diisi';
+    // Barang kosong baru mengikuti stok sistem setelah opname insidental
+    // diposting; selain itu ia belum diisi (ADR 0056, 0057).
+    $labelTidakDiisi = $opname->kosongMengikutiStokSistem() ? 'Ikut Stok Sistem' : 'Belum Diisi';
 
     $penyaring = [
         'semua' => ['Semua', $ringkasan['barang']],
@@ -164,7 +164,7 @@
                             </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <span class="text-theme-sm text-gray-500 dark:text-gray-400">
-                                    {{ number_format($detail->stock_stored, 0, ',', '.') }}
+                                    {{ number_format($detail->stokSistem(), 0, ',', '.') }}
                                 </span>
                             </td>
                             <td class="px-5 py-4 sm:px-6">

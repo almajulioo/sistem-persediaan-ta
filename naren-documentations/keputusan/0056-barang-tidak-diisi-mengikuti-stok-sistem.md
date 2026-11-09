@@ -11,6 +11,13 @@ dihapus. Aturan penyesuaian ADR 0010 (yang diterapkan hanyalah selisih hasil
 cacah) tetap berlaku. Juga menghapus jenis notifikasi "Opname Siap Diposting"
 dari [ADR 0013](0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md).
 
+Sebagian digantikan oleh [ADR 0057](0057-prosedur-lapangan-stok-opname.md)
+— 9 November 2026: barang kosong mengikuti stok sistem **hanya pada opname
+insidental**; opname lain wajib mengisi setiap barang, dan "Opname Siap
+Diposting" dipulihkan untuknya. Pembanding baris kosong insidental kini stok
+saat posting. Pengiriman JSON `hasil_cacah`, posting lewat `PUT` yang
+menyimpan lebih dulu, dan penanda `counted_at` tetap berlaku.
+
 ## Konteks
 
 Narendra meminta: "buat agar barang yang tidak diisi nilai stok di gudang atau

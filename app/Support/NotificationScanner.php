@@ -233,13 +233,13 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan tiap dokumen opname: draf yang menggantung terlalu lama.
-     * Opname yang sudah selesai atau dihapus menutupnya.
+     * Keadaan tiap dokumen opname: siap diposting, atau menggantung terlalu
+     * lama. Opname yang sudah selesai atau dihapus menutup keduanya.
      *
-     * "Siap diposting" tidak ada lagi (ADR 0056): barang yang tidak diisi
-     * mengikuti stok sistem, jadi setiap draf selalu dapat diposting dan
-     * sistem tidak dapat tahu kapan pencacahan selesai. Yang tersisa adalah
-     * pengingat bahwa draf belum juga diposting.
+     * "Siap diposting" hanya untuk opname yang mewajibkan setiap barang diisi
+     * (ADR 0057). Pada opname insidental barang kosong sah, jadi sistem tidak
+     * dapat tahu kapan pencacahannya usai; yang tersisa baginya hanyalah
+     * pengingat bahwa drafnya belum juga diposting (ADR 0056).
      */
     public static function periksaOpname(): void
     {
@@ -250,9 +250,24 @@ class NotificationScanner
             foreach ($opnames as $opname) {
                 $pembuat = $opname->user;
                 $ringkasan = $opname->ringkasan();
+                $siap = $opname->siapDiposting();
 
                 Notifier::terapkanKeadaan(
-                    berlaku: $opname->isDraf() && $opname->created_at->lt($batas),
+                    berlaku: $siap,
+                    penerima: $pembuat !== null ? new EloquentCollection([$pembuat]) : new EloquentCollection,
+                    type: NotificationType::OpnameSiapDiposting,
+                    dedupKey: NotificationType::OpnameSiapDiposting->dedupKey($opname->opname_id),
+                    title: "Siap diposting: {$opname->judul()}",
+                    body: "Seluruh barang pada {$opname->judul()} sudah diisi. Periksa sekali lagi lalu posting supaya penyesuaian masuk ke buku mutasi.",
+                    actionUrl: route('opname.edit', $opname, false),
+                    subject: $opname,
+                );
+
+                // Menggantung dan siap diposting saling eksklusif: draf yang
+                // sudah lengkap butuh satu ajakan yang jelas, bukan dua
+                // notifikasi tentang dokumen yang sama.
+                Notifier::terapkanKeadaan(
+                    berlaku: $opname->isDraf() && ! $siap && $opname->created_at->lt($batas),
                     penerima: $pembuat !== null ? $admin->concat([$pembuat])->unique('user_id') : $admin,
                     type: NotificationType::OpnameDrafMenggantung,
                     dedupKey: NotificationType::OpnameDrafMenggantung->dedupKey($opname->opname_id),
@@ -1278,11 +1293,14 @@ class NotificationScanner
             dedupKey: NotificationType::OpnameDiposting->dedupKey($opname->opname_id),
             title: "{$opname->judul()} telah diposting",
             body: sprintf(
-                '%s memposting %s: %d dari %d barang diisi, sisanya mengikuti stok sistem; %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
+                '%s memposting %s: %s; %d selisih, %s lebih dan %s kurang. Penyesuaian sudah masuk ke buku mutasi.',
                 $pelaku->fullname,
                 $opname->judul(),
-                $ringkasan['diisi'],
-                $ringkasan['barang'],
+                // Hanya opname insidental yang bisa menyisakan barang kosong
+                // (ADR 0057).
+                $ringkasan['tidak_diisi'] > 0
+                    ? "{$ringkasan['diisi']} dari {$ringkasan['barang']} barang diisi, sisanya mengikuti stok sistem"
+                    : "{$ringkasan['barang']} barang dicacah",
                 $ringkasan['selisih'],
                 number_format($ringkasan['lebih'], 0, ',', '.'),
                 number_format($ringkasan['kurang'], 0, ',', '.'),

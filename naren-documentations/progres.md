@@ -5,6 +5,104 @@ perubahan.
 
 ---
 
+## 9 November 2026 (lanjutan) — Prosedur lapangan stok opname (ADR 0057)
+
+Empat perbaikan yang disepakati dalam percakapan peninjauan, dikerjakan setelah
+Narendra menjawab 12 pertanyaan. Satu ADR gabungan:
+[ADR 0057](keputusan/0057-prosedur-lapangan-stok-opname.md).
+
+**Jawaban Narendra yang mengubah rencana.** (a) Petugas mencacah **di kertas
+lalu mengetiknya kemudian** — rencana "pembanding = stok saat baris disimpan"
+tidak menutup bug, jadi diganti isian **"Dihitung Pada"**: wajib setiap angka
+berubah, tanpa isian bawaan, rentang 00:00 Tanggal Cacah s.d. sekarang. (b)
+Ruang tanda tangan Kasubbag **tanpa nama dari akun** — ditulis tangan; rencana
+kolom `kasubbag_name` yang dibekukan saat posting dibatalkan, bersama tiga
+pertanyaan turunannya (akun aktif, opname lama, tanpa akun Kasubbag). Jawaban
+lain: tanpa placeholder pada opname berkala; "Opname Siap Diposting" dipulihkan
+untuk selain insidental; penjaga satu draf di aplikasi saja; judul kolom tetap
+"Stok Sistem", tanpa kolom "Dihitung Pada" per baris; blok "Bandar Lampung,
+{tanggal posting} / Mengetahui, / Kepala Subbagian Umum dan TI /
+(…………)", tidak pada draf. Pertanyaan "commit dulu?" gugur: ADR 0055/0056 sudah
+ter-commit (8fbb33b).
+
+**1. Wajib diisi kecuali insidental.** `PeriodeOpname::bolehKosong()` +
+`StockOpname::bolehKosong()`; `OpnamePoster::pastikanSiap()` menolak baris
+kosong lewat `OpnameTidakSiapException::masihAdaYangBelumDiisi()` (nama lama
+`masihAdaYangBelumDicacah()` diganti mengikuti label "Belum Diisi"). Layar
+cacah: "Belum Diisi", tanpa placeholder, "Ya, Posting" terkunci dengan
+"Tampilkan"; petunjuk/pil/kartu "Ikut sistem" hanya insidental. Label halaman
+hasil dan Excel lewat `kosongMengikutiStokSistem()`. `siapDiposting()` dan
+notifikasi `OpnameSiapDiposting` dipulihkan (keadaan, pembuat, saling eksklusif
+dengan menggantung). Teks peristiwa "telah diposting" menyesuaikan.
+
+**2. Pembanding pada waktu cacah.** `StockLedger::stokPada()` (metode baca
+baru): stok kini − Σ `amount` mutasi sesudah menit T; mutasi di dalam menit T
+dihitung sudah terjadi. `stock_stored` = pembanding, `counted_at` = T, tanpa
+migrasi; dihitung ulang hanya bila angka berubah. Layar menghitung sendiri dari
+mutasi sejak 00:00 Tanggal Cacah (data per baris dari `edit()`), mengirim
+`stok_sistem` yang ditampilkan; server menghitung ulang dengan baris barang
+terkunci dan menolak bila berbeda ("… ternyata 2, bukan 5"). Stok kini tampil
+sebagai "kini N". Baris kosong insidental: pembanding = stok saat posting.
+Halaman hasil/Excel draf menampilkan stok kini untuk baris yang belum dicacah
+(`OpnameDetail::stokSistem()`). Log aktivitas menyebut "dihitung pada …".
+
+**3. Ruang tanda tangan Kasubbag** di Excel opname Selesai (kolom J:L, digabung,
+rata tengah), tanpa nama; tanpa tahap persetujuan.
+
+**4. Satu draf aktif.** Pemeriksaan di dalam `KirimanFormulir::sekali()` sesudah
+token; `DrafOpnameMasihAdaException` → arahan ke draf itu. Daftar: "Lanjut Cacah
+{periode}" menggantikan "Mulai Opname"; halaman Mulai Opname menampilkan kalimat
+terkunci + Lanjut Cacah.
+
+**Data contoh.** Triwulan II yang diposting kini mengisi seluruh barang (tiga
+berselisih); draf Triwulan III tetap 5 dari 120.
+
+**Cacat yang ditemukan sendiri sebelum diuji.** Kalimat log aktivitas membaca
+`angkaBerubah()` sesudah menyimpan — padahal rincian di request adalah model
+yang sama yang baru diubah, jadi waktu cacah tak pernah tercatat. Dipindah
+sebelum menyimpan. Juga: fixture Kasubbag membuat opname Selesai tanpa
+`posted_at` → 500 di Excel; baris tempat-tanggal kini jatuh ke titik-titik
+(posting selalu mengisinya).
+
+**Pemeriksaan.**
+
+- `php artisan test`: **942 lulus** (dari 910). Uji baru: posting berkala
+  ditolak selama ada barang kosong (lewat model dan HTTP), `bolehKosong()` per
+  periode, pembanding sebelum/sesudah penyerahan, mutasi di menit yang sama,
+  alasan dinilai terhadap stok pada waktu cacah, penolakan `stok_sistem` basi
+  beserta pesannya, pembanding hanya dihitung ulang bila angka berubah,
+  "Dihitung pada" wajib/tak wajib/di luar rentang/tak terbaca/sebelum draf
+  dibuat, data mutasi di layar, waktu di log, satu draf (tolak, setelah
+  posting/hapus, Lanjut Cacah), Siap Diposting (berkala ya, insidental tidak),
+  ruang tanda tangan (Selesai ya, draf tidak, tanpa nama akun), label "Belum
+  Diisi 0" pada opname berkala selesai, stok kini pada draf.
+- Uji mutasi: menggeser batas `stokPada()` ke "detik pertama menit itu"
+  menggagalkan uji mutasi di menit yang sama.
+- Pint bersih untuk 19 berkas yang disentuh.
+- `migrate:fresh --seed` pada basis data MariaDB **sementara**
+  `sistem_persediaan_uji_0057` (bukan `sistem_persediaan`): bersih; Triwulan II
+  120/120 terisi dengan 3 selisih, draf 115 kosong; `notifikasi:periksa` tidak
+  memunculkan Siap Diposting untuk draf yang belum lengkap.
+- Uji peramban (Edge headless lewat CDP, server kedua port 8123 atas SQLite
+  terpisah, sebagai `gudang`) — **28 pemeriksaan lulus**: daftar & halaman
+  mulai menawarkan Lanjut Cacah; seluruh ekspresi Alpine terkompilasi; tanpa
+  petunjuk, kartu Belum Diisi = 115, tanpa placeholder; angka baru tanpa jam →
+  Simpan terkunci + isian merah; jam 00:00 → Stok Sistem "0 kini 31", "Sesuai",
+  kiriman membawa `stok_sistem`; simpan diterima (rumus klien = server),
+  tersimpan dengan pembanding dan jam 00:00; isian jam kosong lagi; mutasi
+  dicatat **setelah** halaman dibuka → baris ditolak "ternyata 28, bukan 29",
+  penyaring Perlu Dilengkapi, isian dipulihkan, selisih +1 dihitung ulang;
+  modal "Belum diisi 114" memblokir, Tampilkan menyaring; 390 px tanpa gulir
+  horizontal; versi insidental: petunjuk, placeholder, modal "Mengikuti stok
+  sistem", posting → "Ikut sistem"; tanpa draf "Mulai Opname" kembali. Galat
+  konsol hanya skrip tema lama (butir terbuka 23). Isi Excel diperiksa lewat
+  PhpSpreadsheet: "Belum Diisi 0" dan ruang tanda tangan di J:L.
+  (Pemeriksa sempat salah menilai dua hal — `x-transition:*` berisi daftar
+  kelas, dan `counted_at` diserialkan dalam UTC — dibetulkan, lalu dijalankan
+  ulang atas data baru.)
+
+---
+
 ## 9 November 2026 — Laporan stok opname dalam Excel; barang kosong mengikuti stok sistem
 
 Dua permintaan Narendra untuk modul Stok Opname.

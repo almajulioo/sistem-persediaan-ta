@@ -48,6 +48,19 @@ enum PeriodeOpname: string
     }
 
     /**
+     * Barang yang tidak diisi boleh diposting dan mengikuti stok sistem.
+     *
+     * Hanya opname insidental — pencacahan di luar jadwal, biasanya sebagian
+     * barang saja. Opname berkala wajib memastikan setiap barang secara fisik,
+     * jadi tiap baris harus diisi sebelum diposting (ADR 0057, membatasi ADR
+     * 0056).
+     */
+    public function bolehKosong(): bool
+    {
+        return $this === self::Insidental;
+    }
+
+    /**
      * @return array<string, string> nilai => label, untuk dropdown form.
      */
     public static function options(): array

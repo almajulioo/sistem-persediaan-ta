@@ -262,8 +262,9 @@ describe('tampilan baca-saja', function () {
             ->assertSee(route('items.create'), false)
             ->assertSee(route('items.edit', $this->item), false);
         $this->get('/mutasi')->assertSee(route('mutations.create'), false);
+        // Selama ada draf, "Mulai Opname" diganti "Lanjut Cacah" (ADR 0057).
         $this->get('/opname')
-            ->assertSee(route('opname.create'), false)
+            ->assertDontSee(route('opname.create'), false)
             ->assertSee(route('opname.edit', $this->draf), false);
         $this->get("/pengadaan/{$this->procurement->procurement_id}")
             ->assertSee('action="'.route('procurement-documents.store', $this->procurement).'"', false);

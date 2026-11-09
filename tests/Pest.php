@@ -59,6 +59,15 @@ function tokenKiriman(): string
 }
 
 /**
+ * Nilai isian "Dihitung pada" layar pencacahan opname (ADR 0057), bawaannya
+ * menit ini. Wajib menyertai setiap kiriman yang mengubah angka Stok Fisik.
+ */
+function dihitungPada(?Carbon\CarbonInterface $waktu = null): string
+{
+    return ($waktu ?? now())->format('Y-m-d\TH:i');
+}
+
+/**
  * Menuntaskan penerimaan lewat alur BAST digital sungguhan (ADR 0051): hasil
  * pemeriksaan oleh `$petugas`, nomor BAST, lalu TTE `$pejabat` dan `$petugas`.
  * Stok bertambah pada TTE kedua.

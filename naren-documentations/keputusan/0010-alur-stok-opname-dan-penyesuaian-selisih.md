@@ -9,6 +9,12 @@ Sebagian digantikan oleh [ADR 0056](0056-barang-tidak-diisi-mengikuti-stok-siste
 barang yang tidak diisi mengikuti stok sistem saat diposting. Aturan
 penyesuaian (hanya selisih hasil cacah yang diterapkan) tetap berlaku.
 
+Sebagian digantikan oleh [ADR 0057](0057-prosedur-lapangan-stok-opname.md)
+— 9 November 2026: syarat "seluruh barang sudah dicacah" berlaku lagi untuk
+setiap opname kecuali insidental; dan `stock_stored` kini stok sistem pada
+waktu barang dihitung ("Dihitung pada" dari lembar cacah), bukan salinan saat
+draf dibuat. Satu draf aktif dalam satu waktu.
+
 ## Konteks
 
 Activity diagram awal menggambarkan stok opname sebagai satu jalur lurus:

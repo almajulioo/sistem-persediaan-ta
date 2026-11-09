@@ -11,14 +11,19 @@
     $kiriman = json_decode((string) old('hasil_cacah', ''), true);
     $lama = is_array($kiriman) ? $kiriman : (array) old('details', []);
 
+    // Galat angka (stok sistem berubah sejak halaman dibuka) dipisah dari
+    // galat alasan: yang pertama perlu diperiksa ulang walau barisnya sah.
     $galatBaris = [];
+    $galatStok = [];
     foreach ($errors->getMessages() as $kunci => $pesan) {
-        if (preg_match('/^details\.([^.]+)\./', $kunci, $cocok)) {
+        if (preg_match('/^details\.([^.]+)\.stock_real$/', $kunci, $cocok)) {
+            $galatStok[$cocok[1]] ??= $pesan[0];
+        } elseif (preg_match('/^details\.([^.]+)\./', $kunci, $cocok)) {
             $galatBaris[$cocok[1]] ??= $pesan[0];
         }
     }
 
-    $baris = $opname->details->map(function ($detail) use ($lama, $galatBaris) {
+    $baris = $opname->details->map(function ($detail) use ($lama, $galatBaris, $galatStok) {
         $id = $detail->opname_detail_id;
 
         $tersimpan = [
@@ -40,23 +45,35 @@
             'kode' => $detail->item->item_code,
             'nama' => $detail->item->item_name,
             'satuan' => $detail->item->unit->label(),
+            // Pembanding tersimpan: stok sistem pada waktu barang ini dihitung
+            // (ADR 0057). Hanya bermakna bila barisnya sudah dicacah.
             'stored' => $detail->stock_stored,
+            'kini' => $detail->item->stock_current,
+            'dicacah' => $detail->counted_at?->translatedFormat('d M Y H:i'),
             'real' => $isian['real'],
             'reason' => $isian['reason'],
             'note' => $isian['note'],
             'asal' => $tersimpan,
             'galat' => $galatBaris[$id] ?? null,
+            'galatStok' => $galatStok[$id] ?? null,
         ];
     })->values()->all();
 
     $alasan = \App\Enums\AlasanSelisih::options();
 
+    // Hanya opname insidental yang barang kosongnya mengikuti stok sistem;
+    // opname lain wajib mengisi setiap barang (ADR 0057).
+    $bolehKosong = $opname->bolehKosong();
+
     $penyaring = [
         'semua' => ['Semua', 'total'],
         'diisi' => ['Diisi', 'diisi'],
         'berselisih' => ['Berselisih', 'berselisih'],
-        'kosong' => ['Ikut Stok Sistem', 'kosong'],
+        'kosong' => [$bolehKosong ? 'Ikut Stok Sistem' : 'Belum Diisi', 'kosong'],
     ];
+
+    // Batas paling awal "Dihitung pada": pukul 00:00 tanggal pencacahan.
+    $waktuAwal = $opname->opname_date->format('Y-m-d').'T00:00';
 
     $kelasInput = 'dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 h-10 rounded-lg border bg-transparent px-3 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30';
 @endphp
@@ -126,11 +143,20 @@
                     <span class="text-error-600 dark:text-error-500" x-text="'-' + angka(statistik.kurang)"></span>
                 </h4>
             </div>
-            <div class="border-brand-200 bg-brand-50 dark:border-brand-500/30 dark:bg-brand-500/10 rounded-2xl border p-5">
-                <span class="text-theme-sm text-brand-700 dark:text-brand-400">Ikut Stok Sistem</span>
-                <h4 class="text-title-sm text-brand-700 dark:text-brand-400 mt-2 font-bold" x-text="angka(statistik.kosong)"></h4>
-                <p class="text-theme-xs text-brand-700/80 dark:text-brand-400/80 mt-1">tidak diisi</p>
-            </div>
+            @if ($bolehKosong)
+                <div class="border-brand-200 bg-brand-50 dark:border-brand-500/30 dark:bg-brand-500/10 rounded-2xl border p-5">
+                    <span class="text-theme-sm text-brand-700 dark:text-brand-400">Ikut Stok Sistem</span>
+                    <h4 class="text-title-sm text-brand-700 dark:text-brand-400 mt-2 font-bold" x-text="angka(statistik.kosong)"></h4>
+                    <p class="text-theme-xs text-brand-700/80 dark:text-brand-400/80 mt-1">tidak diisi</p>
+                </div>
+            @else
+                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03]">
+                    <span class="text-theme-sm text-gray-500 dark:text-gray-400">Belum Diisi</span>
+                    <h4 class="text-title-sm mt-2 font-bold"
+                        :class="statistik.kosong > 0 ? 'text-warning-600 dark:text-orange-400' : 'text-gray-800 dark:text-white/90'"
+                        x-text="angka(statistik.kosong)"></h4>
+                </div>
+            @endif
         </div>
 
         <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
@@ -141,8 +167,23 @@
                     <span x-show="statistik.berubah > 0" x-cloak
                         class="text-theme-xs text-warning-600 dark:text-orange-400 font-medium"
                         x-text="angka(statistik.berubah) + ' perubahan belum disimpan'"></span>
+
+                    {{-- Waktu di lembar cacah. Wajib setiap kali angka Stok Fisik
+                         berubah dan sengaja tanpa isian bawaan: lembar kertas
+                         pagi yang dibandingkan dengan stok sore memunculkan
+                         selisih palsu (ADR 0057). --}}
+                    <div class="flex items-center gap-2">
+                        <label for="dihitung-pada" class="text-theme-sm font-medium whitespace-nowrap text-gray-700 dark:text-gray-400">
+                            Dihitung Pada
+                        </label>
+                        <input type="datetime-local" id="dihitung-pada" x-model="waktu" min="{{ $waktuAwal }}"
+                            :aria-invalid="waktuKurang"
+                            :class="waktuKurang || (waktu !== '' && ! waktuSah) ? 'border-error-500' : 'border-gray-300 dark:border-gray-700'"
+                            class="{{ $kelasInput }} w-52 tabular-nums" />
+                    </div>
+
                     <button type="submit" form="form-cacah" name="aksi" value="simpan"
-                        x-bind:disabled="statistik.berubah === 0 || terkirim"
+                        x-bind:disabled="statistik.berubah === 0 || waktuKurang || terkirim"
                         class="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                         Simpan Draf
                     </button>
@@ -154,17 +195,25 @@
                 </div>
             </div>
 
-            {{-- Satu-satunya kalimat petunjuk di layar ini, diminta Narendra
-                 (9 Nov 2026) supaya petugas tahu barang kosong tidak berarti
-                 terlewat: ia mengikuti stok sistem (ADR 0056). --}}
-            <div class="bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400 mx-5 mb-5 flex items-start gap-3 rounded-lg px-4 py-3 text-sm sm:mx-6">
-                <x-ui.icon name="info" class="mt-0.5 size-4" />
-                <p>
-                    Isi <span class="font-semibold">Stok Fisik</span> hanya untuk barang yang jumlahnya berbeda dari
-                    <span class="font-semibold">Stok Sistem</span>. Barang yang dikosongkan dianggap sesuai dan
-                    mengikuti stok sistem saat diposting.
-                </p>
-            </div>
+            @error('dihitung_pada')
+                <p class="text-theme-xs text-error-500 -mt-3 mb-4 px-5 text-right sm:px-6">{{ $message }}</p>
+            @enderror
+
+            @if ($bolehKosong)
+                {{-- Satu-satunya kalimat petunjuk di layar ini, diminta Narendra
+                     (9 Nov 2026) supaya petugas tahu barang kosong tidak berarti
+                     terlewat: ia mengikuti stok sistem (ADR 0056). Sejak ADR
+                     0057 hanya berlaku — dan hanya tampil — pada opname
+                     insidental. --}}
+                <div class="bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400 mx-5 mb-5 flex items-start gap-3 rounded-lg px-4 py-3 text-sm sm:mx-6">
+                    <x-ui.icon name="info" class="mt-0.5 size-4" />
+                    <p>
+                        Isi <span class="font-semibold">Stok Fisik</span> hanya untuk barang yang jumlahnya berbeda dari
+                        <span class="font-semibold">Stok Sistem</span>. Barang yang dikosongkan dianggap sesuai dan
+                        mengikuti stok sistem saat diposting.
+                    </p>
+                </div>
+            @endif
 
             {{-- Pencarian dan penyaring. Daftar disaring ulang hanya saat
                  penyaring atau kata kunci berganti, bukan saat mengetik angka,
@@ -194,7 +243,7 @@
                         </button>
                     @endforeach
 
-                    <button type="button" x-show="statistik.perlu > 0" x-cloak @click="pilih('perlu')"
+                    <button type="button" x-show="statistik.tinjau > 0" x-cloak @click="pilih('perlu')"
                         :aria-pressed="saring === 'perlu'"
                         :class="saring === 'perlu'
                             ? 'bg-error-500 text-white ring-error-500'
@@ -204,7 +253,7 @@
                         Perlu Dilengkapi
                         <span class="text-theme-xs rounded-full px-1.5 tabular-nums"
                             :class="saring === 'perlu' ? 'bg-white/20' : 'bg-error-50 dark:bg-error-500/15'"
-                            x-text="angka(statistik.perlu)"></span>
+                            x-text="angka(statistik.tinjau)"></span>
                     </button>
                 </div>
             </div>
@@ -223,7 +272,7 @@
                     <tbody>
                         <template x-for="(row, i) in tampil" :key="row.id">
                             <tr class="border-b border-gray-100 dark:border-gray-800"
-                                :class="perlu(row) ? 'bg-error-50/60 dark:bg-error-500/5' : ''">
+                                :class="perlu(row) || row.galatStok ? 'bg-error-50/60 dark:bg-error-500/5' : ''">
                                 <td class="px-5 py-3 sm:px-6">
                                     <span class="text-theme-sm font-medium text-gray-800 dark:text-white/90" x-text="row.kode"></span>
                                 </td>
@@ -233,25 +282,34 @@
                                 <td class="px-5 py-3 sm:px-6">
                                     <span class="text-theme-sm text-gray-500 dark:text-gray-400" x-text="row.satuan"></span>
                                 </td>
-                                <td class="px-5 py-3 sm:px-6">
-                                    <span class="text-theme-sm font-medium text-gray-800 tabular-nums dark:text-white/90" x-text="angka(row.stored)"></span>
+                                {{-- Stok sistem pada waktu cacah: pembanding tersimpan
+                                     untuk baris yang sudah dicacah, atau stok pada
+                                     "Dihitung Pada" untuk angka baru. Stok kini
+                                     ditampilkan sebagai data bila sudah bergerak. --}}
+                                <td class="px-5 py-3 sm:px-6" :title="tersimpan(row) && row.dicacah ? 'Dihitung ' + row.dicacah : ''">
+                                    <span class="text-theme-sm font-medium text-gray-800 tabular-nums dark:text-white/90" x-text="angka(pembanding(row))"></span>
+                                    <span x-show="pembanding(row) !== row.kini" x-cloak
+                                        class="text-theme-xs block whitespace-nowrap text-gray-500 tabular-nums dark:text-gray-400"
+                                        x-text="'kini ' + angka(row.kini)"></span>
                                 </td>
                                 <td class="px-5 py-3 sm:px-6">
                                     <input type="text" inputmode="numeric" autocomplete="off" maxlength="6"
                                         :id="'fisik-' + row.id"
                                         x-model="row.real"
-                                        :placeholder="angka(row.stored)"
+                                        :placeholder="BOLEH_KOSONG ? angka(pembanding(row)) : ''"
                                         :aria-label="'Stok fisik ' + row.nama"
                                         :aria-invalid="! angkaSah(row)"
                                         @keydown.enter.prevent="lanjut(row, i)"
-                                        :class="angkaSah(row) ? 'border-gray-300 dark:border-gray-700' : 'border-error-500'"
+                                        :class="angkaSah(row) && ! row.galatStok ? 'border-gray-300 dark:border-gray-700' : 'border-error-500'"
                                         class="{{ $kelasInput }} w-24 tabular-nums" />
+                                    <p x-show="row.galatStok" x-cloak class="text-theme-xs text-error-500 mt-1 max-w-64" x-text="row.galatStok"></p>
                                 </td>
                                 <td class="px-5 py-3 sm:px-6">
-                                    <span x-show="kosong(row)"
+                                    <span x-show="BOLEH_KOSONG && kosong(row)"
                                         class="text-theme-xs bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-400 inline-flex rounded-full px-2.5 py-0.5 font-medium whitespace-nowrap">
                                         Ikut sistem
                                     </span>
+                                    <span x-show="! BOLEH_KOSONG && kosong(row)" class="text-theme-sm text-gray-400">—</span>
                                     <span x-show="! angkaSah(row)" class="text-theme-xs text-error-600 dark:text-error-500 font-medium">
                                         Bukan angka bulat
                                     </span>
@@ -319,11 +377,13 @@
         <form id="form-cacah" method="POST" action="{{ route('opname.update', $opname) }}" class="hidden">
             @csrf
             @method('PUT')
+            <input type="hidden" name="dihitung_pada" :value="waktu">
             <input type="hidden" name="hasil_cacah" :value="kiriman">
         </form>
 
-        {{-- Konfirmasi posting: ringkasan dari isian di layar, termasuk berapa
-             barang yang akan mengikuti stok sistem. --}}
+        {{-- Konfirmasi posting: ringkasan dari isian di layar. Pada opname
+             insidental disebut berapa barang yang akan mengikuti stok sistem;
+             pada opname lain barang yang belum diisi menghalangi posting. --}}
         <div x-show="konfirmasi" x-cloak @keydown.escape.window="konfirmasi = false"
             class="fixed inset-0 z-99999 flex items-center justify-center p-5"
             role="dialog" aria-modal="true" aria-labelledby="judul-konfirmasi-posting">
@@ -351,17 +411,42 @@
                                 x-text="'(+' + angka(statistik.lebih) + ' / -' + angka(statistik.kurang) + ')'"></span>
                         </dd>
                     </div>
-                    <div class="bg-brand-50 dark:bg-brand-500/10 flex items-center justify-between px-4 py-3">
-                        <dt class="text-brand-700 dark:text-brand-400 font-medium">Mengikuti stok sistem</dt>
-                        <dd class="text-brand-700 dark:text-brand-400 font-semibold tabular-nums" x-text="angka(statistik.kosong) + ' barang'"></dd>
-                    </div>
+                    @if ($bolehKosong)
+                        <div class="bg-brand-50 dark:bg-brand-500/10 flex items-center justify-between px-4 py-3">
+                            <dt class="text-brand-700 dark:text-brand-400 font-medium">Mengikuti stok sistem</dt>
+                            <dd class="text-brand-700 dark:text-brand-400 font-semibold tabular-nums" x-text="angka(statistik.kosong) + ' barang'"></dd>
+                        </div>
+                    @else
+                        <div class="flex items-center justify-between px-4 py-3">
+                            <dt class="font-medium text-gray-800 dark:text-white/90">Belum diisi</dt>
+                            <dd class="font-semibold text-gray-800 tabular-nums dark:text-white/90" x-text="angka(statistik.kosong) + ' barang'"></dd>
+                        </div>
+                    @endif
                 </dl>
+
+                @unless ($bolehKosong)
+                    <div x-show="statistik.kosong > 0"
+                        class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm">
+                        <span x-text="angka(statistik.kosong) + ' barang belum diisi.'"></span>
+                        <button type="button" @click="konfirmasi = false; pilih('kosong')" class="shrink-0 font-medium underline">
+                            Tampilkan
+                        </button>
+                    </div>
+                @endunless
 
                 <div x-show="statistik.perlu > 0"
                     class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm">
                     <span x-text="angka(statistik.perlu) + ' barang perlu dilengkapi: angka tidak sah, atau selisih tanpa alasan dan keterangan.'"></span>
                     <button type="button" @click="konfirmasi = false; pilih('perlu')" class="shrink-0 font-medium underline">
                         Tampilkan
+                    </button>
+                </div>
+
+                <div x-show="waktuKurang"
+                    class="bg-error-50 text-error-600 dark:bg-error-500/15 dark:text-error-500 mt-4 flex items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm">
+                    <span>Dihitung pada belum diisi.</span>
+                    <button type="button" @click="konfirmasi = false; fokus('dihitung-pada')" class="shrink-0 font-medium underline">
+                        Isi
                     </button>
                 </div>
 
@@ -375,7 +460,7 @@
                         Batal
                     </button>
                     <button type="submit" form="form-cacah" name="aksi" value="posting"
-                        x-bind:disabled="statistik.perlu > 0 || terkirim"
+                        x-bind:disabled="! bisaPosting || terkirim"
                         class="bg-brand-500 hover:bg-brand-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
                         Ya, Posting
                     </button>
@@ -387,10 +472,16 @@
     <script>
         function pencacahanOpname() {
             const PER_HALAMAN = 50;
+            const BOLEH_KOSONG = @js($bolehKosong);
+            const WAKTU_AWAL = @js($waktuAwal);
             const rows = @json($baris);
+            // Mutasi tiap baris sejak 00:00 tanggal cacah, [waktu, jumlah],
+            // untuk menghitung stok sistem pada "Dihitung Pada" di klien.
+            const MUTASI = @json($mutasi);
             const format = new Intl.NumberFormat('id-ID');
 
             return {
+                BOLEH_KOSONG,
                 rows,
                 daftar: [],
                 cari: '',
@@ -398,11 +489,12 @@
                 batas: PER_HALAMAN,
                 konfirmasi: false,
                 terkirim: false,
+                waktu: @js((string) old('dihitung_pada', '')),
 
                 init() {
                     // Setelah validasi gagal, langsung tampilkan baris yang
-                    // perlu dibetulkan.
-                    if (this.rows.some(row => this.perlu(row))) {
+                    // perlu dibetulkan atau diperiksa ulang.
+                    if (this.rows.some(row => this.perlu(row) || row.galatStok)) {
                         this.saring = 'perlu';
                     }
 
@@ -420,8 +512,35 @@
                 isi(row) { return String(row.real ?? '').trim(); },
                 kosong(row) { return this.isi(row) === ''; },
                 angkaSah(row) { return this.kosong(row) || /^\d{1,6}$/.test(this.isi(row)); },
+
+                get waktuSah() {
+                    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(this.waktu) && this.waktu >= WAKTU_AWAL;
+                },
+                // Angka tersimpan yang tidak diubah tetap memakai pembanding
+                // tersimpannya.
+                tersimpan(row) { return row.asal.real !== '' && this.isi(row) === row.asal.real; },
+                // Angka baru yang akan dibandingkan pada "Dihitung Pada".
+                angkaBaru(row) { return ! this.kosong(row) && this.angkaSah(row) && ! this.tersimpan(row); },
+                get waktuKurang() { return this.statistik.baru > 0 && ! this.waktuSah; },
+
+                // Stok sistem pada akhir menit "Dihitung Pada": stok kini
+                // dikurangi mutasi sesudahnya — rumus yang sama dengan
+                // StockLedger::stokPada() di server. Waktu dibandingkan
+                // sebagai teks berformat sama.
+                stokPada(row) {
+                    const sesudah = this.waktu + ':59';
+                    let stok = row.kini;
+                    for (const [waktu, jumlah] of (MUTASI[row.id] ?? [])) {
+                        if (waktu > sesudah) stok -= jumlah;
+                    }
+                    return stok;
+                },
+                pembanding(row) {
+                    if (this.tersimpan(row)) return row.stored;
+                    return this.waktuSah ? this.stokPada(row) : row.kini;
+                },
                 selisih(row) {
-                    return this.kosong(row) || ! this.angkaSah(row) ? null : Number(this.isi(row)) - row.stored;
+                    return this.kosong(row) || ! this.angkaSah(row) ? null : Number(this.isi(row)) - this.pembanding(row);
                 },
                 berselisih(row) {
                     const selisih = this.selisih(row);
@@ -440,7 +559,7 @@
                 },
 
                 get statistik() {
-                    const hasil = { total: this.rows.length, diisi: 0, sesuai: 0, berselisih: 0, lebih: 0, kurang: 0, perlu: 0, berubah: 0 };
+                    const hasil = { total: this.rows.length, diisi: 0, sesuai: 0, berselisih: 0, lebih: 0, kurang: 0, perlu: 0, tinjau: 0, berubah: 0, baru: 0 };
 
                     for (const row of this.rows) {
                         if (! this.kosong(row)) hasil.diisi++;
@@ -453,8 +572,11 @@
                             if (selisih > 0) hasil.lebih += selisih; else hasil.kurang -= selisih;
                         }
 
-                        if (this.perlu(row)) hasil.perlu++;
+                        const perlu = this.perlu(row);
+                        if (perlu) hasil.perlu++;
+                        if (perlu || row.galatStok) hasil.tinjau++;
                         if (this.berubah(row)) hasil.berubah++;
+                        if (this.angkaBaru(row)) hasil.baru++;
                     }
 
                     hasil.kosong = hasil.total - hasil.diisi;
@@ -462,8 +584,17 @@
                     return hasil;
                 },
 
+                // Opname selain insidental wajib mengisi setiap barang (ADR
+                // 0057); server menolaknya juga.
+                get bisaPosting() {
+                    const s = this.statistik;
+                    return s.perlu === 0 && ! this.waktuKurang && (BOLEH_KOSONG || s.kosong === 0);
+                },
+
                 // Hanya baris yang berubah, sebagai satu JSON (lihat komentar
                 // di atas). Baris yang dikosongkan dikirim dengan angka kosong.
+                // Angka baru membawa stok sistem yang ditampilkan, supaya
+                // server dapat menolak bila ternyata sudah berbeda.
                 get kiriman() {
                     const isi = {};
 
@@ -473,6 +604,7 @@
                         const berselisih = this.berselisih(row);
                         isi[row.id] = {
                             stock_real: this.isi(row),
+                            stok_sistem: this.angkaBaru(row) ? String(this.pembanding(row)) : '',
                             adjustment_reason: berselisih ? row.reason : '',
                             adjustment_note: berselisih ? row.note.trim() : '',
                         };
@@ -493,7 +625,7 @@
                             case 'diisi': return ! this.kosong(row);
                             case 'berselisih': return this.berselisih(row);
                             case 'kosong': return this.kosong(row);
-                            case 'perlu': return this.perlu(row);
+                            case 'perlu': return this.perlu(row) || row.galatStok;
                             default: return true;
                         }
                     });

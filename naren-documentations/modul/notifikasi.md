@@ -45,7 +45,8 @@ penerimanya sudah ditendang keluar sesi.
 | Stok Berlebih | Info | Gudang + Admin | Tinjau kebutuhan, cegah menumpuk |
 | Barang Tidak Bergerak | Info | Gudang + Admin | Evaluasi atau arsipkan |
 | Draf Usulan Tersedia | Perhatian | Gudang + Admin | Tinjau, sesuaikan jumlah, lalu ajukan |
-| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Draf belum diposting &gt;7 hari: selesaikan lalu posting, atau hapus draf. Sejak [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) berlaku untuk setiap draf; "Opname Siap Diposting" dihapus karena setiap draf selalu dapat diposting |
+| Opname Siap Diposting | Perhatian | Pembuat draf | Draf selain insidental yang setiap barangnya sudah diisi: periksa lalu posting. Dihapus [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md), dipulihkan [ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md) — opname insidental tidak mendapatkannya karena barang kosongnya sah |
+| Draf Opname Menggantung | Perhatian | Pembuat + Admin | Draf belum diposting &gt;7 hari: selesaikan lalu posting, atau hapus draf. Saling eksklusif dengan "Opname Siap Diposting" |
 | Periode Belum Diopname | Perhatian | Gudang + Admin | Buat draf opname |
 | Usulan Menunggu Persetujuan | Perhatian | Pejabat Pengadaan + Admin | Setujui atau tolak |
 | Usulan Pengadaan Menggantung | Perhatian | Pejabat Pengadaan + Admin + pengaju | Segera putuskan, sudah &gt;7 hari |
@@ -97,7 +98,10 @@ yang sudah ada sejak modul opname tetapi **tidak pernah ditampilkan kepada
 siapa pun**. Lihat [ADR 0010](../keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md).
 Sejak [ADR 0056](../keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md)
 hanya baris yang diisi petugas yang dihitung: baris yang mengikuti stok sistem
-tidak punya hasil cacah yang bisa berbeda dari stok akhirnya.
+tidak punya hasil cacah yang bisa berbeda dari stok akhirnya. Sejak
+[ADR 0057](../keputusan/0057-prosedur-lapangan-stok-opname.md) "dicacah" berarti
+jam "Dihitung Pada" di lembar cacah, sehingga lembar yang diketik belakangan
+untuk barang yang sempat dilayani juga menimbulkan peristiwa ini.
 
 ## Ambang batas
 

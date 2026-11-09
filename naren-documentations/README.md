@@ -38,7 +38,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0007](keputusan/0007-kolom-audit-dan-referensi-polimorfik.md) | Kolom audit tambahan dan referensi dokumen polimorfik | Diterima |
 | [0008](keputusan/0008-penerimaan-barang-oleh-pengelola-gudang.md) | Penerimaan barang dikonfirmasi Pengelola Gudang | Sebagian digantikan oleh 0051 |
 | [0009](keputusan/0009-laporan-pdf-dan-csv.md) | Laporan PDF lewat dompdf dan CSV tanpa paket tambahan | Sebagian digantikan oleh 0048 dan 0055 |
-| [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Sebagian digantikan oleh 0056 |
+| [0010](keputusan/0010-alur-stok-opname-dan-penyesuaian-selisih.md) | Alur stok opname: draf, posting wajib lengkap, dan penyesuaian hanya menerapkan selisih hasil cacah | Sebagian digantikan oleh 0056 dan 0057 |
 | [0011](keputusan/0011-alasan-selisih-enum-baku-dan-keterangan-wajib.md) | Alasan selisih: enum baku berpasangan keterangan wajib | Diterima |
 | [0012](keputusan/0012-periode-opname-enum-jenis-dan-tahun.md) | Periode opname sebagai enum jenis + tahun | Diterima |
 | [0013](keputusan/0013-notifikasi-memisahkan-keadaan-dari-peristiwa.md) | Notifikasi memisahkan keadaan dari peristiwa | Sebagian digantikan oleh 0036 dan 0056 |
@@ -83,8 +83,9 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0052](keputusan/0052-catatan-tte-bast-di-kaki-halaman-pertama.md) | Catatan TTE BAST di kaki halaman 1, tanpa waktu di bawah QR | Diterima |
 | [0053](keputusan/0053-usulan-barang-baru-diputuskan-dari-permohonan.md) | Usulan barang baru diputuskan dari rincian permohonan; halaman Usulan Barang Baru dihapus | Diterima |
 | [0054](keputusan/0054-grup-menu-persetujuan-dihapus.md) | Grup menu Persetujuan dihapus | Diterima |
-| [0055](keputusan/0055-laporan-stok-opname-dalam-excel.md) | Laporan Stok Opname dalam Excel, menggantikan PDF | Diterima |
-| [0056](keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) | Barang yang tidak diisi mengikuti stok sistem saat opname diposting | Diterima |
+| [0055](keputusan/0055-laporan-stok-opname-dalam-excel.md) | Laporan Stok Opname dalam Excel, menggantikan PDF | Sebagian digantikan oleh 0057 |
+| [0056](keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) | Barang yang tidak diisi mengikuti stok sistem saat opname diposting | Sebagian digantikan oleh 0057 |
+| [0057](keputusan/0057-prosedur-lapangan-stok-opname.md) | Prosedur lapangan stok opname: wajib diisi kecuali insidental, pembanding pada waktu cacah, ruang tanda tangan Kasubbag, satu draf aktif | Diterima |
 
 ## Cara memelihara dokumentasi ini
 
