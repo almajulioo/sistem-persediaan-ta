@@ -4,6 +4,7 @@
     $fieldClass = 'dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30';
     $stepperButton = 'flex size-9 shrink-0 items-center justify-center text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/[0.05]';
     $modul = \App\Enums\ModulPengajuan::Permohonan;
+    $lawan = $modul->lawan();
     $tambahStok = \App\Enums\ItemApplicationType::TambahStok;
     $barangBaru = \App\Enums\ItemApplicationType::BarangBaru;
     // Kartu jenis yang terpilih berbingkai warna jenisnya. Ditulis utuh
@@ -55,7 +56,16 @@
         @csrf
 
         <div class="space-y-6 lg:col-span-3">
-            <x-form.section number="1" title="Keperluan" :warna="$modul->warna()" description="Jelaskan untuk apa barang-barang ini dibutuhkan.">
+            <x-form.section number="1" title="Nota Dinas" :warna="$modul->warna()" description="Nomor urut Nota Dinas dari agenda unit Anda. Nota Dinas terbit otomatis dan disetujui pimpinan unit Anda.">
+                <x-form.text-field name="nd_sequence" label="Nomor Urut Nota Dinas" required inputmode="numeric"
+                    maxlength="6" placeholder="mis. 51" x-model="ndSequence" />
+                <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-white/[0.03]">
+                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">Nomor lengkap</p>
+                    <p class="mt-0.5 font-mono text-sm break-all text-gray-800 dark:text-white/90" x-text="ndPreview"></p>
+                </div>
+            </x-form.section>
+
+            <x-form.section number="2" title="Keperluan" :warna="$modul->warna()" description="Jelaskan untuk apa barang-barang ini dibutuhkan.">
                 <div>
                     <textarea id="purpose" name="purpose" rows="3" required maxlength="500" aria-label="Keperluan"
                         placeholder="mis. Kebutuhan ATK untuk kegiatan pemeriksaan triwulan IV"
@@ -66,7 +76,7 @@
                 </div>
             </x-form.section>
 
-            <x-form.section number="2" title="Tambah Barang" :warna="$modul->warna()" description="Pilih jenis permohonan, isi rinciannya, lalu tambahkan ke daftar.">
+            <x-form.section number="3" title="Tambah Barang" :warna="$modul->warna()" description="Pilih jenis permohonan, isi rinciannya, lalu tambahkan ke daftar.">
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Jenis permohonan">
                     @foreach ([
                         [$tambahStok, 'Tambah stok', 'Barang sudah terdaftar, stoknya kurang.'],
@@ -238,6 +248,45 @@
         </aside>
     </form>
 
+    {{-- Gerbang sebelum mengisi: Permohonan hanya bagi yang sudah mencoba
+         Permintaan. Sengaja tanpa Escape dan klik latar supaya pengguna harus
+         memilih, dan tidak muncul lagi saat kembali dari validasi yang gagal. --}}
+    @unless (session()->hasOldInput())
+        <div x-data="{ terbuka: true }" x-show="terbuka" role="alertdialog" aria-modal="true"
+            aria-labelledby="gerbang-judul" aria-describedby="gerbang-isi"
+            class="fixed inset-0 z-99999 flex overflow-y-auto p-5">
+            <div class="fixed inset-0 bg-gray-900/70"></div>
+
+            {{-- m-auto, bukan items-center: di layar pendek tepi atas tetap bisa dicapai. --}}
+            <div class="border-t-error-600 relative m-auto w-full max-w-md rounded-2xl border-t-8 bg-white p-6 text-center sm:p-8 dark:bg-gray-900 dark:ring-1 dark:ring-white/10">
+                <span class="bg-error-600 ring-error-100 dark:ring-error-500/20 mx-auto flex size-16 items-center justify-center rounded-full text-white ring-8">
+                    <x-ui.icon name="alert-triangle" class="size-8" />
+                </span>
+                <p class="text-error-600 dark:text-error-400 mt-6 text-sm font-bold tracking-widest uppercase">Perhatian</p>
+                <h3 id="gerbang-judul" class="mt-1 text-2xl font-bold text-gray-800 dark:text-white/90">Sudah mencoba Permintaan?</h3>
+                <div id="gerbang-isi" class="mt-4 space-y-3 text-sm">
+                    <p class="bg-error-600 rounded-lg px-4 py-3 font-semibold text-white">
+                        Ajukan Permohonan <span class="font-extrabold uppercase underline decoration-2 underline-offset-2">hanya jika</span>
+                        Anda telah menggunakan layanan Permintaan dan stok tidak mencukupi atau barang kurang.
+                    </p>
+                    <p class="text-gray-500 dark:text-gray-400">{{ $modul->hasil(auth()->user()) }}</p>
+                </div>
+
+                <div class="mt-6 flex flex-col gap-3">
+                    <a href="{{ $lawan->ruteBuat() }}"
+                        class="shadow-theme-xs inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition {{ $lawan->tombolClass() }}">
+                        <x-ui.icon :name="$lawan->icon()" class="size-4" />
+                        {{ $lawan->labelBuat() }}
+                    </a>
+                    <button type="button" @click="terbuka = false"
+                        class="text-error-600 ring-error-300 hover:bg-error-50 dark:text-error-400 dark:ring-error-500/30 dark:hover:bg-error-500/10 rounded-lg px-5 py-3 text-sm font-medium ring-1 ring-inset transition">
+                        Saya yakin, lanjutkan Permohonan
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endunless
+
     <script>
         function applicationForm() {
             const items = @json($items);
@@ -246,6 +295,8 @@
             return {
                 items,
                 units,
+                ndTemplate: @js($ndTemplate),
+                ndSequence: @js((string) old('nd_sequence', '')),
                 mode: @js($tambahStok->value),
                 selectedItem: null,
                 newItemName: '',
@@ -267,6 +318,10 @@
                             this.pushRow({ ...row, label: `${row.item_name ?? ''} (${units[row.unit] ?? row.unit ?? '-'})` });
                         }
                     });
+                },
+
+                get ndPreview() {
+                    return this.ndTemplate.replace('__SEQ__', this.ndSequence.trim() || '……');
                 },
 
                 setMode(mode) {

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\RequestHistoryAction;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
+use App\Support\BastQrStamper;
 use App\Support\Warna;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -117,6 +118,58 @@ class Request extends Model
     public function hasItemProposals(): bool
     {
         return $this->item()->whereNotNull('item_proposal_id')->exists();
+    }
+
+    /**
+     * Nota Dinas sudah ditandatangani dengan QR, sehingga mengubah nomornya
+     * menerbitkan QR baru dan QR pada salinan lama tidak berlaku lagi.
+     */
+    public function notaDinasBerQr(): bool
+    {
+        return $this->requestDocuments()
+            ->where('document_type', 'nota_dinas')
+            ->whereNotNull('verification_token_hash')
+            ->exists();
+    }
+
+    /**
+     * Status tempat BAST dan QR-nya berlaku: sejak Kasubbag memulai
+     * pengeluaran. Ditolak atau dikembalikan sebelum diserahkan berarti
+     * persetujuan Mengetahui itu batal.
+     */
+    public const BAST_BERLAKU = ['in_issuance', 'delivered', 'completed'];
+
+    public function bastBerlaku(): bool
+    {
+        return in_array($this->status, self::BAST_BERLAKU, true);
+    }
+
+    /**
+     * Baris riwayat tiap persetujuan BAST menurut kolom tanda tangannya. Yang
+     * belum terjadi tidak ikut, termasuk Mengetahui pada permintaan darurat
+     * yang memang tidak melewati tahap pengeluaran. Di luar BAST_BERLAKU tidak
+     * ada yang berlaku, sehingga QR pada BAST yang terlanjur terbit ikut batal.
+     *
+     * @return array<string, RequestHistory>
+     */
+    public function persetujuanBast(): array
+    {
+        if (! $this->bastBerlaku()) {
+            return [];
+        }
+
+        $riwayat = $this->histories()->reorder()->latest('request_history_id')->get();
+        $disetujuiKe = fn (string $status) => $riwayat->first(
+            fn (RequestHistory $history) => $history->action === RequestHistoryAction::Disetujui && $history->to_status === $status,
+        );
+
+        return array_filter([
+            BastQrStamper::MENGETAHUI => $disetujuiKe('in_issuance'),
+            BastQrStamper::PIHAK_KESATU => $disetujuiKe('delivered'),
+            BastQrStamper::PIHAK_KEDUA => $riwayat->first(
+                fn (RequestHistory $history) => in_array($history->action, [RequestHistoryAction::Diterima, RequestHistoryAction::DitutupPetugas], true),
+            ),
+        ]);
     }
 
     /**
@@ -354,11 +407,12 @@ class Request extends Model
     public const BATAS_HARI_KONFIRMASI = 7;
 
     /**
-     * Hari sejak diajukan sebelum permintaan yang belum diputuskan Kepala Unit
-     * dibatalkan otomatis, supaya stok yang ditahannya kembali tersedia
-     * (RequestWorkflowService::expireStale()).
+     * Hari kalender sejak diajukan sebelum permintaan yang belum diputuskan
+     * Kepala Unit dibatalkan otomatis, supaya stok yang ditahannya kembali
+     * tersedia (RequestWorkflowService::expireStale()). Dihitung menurut
+     * tanggal: yang diajukan tanggal 4 masih bisa diputuskan sepanjang tanggal 11.
      */
-    public const BATAS_HARI_PERSETUJUAN = 14;
+    public const BATAS_HARI_PERSETUJUAN = 7;
 
     /**
      * Pemohon melaporkan masalah penerimaan yang belum ditanggapi Gudang.

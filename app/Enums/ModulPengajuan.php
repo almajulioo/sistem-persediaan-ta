@@ -113,14 +113,14 @@ enum ModulPengajuan: string
     }
 
     /**
-     * Apa yang terjadi setelah diajukan. Penyetuju permintaan disebut menurut
+     * Apa yang terjadi setelah diajukan. Penyetuju pertama disebut menurut
      * unit pemohon bila diketahui, sama dengan label status permintaan.
      */
     public function hasil(?User $pemohon = null): string
     {
         return match ($this) {
-            self::Permintaan => 'Disetujui '.($pemohon?->unit?->sebutanKepala() ?? 'atasan').' Anda, lalu barang diserahkan Pengelola Gudang.',
-            self::Permohonan => 'Ditinjau Pengelola Gudang, lalu diteruskan ke pengadaan. Barang tidak langsung diserahkan.',
+            self::Permintaan => 'Disetujui '.($pemohon?->unit?->sebutanKepala() ?? 'atasan').' Anda, lalu permintaan ditinjau oleh Pengelola Gudang.',
+            self::Permohonan => 'Disetujui '.($pemohon?->unit?->sebutanKepala() ?? 'atasan').' Anda, ditinjau Pengelola Gudang, lalu diputuskan Kasubbag Umum dan TI sebelum diteruskan ke pengadaan. Barang tidak langsung diserahkan.',
         };
     }
 

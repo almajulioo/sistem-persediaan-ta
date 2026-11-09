@@ -6,9 +6,13 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class RejectItemApplicationRequest extends FormRequest
 {
+    /**
+     * Penolak berganti mengikuti tahap permohonan, jadi wewenangnya diperiksa
+     * di ItemApplicationWorkflowService, bukan di sini.
+     */
     public function authorize(): bool
     {
-        return $this->user()?->can('kelola-permintaan') ?? false;
+        return $this->user() !== null;
     }
 
     /**

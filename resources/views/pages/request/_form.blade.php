@@ -27,7 +27,9 @@
     Dua kolom: isian di kiri, daftar barang di kanan yang tetap terlihat saat
     halaman digulir. Dipakai Buat Permintaan dan Ubah Kuantitas.
 --}}
-<form action="{{ $action }}" method="POST" x-data="requestForm()" class="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
+<form action="{{ $action }}" method="POST" x-data="requestForm()" @submit="periksaNomor($event)"
+    @nd-renumber-confirmed.window="yakinUbahNomor = true; $el.requestSubmit()"
+    class="grid grid-cols-1 items-start gap-6 lg:grid-cols-5">
     @csrf
     @if ($isEdit)
         @method('PUT')
@@ -223,6 +225,24 @@
     </aside>
 </form>
 
+{{-- Form ini tersimpan tanpa modal keputusan, jadi mengubah nomor Nota Dinas
+     yang sudah ber-QR diminta konfirmasinya di sini. --}}
+@if ($isEdit && ($penerbitanUlang = \App\Support\PemberitahuanQr::penerbitanUlang($request)))
+    <x-ui.modal @show-nd-renumber-modal.window="open = true" :isOpen="false" :showCloseButton="false" class="max-w-md">
+        <div class="p-6 sm:p-8" x-data="{ ulang: @js($penerbitanUlang) }">
+            <h3 class="text-xl font-semibold text-gray-800 dark:text-white/90">Ubah nomor Nota Dinas?</h3>
+            <p class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">Nomor urut yang Anda isi berbeda dengan nomor Nota Dinas saat ini.</p>
+
+            @include('pages.request._qr-warning', ['sumber' => 'ulang'])
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>
+                <button type="button" @click="open = false; $dispatch('nd-renumber-confirmed')" class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white">Ya, Ubah Nomor</button>
+            </div>
+        </div>
+    </x-ui.modal>
+@endif
+
 <x-ui.modal
     @show-request-validation-modal.window="message = $event.detail.message; open = true"
     :isOpen="false" :showCloseButton="false" class="max-w-md">
@@ -257,6 +277,9 @@
             ndSequence: @json((string) old('nd_sequence', '')),
             requestedList: @json($existingItems),
             isEdit: @json($isEdit),
+            ndAsli: @json($isEdit ? (string) $request->ndSequence() : ''),
+            ndBerQr: @json($isEdit && $request->notaDinasBerQr()),
+            yakinUbahNomor: false,
             warnaBaris: @json($warnaBaris),
 
             init() {
@@ -322,6 +345,16 @@
                 this.$dispatch('show-request-validation-modal', {
                     message: `Jumlah melebihi stok ${item.item_name} yang tersedia (${master.available ?? 0}).${ditahan} Untuk kekurangannya, ajukan permohonan tambah stok lewat menu Permohonan.`
                 });
+            },
+
+            // Hanya bila nomornya benar-benar berubah, supaya menyimpan
+            // kuantitas seperti biasa tidak terganggu.
+            periksaNomor(event) {
+                if (!this.ndBerQr || this.yakinUbahNomor) return;
+                if (event.target.elements.nd_sequence.value.trim() === this.ndAsli) return;
+
+                event.preventDefault();
+                this.$dispatch('show-nd-renumber-modal');
             },
 
             // Kode unit pada nomor mengikuti peminta: diri sendiri, atau peminta

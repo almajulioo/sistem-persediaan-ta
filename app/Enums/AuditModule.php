@@ -66,7 +66,7 @@ enum AuditModule: string
             self::Penerimaan => 'Konfirmasi penerimaan barang yang menambah stok.',
             self::DokumenPengadaan => 'Berkas pengadaan pada disk privat: unggah, unduh, dan hapus.',
             self::Permintaan => 'Permintaan barang oleh unit kerja. Disediakan untuk sub sistem Permintaan.',
-            self::Permohonan => 'Permohonan barang baru dan tambah stok oleh unit kerja, beserta keputusan Pengelola Gudang.',
+            self::Permohonan => 'Permohonan barang baru dan tambah stok oleh unit kerja, beserta persetujuan bertahapnya.',
         };
     }
 

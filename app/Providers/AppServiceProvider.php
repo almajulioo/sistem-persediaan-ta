@@ -104,6 +104,9 @@ class AppServiceProvider extends ServiceProvider
         // sistem. Lihat ADR 0030.
         Gate::define('setujui-pengadaan', fn (User $user) => $user->hasRole(UserRole::KasubbagUmumTi));
 
+        // Keputusan akhir permohonan, setelah ditinjau Pengelola Gudang.
+        Gate::define('setujui-permohonan', fn (User $user) => $user->hasRole(UserRole::KasubbagUmumTi));
+
         // Dokumen pengadaan dibaca tiga peran sekaligus: Pejabat Pengadaan yang
         // merealisasi, Pengelola Gudang yang mengusulkan dan menerima barangnya,
         // serta Kasubbag Umum dan TI yang harus membaca dokumen sebelum

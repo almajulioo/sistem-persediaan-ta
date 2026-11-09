@@ -71,7 +71,7 @@ describe('dasbor pengguna', function () {
         expect(collect($pintu['permintaan']['statistik'])->pluck('jumlah', 'label')->all())
             ->toBe(['Berjalan' => 1, 'Diserahkan' => 1, 'Selesai' => 0])
             ->and(collect($pintu['permohonan']['statistik'])->pluck('jumlah', 'label')->all())
-            ->toBe(['Diajukan' => 1, 'Disetujui' => 0, 'Ditolak' => 0])
+            ->toBe(['Diajukan' => 1, 'Disetujui Kepala Unit' => 0, 'Ditinjau Gudang' => 0, 'Disetujui' => 0, 'Ditolak' => 0])
             ->and($pintu['permintaan']['perhatian'])->toContain('menunggu konfirmasi')
             ->and($pintu['aktivitas'])->toHaveCount(3);
 
@@ -114,6 +114,36 @@ describe('dasbor kepala unit', function () {
         $response->assertSee('Menunggu Persetujuan Anda')
             ->assertSee('Barang Paling Banyak Diminta')
             ->assertDontSee($unitLain->request_number);
+    });
+
+    it('memasukkan permohonan unitnya ke antrean dan angka ubin', function () {
+        permintaanTampilan($this->pemohon, 'submitted', $this->kertas);
+        $menunggu = permohonanTampilan($this->pemohon, ItemApplicationStatus::Diajukan, $this->kertas);
+        permohonanTampilan($this->pemohon, ItemApplicationStatus::DisetujuiKepalaUnit, $this->kertas);
+        $unitLain = permohonanTampilan(
+            User::factory()->role(UserRole::Pengguna)->create(['unit' => UnitKerja::SubbagianSdm]),
+            ItemApplicationStatus::Diajukan,
+            $this->kertas,
+        );
+
+        $response = $this->actingAs($this->kepala)->get('/dasbor')->assertOk();
+        $unit = $response->viewData('dasborUnit');
+
+        expect($unit['statistik'][0]['jumlah'])->toBe(2)
+            ->and($unit['statistik'][0]['url'])->toBe('#antrean-persetujuan')
+            ->and($unit['antreanPermohonan']->pluck('item_application_id')->all())->toBe([$menunggu->item_application_id]);
+
+        $response->assertSee('id="antrean-persetujuan"', false)
+            ->assertSee('Permohonan dari '.UnitKerja::SubbagianHukum->label())
+            ->assertSee(route('item-applications.show', $menunggu))
+            ->assertDontSee(route('item-applications.show', $unitLain));
+    });
+
+    it('menyebut antrean permohonan kosong bila tidak ada yang menunggu', function () {
+        $this->actingAs($this->kepala)
+            ->get('/dasbor')
+            ->assertOk()
+            ->assertSee('Semua permohonan unit Anda sudah diputuskan.');
     });
 
     it('menyetujui dari dasbor lalu kembali ke dasbor', function () {
@@ -190,7 +220,7 @@ describe('daftar permohonan', function () {
         $this->actingAs($this->pemohon);
 
         $tabs = $this->get(route('item-applications.index'))->assertOk()->viewData('tabs');
-        expect(collect($tabs)->pluck('jumlah')->all())->toBe([2, 1, 1, 0]);
+        expect(collect($tabs)->pluck('jumlah')->all())->toBe([2, 1, 0, 0, 1, 0]);
 
         $this->get(route('item-applications.index', ['status' => 'disetujui']))
             ->assertOk()
@@ -200,9 +230,9 @@ describe('daftar permohonan', function () {
 
 describe('detail permohonan', function () {
     it('memakai modal konfirmasi, bukan dialog bawaan browser, untuk menyetujui', function () {
-        $application = permohonanTampilan($this->pemohon, ItemApplicationStatus::Diajukan, $this->kertas);
+        $application = permohonanTampilan($this->pemohon, ItemApplicationStatus::DitinjauGudang, $this->kertas);
 
-        $this->actingAs(User::factory()->role(UserRole::PengelolaGudang)->create())
+        $this->actingAs(User::factory()->role(UserRole::KasubbagUmumTi)->create())
             ->get(route('item-applications.show', $application))
             ->assertOk()
             ->assertSee('Teruskan permohonan ini?')
@@ -350,7 +380,7 @@ describe('identitas modul permintaan dan permohonan', function () {
         foreach ([route('request.index'), route('request.create')] as $url) {
             $this->get($url)->assertOk()
                 ->assertSee('dipakai bila '.lcfirst(ModulPengajuan::Permintaan->dipakaiBila()))
-                ->assertSee('Disetujui Kepala Subbagian Anda, lalu barang diserahkan Pengelola Gudang.')
+                ->assertSee('Disetujui Kepala Subbagian Anda, lalu permintaan ditinjau oleh Pengelola Gudang.')
                 ->assertSee(ModulPengajuan::Permohonan->ajakan())
                 ->assertSee(route('item-applications.create'));
         }
@@ -363,6 +393,30 @@ describe('identitas modul permintaan dan permohonan', function () {
         }
     });
 
+    it('meminta keyakinan lewat modal sebelum mengisi formulir permohonan', function () {
+        $this->actingAs($this->pemohon)
+            ->get(route('item-applications.create'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Sudah mencoba Permintaan?',
+                'Anda telah menggunakan layanan Permintaan dan stok tidak mencukupi atau barang kurang.',
+                route('request.create'),
+                'Saya yakin, lanjutkan Permohonan',
+            ]);
+
+        $this->get(route('request.create'))->assertOk()->assertDontSee('Sudah mencoba Permintaan?');
+    });
+
+    it('tidak memunculkan lagi modal permohonan setelah validasi gagal', function () {
+        $this->actingAs($this->pemohon)
+            ->from(route('item-applications.create'))
+            ->followingRedirects()
+            ->post(route('item-applications.store'), ['purpose' => ''])
+            ->assertOk()
+            ->assertSee('Periksa kembali isian formulir.')
+            ->assertDontSee('Sudah mencoba Permintaan?');
+    });
+
     it('membandingkan kedua pintu berdampingan di dasbor Pengguna', function () {
         $this->actingAs($this->pemohon)
             ->get('/dasbor')
@@ -371,6 +425,6 @@ describe('identitas modul permintaan dan permohonan', function () {
                 ModulPengajuan::Permintaan->label(), 'Dipakai bila', ModulPengajuan::Permintaan->dipakaiBila(),
                 ModulPengajuan::Permohonan->label(), 'Dipakai bila', ModulPengajuan::Permohonan->dipakaiBila(),
             ])
-            ->assertSee(ModulPengajuan::Permohonan->hasil());
+            ->assertSee(ModulPengajuan::Permohonan->hasil($this->pemohon));
     });
 });

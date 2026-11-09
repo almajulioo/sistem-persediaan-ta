@@ -4,6 +4,7 @@ namespace App\Http\Requests\Request;
 
 use App\Enums\ItemApplicationType;
 use App\Enums\SatuanBarang;
+use App\Models\Request as ModelsRequest;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,6 +24,7 @@ class StoreItemApplicationRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'nd_sequence' => ['required', 'regex:'.ModelsRequest::ND_SEQUENCE_PATTERN],
             'purpose' => ['required', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.type' => ['required', Rule::enum(ItemApplicationType::class)],
@@ -46,7 +48,10 @@ class StoreItemApplicationRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        $this->merge(['purpose' => trim((string) $this->input('purpose'))]);
+        $this->merge([
+            'nd_sequence' => trim((string) $this->input('nd_sequence')),
+            'purpose' => trim((string) $this->input('purpose')),
+        ]);
 
         if (! is_array($this->input('items'))) {
             return;
@@ -76,6 +81,7 @@ class StoreItemApplicationRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'nd_sequence' => 'nomor urut Nota Dinas',
             'purpose' => 'keperluan',
             'items' => 'daftar barang',
             'items.*.type' => 'jenis permohonan',
@@ -93,6 +99,8 @@ class StoreItemApplicationRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'nd_sequence.required' => 'Nomor urut Nota Dinas wajib diisi.',
+            'nd_sequence.regex' => 'Nomor urut Nota Dinas hanya berupa angka, paling banyak 6 digit.',
             'purpose.required' => 'Jelaskan keperluan permohonan ini supaya Pengelola Gudang dapat menilainya.',
             'items.required' => 'Tambahkan minimal satu barang ke daftar permohonan.',
             'items.min' => 'Tambahkan minimal satu barang ke daftar permohonan.',

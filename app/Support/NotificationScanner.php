@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\ItemApplicationStatus;
 use App\Enums\MutationType;
 use App\Enums\NotificationType;
 use App\Enums\PeriodeOpname;
@@ -43,7 +44,7 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
  */
 class NotificationScanner
 {
-    /** Draf opname dianggap menggantung setelah sekian hari tanpa selesai. */
+    /** Draf opname dianggap menggantung setelah sekian                                                                                                                          tanpa selesai. */
     private const HARI_DRAF_MENGGANTUNG = 7;
 
     /** Batas barang dianggap tidak bergerak. */
@@ -1143,20 +1144,41 @@ class NotificationScanner
     }
 
     /**
-     * Keadaan satu permohonan: menunggu ditinjau selama masih Diajukan.
+     * Keadaan satu permohonan: tagihan berpindah mengikuti tahapnya, dari
+     * pimpinan unit pemohon ke Pengelola Gudang lalu ke Kasubbag Umum dan TI.
+     * Admin ikut di setiap tahap karena boleh memutuskan di mana pun.
      *
-     * Penerimanya pengawas gudang, karena keputusan permohonan wewenang
-     * `kelola-permintaan` (Pengelola Gudang, dan Admin).
-     *
-     * @param  EloquentCollection<int, User>|null  $penerima
+     * @param  EloquentCollection<int, User>|null  $pengawas
+     * @param  EloquentCollection<int, User>|null  $pemberiPersetujuan
      */
-    public static function periksaPermohonan(ItemApplication $application, ?EloquentCollection $penerima = null): void
-    {
+    public static function periksaPermohonan(
+        ItemApplication $application,
+        ?EloquentCollection $pengawas = null,
+        ?EloquentCollection $pemberiPersetujuan = null,
+    ): void {
         $application->loadMissing(['user', 'details']);
 
+        $tautan = route('item-applications.show', $application, absolute: false);
+        $menungguKepala = $application->status === ItemApplicationStatus::Diajukan;
+
         Notifier::terapkanKeadaan(
-            berlaku: $application->isDiajukan(),
-            penerima: $penerima ?? self::pengawasGudang(),
+            berlaku: $menungguKepala,
+            penerima: $menungguKepala ? $application->penyetujuUnit()->merge(Notifier::penerimaBerperan(UserRole::Admin)) : [],
+            type: NotificationType::PermohonanMenungguKepalaUnit,
+            dedupKey: NotificationType::PermohonanMenungguKepalaUnit->dedupKey($application->item_application_id),
+            title: "Permohonan {$application->application_number} menunggu persetujuan",
+            body: sprintf(
+                '%s mengajukan permohonan %s. Periksa Nota Dinasnya lalu setujui atau tolak dengan alasan.',
+                $application->user?->fullname ?? 'Seseorang',
+                $application->ringkasan(),
+            ),
+            actionUrl: $tautan,
+            subject: $application,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $application->status === ItemApplicationStatus::DisetujuiKepalaUnit,
+            penerima: $pengawas ?? self::pengawasGudang(),
             type: NotificationType::PermohonanMenungguTinjauan,
             dedupKey: NotificationType::PermohonanMenungguTinjauan->dedupKey($application->item_application_id),
             title: "Permohonan {$application->application_number} menunggu tinjauan",
@@ -1166,7 +1188,22 @@ class NotificationScanner
                 $application->user?->unit?->label() ?? 'tanpa unit',
                 $application->ringkasan(),
             ),
-            actionUrl: route('item-applications.show', $application, absolute: false),
+            actionUrl: $tautan,
+            subject: $application,
+        );
+
+        Notifier::terapkanKeadaan(
+            berlaku: $application->status === ItemApplicationStatus::DitinjauGudang,
+            penerima: $pemberiPersetujuan ?? self::pemberiPersetujuan(),
+            type: NotificationType::PermohonanMenungguPersetujuanAkhir,
+            dedupKey: NotificationType::PermohonanMenungguPersetujuanAkhir->dedupKey($application->item_application_id),
+            title: "Permohonan {$application->application_number} menunggu persetujuan akhir",
+            body: sprintf(
+                'Permohonan %s dari %s sudah ditinjau Pengelola Gudang. Setujui supaya diteruskan ke pengadaan, atau tolak dengan alasan.',
+                $application->ringkasan(),
+                $application->user?->unit?->label() ?? 'unit tanpa nama',
+            ),
+            actionUrl: $tautan,
             subject: $application,
         );
     }
@@ -1177,15 +1214,42 @@ class NotificationScanner
      */
     public static function periksaSeluruhPermohonan(): void
     {
-        $penerima = self::pengawasGudang();
+        $pengawas = self::pengawasGudang();
+        $pemberiPersetujuan = self::pemberiPersetujuan();
 
         ItemApplication::query()
             ->with(['user', 'details'])
-            ->chunk(100, function ($applications) use ($penerima) {
+            ->chunk(100, function ($applications) use ($pengawas, $pemberiPersetujuan) {
                 foreach ($applications as $application) {
-                    self::periksaPermohonan($application, $penerima);
+                    self::periksaPermohonan($application, $pengawas, $pemberiPersetujuan);
                 }
             });
+    }
+
+    /**
+     * Peristiwa: permohonan maju satu tahap, sebelum keputusan akhir. Kuncinya
+     * per tahap supaya kabar tahap berikutnya tidak menimpa yang sebelumnya.
+     * Pelakunya sendiri dan pemohon yang akunnya diarsipkan tidak diberi tahu.
+     */
+    public static function catatPermohonanMajuTahap(ItemApplication $application, User $pelaku): void
+    {
+        $pemohon = $application->user;
+
+        if ($pemohon === null || ! $pemohon->is_active || $pemohon->user_id === $pelaku->user_id) {
+            return;
+        }
+
+        $type = NotificationType::PermohonanDiperbarui;
+
+        Notifier::catatPeristiwa(
+            penerima: new EloquentCollection([$pemohon]),
+            type: $type,
+            dedupKey: $type->dedupKey($application->item_application_id.':'.$application->status->value),
+            title: "Permohonan {$application->application_number}: {$application->status->label()}",
+            body: sprintf('%s meneruskan permohonan Anda. %s', $pelaku->fullname, $application->status->description()),
+            actionUrl: route('item-applications.show', $application, absolute: false),
+            subject: $application,
+        );
     }
 
     /**

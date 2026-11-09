@@ -225,6 +225,8 @@
                                                     'needsNd' => $row->status === 'approved_by_head' && $row->nd_number === null,
                                                     'preview' => $row->documentNumber('ND'),
                                                     'sequence' => $row->ndSequence(),
+                                                    'qr' => \App\Support\PemberitahuanQr::persetujuan($row),
+                                                    'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($row),
                                                 ];
                                             @endphp
                                             {{-- Keduanya lewat modal keputusan: catatan wajib saat

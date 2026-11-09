@@ -219,9 +219,9 @@ class DashboardController extends Controller
     }
 
     /**
-     * Dasbor Kepala Unit: penyetuju permintaan unitnya. Seluruh angka dibatasi
-     * pada permintaan dari unitnya sendiri, sama dengan daftar permintaan
-     * yang ia lihat (Request::scopeTerlihatOleh()).
+     * Dasbor Kepala Unit: penyetuju permintaan dan permohonan unitnya. Seluruh
+     * angka dibatasi pada pengajuan dari unitnya sendiri, sama dengan daftar
+     * yang ia lihat (scopeTerlihatOleh() di kedua model).
      *
      * @return array<string, mixed>
      */
@@ -235,6 +235,13 @@ class DashboardController extends Controller
         $antrean = $unit()
             ->with(['user', 'item'])
             ->where('status', 'submitted')
+            ->oldest('date')
+            ->oldest('created_at');
+
+        $antreanPermohonan = ItemApplication::query()
+            ->terlihatOleh($user)
+            ->with(['user', 'details.item'])
+            ->where('status', ItemApplicationStatus::Diajukan)
             ->oldest('date')
             ->oldest('created_at');
 
@@ -265,9 +272,11 @@ class DashboardController extends Controller
             'unit' => $user->unit->label(),
             'statistik' => [
                 [
+                    // Permintaan dan permohonan, keduanya tampil di antrean
+                    // pada halaman ini.
                     'label' => 'Menunggu persetujuan Anda',
-                    'jumlah' => (clone $antrean)->count(),
-                    'url' => route('request.index', ['status' => 'submitted']),
+                    'jumlah' => (clone $antrean)->count() + (clone $antreanPermohonan)->count(),
+                    'url' => '#antrean-persetujuan',
                     'ikon' => 'inbox',
                     'warna' => 'amber',
                 ],
@@ -294,6 +303,7 @@ class DashboardController extends Controller
                 ],
             ],
             'antrean' => $antrean->limit(5)->get(),
+            'antreanPermohonan' => $antreanPermohonan->limit(5)->get(),
             'barangTeratas' => $barangTeratas->map(fn ($row) => [
                 'nama' => $row->item_name,
                 'total' => (int) $row->total,

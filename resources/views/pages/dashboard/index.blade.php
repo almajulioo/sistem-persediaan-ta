@@ -130,79 +130,124 @@
         </div>
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
-            <section class="{{ $kartu }} border-t-[3px] xl:col-span-3 {{ \App\Enums\ModulPengajuan::Permintaan->aksenClass() }}">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <x-modul.label :modul="\App\Enums\ModulPengajuan::Permintaan" class="mb-1.5" />
-                        <h3 class="{{ $judulKartu }}">Menunggu Persetujuan Anda</h3>
-                        <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">Permintaan dari {{ $dasborUnit['unit'] }}, yang terlama di atas.</p>
+            <div id="antrean-persetujuan" class="scroll-mt-24 space-y-6 xl:col-span-3">
+                <section class="{{ $kartu }} border-t-[3px] {{ \App\Enums\ModulPengajuan::Permintaan->aksenClass() }}">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <x-modul.label :modul="\App\Enums\ModulPengajuan::Permintaan" class="mb-1.5" />
+                            <h3 class="{{ $judulKartu }}">Menunggu Persetujuan Anda</h3>
+                            <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">Permintaan dari {{ $dasborUnit['unit'] }}, yang terlama di atas.</p>
+                        </div>
+                        <a href="{{ route('request.index', ['status' => 'submitted']) }}" class="text-theme-sm inline-flex items-center gap-1 font-medium {{ \App\Enums\ModulPengajuan::Permintaan->tautanClass() }}">
+                            Lihat semua
+                            <x-ui.icon name="arrow-right" class="size-4" />
+                        </a>
                     </div>
-                    <a href="{{ route('request.index', ['status' => 'submitted']) }}" class="text-theme-sm inline-flex items-center gap-1 font-medium {{ \App\Enums\ModulPengajuan::Permintaan->tautanClass() }}">
-                        Lihat semua
-                        <x-ui.icon name="arrow-right" class="size-4" />
-                    </a>
-                </div>
 
-                @if ($dasborUnit['antrean']->isEmpty())
-                    <div class="flex flex-col items-center py-10 text-center">
-                        <span class="bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 flex size-12 items-center justify-center rounded-full">
-                            <x-ui.icon name="check-circle" class="size-6" />
-                        </span>
-                        <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">Semua permintaan unit Anda sudah diputuskan.</p>
-                    </div>
-                @else
-                    <ul class="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
-                        @foreach ($dasborUnit['antrean'] as $antrean)
-                            @php
-                                $respondContext = [
-                                    'id' => $antrean->request_id,
-                                    'number' => $antrean->request_number,
-                                    'needsNd' => false,
-                                    'preview' => $antrean->documentNumber('ND'),
-                                    'sequence' => $antrean->ndSequence(),
-                                ];
-                                $adaUsulanBarang = $antrean->item->contains(fn ($detail) => $detail->item_proposal_id !== null);
-                            @endphp
-                            <li class="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
-                                <div class="flex min-w-0 flex-1 items-center gap-3">
-                                    @if ($antrean->user)
-                                        <x-ui.user-avatar :user="$antrean->user" class="size-10 text-xs" />
-                                    @endif
-                                    <div class="min-w-0">
-                                        <p class="text-theme-sm truncate font-medium text-gray-800 dark:text-white/90">
-                                            {{ $antrean->user?->fullname ?? '-' }}
-                                            @if ($antrean->type === 'emergency')
-                                                <x-ui.pill :warna="$antrean->jenisWarna()" :ikon="$antrean->jenisIcon()" class="ml-1">Darurat</x-ui.pill>
-                                            @endif
-                                        </p>
-                                        <p class="text-theme-xs truncate text-gray-500 dark:text-gray-400">
-                                            {{ $antrean->ringkasanBarang() }} · {{ $antrean->date?->translatedFormat('d M Y') }}
-                                        </p>
+                    @if ($dasborUnit['antrean']->isEmpty())
+                        <div class="flex flex-col items-center py-10 text-center">
+                            <span class="bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500 flex size-12 items-center justify-center rounded-full">
+                                <x-ui.icon name="check-circle" class="size-6" />
+                            </span>
+                            <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">Semua permintaan unit Anda sudah diputuskan.</p>
+                        </div>
+                    @else
+                        <ul class="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
+                            @foreach ($dasborUnit['antrean'] as $antrean)
+                                @php
+                                    $respondContext = [
+                                        'id' => $antrean->request_id,
+                                        'number' => $antrean->request_number,
+                                        'needsNd' => false,
+                                        'preview' => $antrean->documentNumber('ND'),
+                                        'sequence' => $antrean->ndSequence(),
+                                        'qr' => \App\Support\PemberitahuanQr::persetujuan($antrean),
+                                    ];
+                                    $adaUsulanBarang = $antrean->item->contains(fn ($detail) => $detail->item_proposal_id !== null);
+                                @endphp
+                                <li class="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
+                                    <div class="flex min-w-0 flex-1 items-center gap-3">
+                                        @if ($antrean->user)
+                                            <x-ui.user-avatar :user="$antrean->user" class="size-10 text-xs" />
+                                        @endif
+                                        <div class="min-w-0">
+                                            <p class="text-theme-sm truncate font-medium text-gray-800 dark:text-white/90">
+                                                {{ $antrean->user?->fullname ?? '-' }}
+                                                @if ($antrean->type === 'emergency')
+                                                    <x-ui.pill :warna="$antrean->jenisWarna()" :ikon="$antrean->jenisIcon()" class="ml-1">Darurat</x-ui.pill>
+                                                @endif
+                                            </p>
+                                            <p class="text-theme-xs truncate text-gray-500 dark:text-gray-400">
+                                                {{ $antrean->ringkasanBarang() }} · {{ $antrean->date?->translatedFormat('d M Y') }}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <a href="{{ route('request.show', $antrean) }}"
-                                        class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                                        Detail
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <a href="{{ route('request.show', $antrean) }}"
+                                            class="text-theme-xs rounded-lg px-3 py-1.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                            Detail
+                                        </a>
+                                        @unless ($adaUsulanBarang)
+                                            <button type="button" x-data
+                                                @click="$dispatch('open-respond-modal', @js([...$respondContext, 'action' => 'approve', 'label' => 'Setujui']))"
+                                                class="text-theme-xs bg-success-500 hover:bg-success-600 rounded-lg px-3 py-1.5 font-medium text-white transition">
+                                                Setujui
+                                            </button>
+                                            <button type="button" x-data
+                                                @click="$dispatch('open-respond-modal', @js([...$respondContext, 'action' => 'reject', 'label' => 'Tolak']))"
+                                                class="text-theme-xs text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
+                                                Tolak
+                                            </button>
+                                        @endunless
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </section>
+
+                <section class="{{ $kartu }} border-t-[3px] {{ \App\Enums\ModulPengajuan::Permohonan->aksenClass() }}">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <x-modul.label :modul="\App\Enums\ModulPengajuan::Permohonan" class="mb-1.5" />
+                            <h3 class="{{ $judulKartu }}">Menunggu Persetujuan Anda</h3>
+                            <p class="text-theme-sm mt-0.5 text-gray-500 dark:text-gray-400">Permohonan dari {{ $dasborUnit['unit'] }}, yang terlama di atas.</p>
+                        </div>
+                        <a href="{{ route('item-applications.index', ['status' => \App\Enums\ItemApplicationStatus::Diajukan->value]) }}" class="text-theme-sm inline-flex items-center gap-1 font-medium {{ \App\Enums\ModulPengajuan::Permohonan->tautanClass() }}">
+                            Lihat semua
+                            <x-ui.icon name="arrow-right" class="size-4" />
+                        </a>
+                    </div>
+
+                    @if ($dasborUnit['antreanPermohonan']->isEmpty())
+                        <p class="text-theme-sm mt-4 text-gray-500 dark:text-gray-400">Semua permohonan unit Anda sudah diputuskan.</p>
+                    @else
+                        <ul class="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
+                            @foreach ($dasborUnit['antreanPermohonan'] as $application)
+                                <li class="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
+                                    <div class="flex min-w-0 flex-1 items-center gap-3">
+                                        @if ($application->user)
+                                            <x-ui.user-avatar :user="$application->user" class="size-10 text-xs" />
+                                        @endif
+                                        <div class="min-w-0">
+                                            <p class="text-theme-sm truncate font-medium text-gray-800 dark:text-white/90">{{ $application->user?->fullname ?? '-' }}</p>
+                                            <p class="text-theme-xs truncate text-gray-500 dark:text-gray-400">
+                                                {{ $application->ringkasanBarang() }} · {{ $application->date?->translatedFormat('d M Y') }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {{-- Menyetujui berarti menandatangani Nota Dinas, jadi lewat
+                                         halaman detail supaya dokumennya terbaca dulu. --}}
+                                    <a href="{{ route('item-applications.show', $application) }}"
+                                        class="text-theme-xs rounded-lg px-3 py-1.5 font-medium transition {{ \App\Enums\ModulPengajuan::Permohonan->tombolClass() }}">
+                                        Tinjau
                                     </a>
-                                    @unless ($adaUsulanBarang)
-                                        <button type="button" x-data
-                                            @click="$dispatch('open-respond-modal', @js([...$respondContext, 'action' => 'approve', 'label' => 'Setujui']))"
-                                            class="text-theme-xs bg-success-500 hover:bg-success-600 rounded-lg px-3 py-1.5 font-medium text-white transition">
-                                            Setujui
-                                        </button>
-                                        <button type="button" x-data
-                                            @click="$dispatch('open-respond-modal', @js([...$respondContext, 'action' => 'reject', 'label' => 'Tolak']))"
-                                            class="text-theme-xs text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset transition">
-                                            Tolak
-                                        </button>
-                                    @endunless
-                                </div>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </section>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </section>
+            </div>
 
             <div class="space-y-6 xl:col-span-2">
                 <section class="{{ $kartu }}">

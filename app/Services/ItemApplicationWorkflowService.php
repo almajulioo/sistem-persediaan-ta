@@ -12,32 +12,139 @@ use App\Models\ItemApplication;
 use App\Models\ItemApplicationDetail;
 use App\Models\ItemProposal;
 use App\Models\ProcurementRequest;
+use App\Models\Request as ModelsRequest;
 use App\Models\User;
 use App\Support\AuditLogger;
+use App\Support\ItemApplicationDocumentGenerator;
 use App\Support\NotificationScanner;
 use App\Support\ProcurementDraftScanner;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
- * Keputusan Pengelola Gudang atas permohonan barang baru / tambah stok.
+ * Persetujuan bertahap permohonan barang baru / tambah stok: Kepala Unit
+ * menandatangani Nota Dinas, Pengelola Gudang meninjau, dan Kasubbag Umum dan
+ * TI memutuskan terakhir. Tiap tahap boleh menolak.
  *
- * Menyetujui meneruskan setiap baris ke jalur yang sudah ada, bukan membuat
- * jalur baru: baris tambah stok masuk ke draf usulan pengadaan (ADR 0027)
- * sebagai baris manual, dan baris barang baru menjadi usulan barang baru yang
- * tetap diputuskan lewat satu jalur `items.store` (ADR 0032/0033).
+ * Keputusan akhir meneruskan setiap baris ke jalur yang sudah ada, bukan
+ * membuat jalur baru: baris tambah stok masuk ke draf usulan pengadaan
+ * (ADR 0027) sebagai baris manual, dan baris barang baru menjadi usulan barang
+ * baru yang tetap diputuskan lewat satu jalur `items.store` (ADR 0032/0033).
  */
 class ItemApplicationWorkflowService
 {
+    public function __construct(
+        private readonly ItemApplicationDocumentGenerator $documents,
+    ) {}
+
     /**
+     * Tetapkan nomor Nota Dinas dari nomor urut yang diisi pemohon.
+     *
+     * Permintaan dan permohonan memakai agenda unit yang sama dengan format
+     * berbeda (KEU.02.02 dan BMN.09.03), jadi yang dibandingkan nomor urut,
+     * unit, bulan, dan tahunnya di kedua tabel.
+     *
+     * @throws ValidationException
+     */
+    public function assignNotaDinasNumber(ItemApplication $application, string $sequence): void
+    {
+        $ndNumber = $application->nomorNotaDinas($sequence);
+        $setaraPermintaan = (new ModelsRequest(['date' => $application->date]))
+            ->setRelation('user', $application->user)
+            ->documentNumber('ND', $sequence);
+
+        if (ItemApplication::query()->where('nd_number', $ndNumber)->exists()
+            || ModelsRequest::query()->where('nd_number', $setaraPermintaan)->exists()) {
+            throw ValidationException::withMessages([
+                'nd_sequence' => "Nomor Nota Dinas {$ndNumber} sudah dipakai.",
+            ]);
+        }
+
+        $application->update(['nd_number' => $ndNumber]);
+    }
+
+    /**
+     * Setujui tahap yang sedang berjalan.
+     *
      * @throws AuthorizationException
      */
     public function approve(ItemApplication $application, User $actor): ItemApplication
     {
+        return match ($application->status) {
+            ItemApplicationStatus::Diajukan => $this->approveByHead($application, $actor),
+            ItemApplicationStatus::DisetujuiKepalaUnit => $this->review($application, $actor),
+            ItemApplicationStatus::DitinjauGudang => $this->approveFinal($application, $actor),
+            default => throw new AuthorizationException('Permohonan ini sudah diputuskan sebelumnya.'),
+        };
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function approveByHead(ItemApplication $application, User $actor): ItemApplication
+    {
+        DB::transaction(function () use ($application, $actor): void {
+            $this->lockTurn($application, $actor);
+
+            $application->forceFill([
+                'status' => ItemApplicationStatus::DisetujuiKepalaUnit,
+                'head_approved_by' => $actor->user_id,
+                'head_approved_at' => now(),
+            ])->save();
+
+            $this->documents->approveNotaDinas($application, $actor);
+        });
+
+        return $this->recordStage($application, $actor, 'Menyetujui permohonan %s dan menandatangani Nota Dinasnya');
+    }
+
+    /**
+     * @throws AuthorizationException
+     */
+    private function review(ItemApplication $application, User $actor): ItemApplication
+    {
+        DB::transaction(function () use ($application, $actor): void {
+            $this->lockTurn($application, $actor);
+
+            $application->forceFill([
+                'status' => ItemApplicationStatus::DitinjauGudang,
+                'reviewed_by' => $actor->user_id,
+                'reviewed_at' => now(),
+            ])->save();
+        });
+
+        return $this->recordStage($application, $actor, 'Meninjau permohonan %s dan meneruskannya ke Kasubbag Umum dan TI');
+    }
+
+    private function recordStage(ItemApplication $application, User $actor, string $activity): ItemApplication
+    {
+        $application = $application->fresh(['user', 'details']);
+
+        AuditLogger::record(
+            user: $actor,
+            activity: sprintf($activity, $application->application_number),
+            module: AuditModule::Permohonan,
+            event: AuditEvent::Setuju,
+            subject: $application,
+        );
+        NotificationScanner::periksaPermohonan($application);
+        NotificationScanner::catatPermohonanMajuTahap($application, $actor);
+
+        return $application;
+    }
+
+    /**
+     * Keputusan akhir: barisnya baru diteruskan ke pengadaan di sini.
+     *
+     * @throws AuthorizationException
+     */
+    private function approveFinal(ItemApplication $application, User $actor): ItemApplication
+    {
         /** @var Collection<int, ItemProposal> $proposals */
         $proposals = DB::transaction(function () use ($application, $actor): Collection {
-            $this->lockUndecided($application);
+            $this->lockTurn($application, $actor);
 
             $application->load('details');
             $stockAdditions = $application->details->filter(fn (ItemApplicationDetail $detail) => $detail->isTambahStok());
@@ -106,7 +213,7 @@ class ItemApplicationWorkflowService
     public function reject(ItemApplication $application, User $actor, string $note): ItemApplication
     {
         DB::transaction(function () use ($application, $actor, $note): void {
-            $this->lockUndecided($application);
+            $this->lockTurn($application, $actor);
 
             $application->forceFill([
                 'status' => ItemApplicationStatus::Ditolak,
@@ -131,17 +238,22 @@ class ItemApplicationWorkflowService
     }
 
     /**
-     * Kunci baris permohonan supaya dua keputusan yang dikirim bersamaan
-     * tidak sama-sama lolos dan meneruskan barisnya dua kali.
+     * Kunci baris permohonan supaya dua keputusan yang dikirim bersamaan tidak
+     * sama-sama lolos, lalu pastikan tahapnya masih sama dan memang giliran
+     * akun ini.
      *
      * @throws AuthorizationException
      */
-    private function lockUndecided(ItemApplication $application): void
+    private function lockTurn(ItemApplication $application, User $actor): void
     {
-        $locked = ItemApplication::query()->lockForUpdate()->findOrFail($application->getKey());
+        $locked = ItemApplication::query()->with('user')->lockForUpdate()->findOrFail($application->getKey());
 
-        if (! $locked->isDiajukan()) {
+        if (! $locked->isMenunggu() || $locked->status !== $application->status) {
             throw new AuthorizationException('Permohonan ini sudah diputuskan sebelumnya.');
+        }
+
+        if (! $locked->bisaDiputuskanOleh($actor)) {
+            throw new AuthorizationException('Anda tidak memiliki izin memutuskan permohonan pada tahap ini.');
         }
     }
 
