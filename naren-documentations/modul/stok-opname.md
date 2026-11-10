@@ -38,7 +38,7 @@ Pengadaan menerima 403 dan menunya tidak muncul.
 | GET | `/opname/{opname}/edit` | `opname.edit` | Layar pencacahan — draf saja |
 | PUT | `/opname/{opname}` | `opname.update` | Simpan baris yang berubah (+ `dihitung_pada`); dengan `aksi=posting` sekaligus posting |
 | GET | `/opname/{opname}/excel` | `opname.excel` | Laporan Stok Opname (.xlsx) |
-| DELETE | `/opname/{opname}` | `opname.destroy` | Hapus **draf saja** |
+| DELETE | `/opname/{opname}` | `opname.destroy` | Buang **draf saja** — tombol "Buang Draf" di layar pencacahan dan halaman hasil; notifikasi milik draf ikut dibuang |
 
 Rute `POST /opname/{opname}/posting` dan `GET /opname/{opname}/cetak` (PDF)
 sudah tidak ada sejak ADR 0056 dan 0055.

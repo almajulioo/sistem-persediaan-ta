@@ -273,7 +273,7 @@ class NotificationScanner
                     dedupKey: NotificationType::OpnameDrafMenggantung->dedupKey($opname->opname_id),
                     title: "Draf menggantung: {$opname->judul()}",
                     body: sprintf(
-                        'Draf %s dibuat %s dan belum diposting (%d dari %d barang diisi). Selesaikan pencacahan lalu posting, atau hapus drafnya.',
+                        'Draf %s dibuat %s dan belum diposting (%d dari %d barang diisi). Selesaikan pencacahan lalu posting, atau buang drafnya.',
                         $opname->judul(),
                         $opname->created_at->diffForHumans(),
                         $ringkasan['diisi'],

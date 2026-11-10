@@ -549,6 +549,43 @@ describe('opname selesai bersifat final', function () {
 
         expect(StockOpname::find($opname->opname_id))->toBeNull();
     });
+
+    it('menampilkan tombol Buang Draf hanya bagi yang boleh mengubah', function () {
+        Item::factory()->create();
+
+        $actor = petugasGudang();
+        $opname = buatDraf($actor);
+
+        $this->actingAs($actor)->get("/opname/{$opname->opname_id}/edit")->assertOk()->assertSee('Buang Draf');
+        $this->actingAs($actor)->get("/opname/{$opname->opname_id}")->assertOk()->assertSee('Buang Draf');
+
+        // Kasubbag hanya membaca (ADR 0041).
+        $this->actingAs(User::factory()->role(UserRole::KasubbagUmumTi)->create())
+            ->get("/opname/{$opname->opname_id}")
+            ->assertOk()
+            ->assertDontSee('Buang Draf');
+    });
+
+    it('membuang notifikasi milik draf yang dibuang', function () {
+        Item::factory()->create(['stock_current' => 10]);
+
+        $actor = petugasGudang();
+        $opname = buatDraf($actor);
+        $detail = $opname->details->first();
+
+        // Seluruh barang diisi → keadaan "siap diposting" menunjuk draf ini.
+        $this->actingAs($actor)->put("/opname/{$opname->opname_id}", [
+            'dihitung_pada' => dihitungPada(),
+            'details' => [$detail->opname_detail_id => ['stock_real' => 10]],
+        ]);
+        NotificationScanner::periksaOpname();
+
+        expect(Notification::where('subject_id', $opname->opname_id)->exists())->toBeTrue();
+
+        $this->actingAs($actor)->delete("/opname/{$opname->opname_id}")->assertRedirect('/opname');
+
+        expect(Notification::where('subject_id', $opname->opname_id)->exists())->toBeFalse();
+    });
 });
 
 // ADR 0057: opname berkala wajib mengisi setiap barang.

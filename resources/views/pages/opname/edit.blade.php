@@ -109,6 +109,10 @@
                 <span class="text-theme-xs inline-flex items-center rounded-full px-2.5 py-1 font-medium {{ $opname->status->badgeClass() }}">
                     {{ $opname->status->label() }}
                 </span>
+                <button type="button" @click="buang = true" x-bind:disabled="terkirim"
+                    class="text-theme-sm text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-4 py-2.5 font-medium ring-1 ring-inset transition disabled:cursor-not-allowed disabled:opacity-50">
+                    Buang Draf
+                </button>
             </div>
         </div>
 
@@ -381,6 +385,38 @@
             <input type="hidden" name="hasil_cacah" :value="kiriman">
         </form>
 
+        {{-- Konfirmasi buang draf. Formulirnya berada di dalam akar halaman
+             supaya submit-nya menyetel `terkirim`: tombol terkunci dan
+             peringatan "perubahan belum disimpan" tidak ikut muncul. --}}
+        <div x-show="buang" x-cloak @keydown.escape.window="buang = false"
+            class="fixed inset-0 z-99999 flex items-center justify-center p-5"
+            role="dialog" aria-modal="true" aria-labelledby="judul-konfirmasi-buang">
+            <div @click="buang = false" class="fixed inset-0 bg-gray-900/50"></div>
+
+            <div @click.stop class="relative w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-900">
+                <h3 id="judul-konfirmasi-buang" class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
+                    Buang draf {{ $opname->judul() }}?
+                </h3>
+
+                <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">
+                    Hasil cacah yang sudah diisi akan hilang dan tidak dapat dikembalikan.
+                </p>
+
+                <form method="POST" action="{{ route('opname.destroy', $opname) }}" class="mt-6 flex justify-end gap-3">
+                    @csrf
+                    @method('DELETE')
+                    <button type="button" @click="buang = false"
+                        class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                        Batal
+                    </button>
+                    <button type="submit" x-bind:disabled="terkirim"
+                        class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                        Ya, Buang
+                    </button>
+                </form>
+            </div>
+        </div>
+
         {{-- Konfirmasi posting: ringkasan dari isian di layar. Pada opname
              insidental disebut berapa barang yang akan mengikuti stok sistem;
              pada opname lain barang yang belum diisi menghalangi posting. --}}
@@ -488,6 +524,7 @@
                 saring: 'semua',
                 batas: PER_HALAMAN,
                 konfirmasi: false,
+                buang: false,
                 terkirim: false,
                 waktu: @js((string) old('dihitung_pada', '')),
 

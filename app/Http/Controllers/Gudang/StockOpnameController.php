@@ -18,6 +18,7 @@ use App\Models\StockOpname;
 use App\Support\AuditLogger;
 use App\Support\KirimanFormulir;
 use App\Support\LaporanStokOpname;
+use App\Support\Notifier;
 use App\Support\OpnamePoster;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -118,7 +119,7 @@ class StockOpnameController extends Controller
         } catch (DrafOpnameMasihAdaException $e) {
             return redirect()
                 ->route('opname.edit', $e->draf)
-                ->with('error', $e->getMessage().' Posting atau hapus draf ini sebelum memulai opname baru.');
+                ->with('error', $e->getMessage().' Posting atau buang draf ini sebelum memulai opname baru.');
         }
 
         if ($ulang) {
@@ -321,16 +322,21 @@ class StockOpnameController extends Controller
         $judul = $opname->judul();
         $opname->delete();
 
+        // Pengingat "siap diposting" atau "draf menggantung" milik draf ini
+        // tidak akan pernah pulih sendiri: pemindai hanya menelusuri opname
+        // yang masih ada, dan tautannya kini menuju halaman 404.
+        Notifier::hapusUntukSubjek($opname);
+
         AuditLogger::record(
             user: $request->user(),
-            activity: "Menghapus draf {$judul}",
+            activity: "Membuang draf {$judul}",
             module: AuditModule::Opname,
             event: AuditEvent::Hapus,
         );
 
         return redirect()
             ->route('opname.index')
-            ->with('status', "Draf {$judul} berhasil dihapus.");
+            ->with('status', "Draf {$judul} dibuang.");
     }
 
     public function exportExcel(Request $request, StockOpname $opname): StreamedResponse

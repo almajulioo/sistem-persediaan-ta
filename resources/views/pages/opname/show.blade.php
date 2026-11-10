@@ -51,6 +51,42 @@
                 </a>
             @else
                 @can('kelola-gudang')
+                    <div x-data="{ buang: false, terkirim: false }">
+                        <button type="button" @click="buang = true"
+                            class="text-theme-sm text-error-600 dark:text-error-500 ring-error-200 dark:ring-error-500/30 hover:bg-error-50 dark:hover:bg-error-500/10 rounded-lg px-4 py-3 font-medium ring-1 ring-inset transition">
+                            Buang Draf
+                        </button>
+
+                        <div x-show="buang" x-cloak @keydown.escape.window="buang = false"
+                            class="fixed inset-0 z-99999 flex items-center justify-center p-5"
+                            role="dialog" aria-modal="true" aria-labelledby="judul-konfirmasi-buang">
+                            <div @click="buang = false" class="fixed inset-0 bg-gray-900/50"></div>
+
+                            <div @click.stop class="relative w-full max-w-md rounded-2xl bg-white p-6 dark:bg-gray-900">
+                                <h3 id="judul-konfirmasi-buang" class="text-theme-xl font-semibold text-gray-800 dark:text-white/90">
+                                    Buang draf {{ $opname->judul() }}?
+                                </h3>
+
+                                <p class="text-theme-sm mt-3 text-gray-500 dark:text-gray-400">
+                                    Hasil cacah yang sudah diisi akan hilang dan tidak dapat dikembalikan.
+                                </p>
+
+                                <form method="POST" action="{{ route('opname.destroy', $opname) }}"
+                                    @submit="terkirim = true" class="mt-6 flex justify-end gap-3">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="button" @click="buang = false"
+                                        class="rounded-lg px-4 py-2.5 text-sm font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
+                                        Batal
+                                    </button>
+                                    <button type="submit" x-bind:disabled="terkirim"
+                                        class="bg-error-500 hover:bg-error-600 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-50">
+                                        Ya, Buang
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                     <a href="{{ route('opname.edit', $opname) }}"
                         class="bg-brand-500 shadow-theme-xs hover:bg-brand-600 rounded-lg px-4 py-3 text-sm font-medium text-white transition">
                         Lanjut Cacah

@@ -5,6 +5,45 @@ perubahan.
 
 ---
 
+## 10 November 2026 — Tombol Buang Draf stok opname
+
+Permintaan Narendra: "tambahkan tombol buang draf stok opname". Rute
+`opname.destroy` dan penolakannya atas opname selesai sudah ada sejak modul
+dibuat, tetapi **tidak ada satu tombol pun** yang memanggilnya — padahal sejak
+ADR 0057 pesan "satu draf dalam satu waktu" menyuruh pengguna membuangnya.
+Tanpa ADR: tidak ada keputusan baru, hanya pintu ke rute yang sudah ada.
+
+- **Layar pencacahan** (`opname/edit`): tombol "Buang Draf" di kepala halaman,
+  di samping lencana status. Formulir di dalam dialognya berada di dalam akar
+  Alpine halaman, sehingga submit-nya menyetel `terkirim`: tombol terkunci dan
+  peringatan "perubahan belum disimpan" (`beforeunload`) tidak ikut muncul.
+- **Halaman hasil** (`opname/show`) pada draf: tombol yang sama di samping
+  "Lanjut Cacah", di balik `@can('kelola-gudang')` — Kasubbag tidak melihatnya
+  (ADR 0041).
+- Konfirmasi semula memakai `confirm()` peramban; atas permintaan Narendra
+  pada sesi yang sama diganti **dialog (modal) sendiri** di kedua halaman,
+  segaya dengan dialog posting: judul "Buang draf …?", peringatan bahwa hasil
+  cacah akan hilang dan tidak dapat dikembalikan, tombol Batal / "Ya, Buang",
+  tutup dengan Esc atau klik latar.
+- **Perbaikan yang ikut ditemukan:** `destroy()` tidak membuang notifikasi
+  milik draf itu. `periksaOpname()` hanya menelusuri opname yang masih ada,
+  jadi "Siap diposting" / "Draf menggantung" milik draf yang dibuang tidak
+  akan pernah pulih dan tautannya menuju 404. Kini `Notifier::hapusUntukSubjek()`
+  dipanggil setelah penghapusan, seperti pada `ItemController::destroy()`.
+- Kata diseragamkan menjadi **"buang"**: flash ("Draf … dibuang."), kalimat
+  log aktivitas ("Membuang draf …", event tetap `Hapus`), pesan satu-draf di
+  controller dan halaman Mulai Opname, serta isi notifikasi draf menggantung.
+
+**Tidak dikerjakan:** tombol di tabel daftar opname (baris draf sudah menaut ke
+layar pencacahan, tempat tombolnya berada).
+
+**Uji:** 2 uji baru di `StockOpnameTest` (tombol tampil di kedua halaman dan
+tidak bagi Kasubbag; notifikasi draf ikut terbuang). Seluruh suite: **944
+lulus**. Pint pada tiga berkas PHP yang disentuh: lulus. Tombolnya belum
+dicoba di peramban.
+
+---
+
 ## 9 November 2026 (lanjutan) — Prosedur lapangan stok opname (ADR 0057)
 
 Empat perbaikan yang disepakati dalam percakapan peninjauan, dikerjakan setelah
