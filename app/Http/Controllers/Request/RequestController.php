@@ -24,6 +24,7 @@ use App\Models\RequestDocument;
 use App\Models\User;
 use App\Services\RequestWorkflowService;
 use App\Support\AuditLogger;
+use App\Support\BastQrStamper;
 use App\Support\KatalogBarang;
 use App\Enums\AuditEvent;
 use App\Enums\AuditModule;
@@ -477,7 +478,9 @@ class RequestController extends Controller
             'title' => 'Detail Permintaan',
             'requestData' => $request,
             'hasNotaDinas' => $notaDinas && Storage::disk('local')->exists($notaDinas->file_path),
-            'hasBast' => $bast && Storage::disk('local')->exists($bast->file_path),
+            // BAST yang terbit lalu ditolak atau dikembalikan sebelum
+            // diserahkan tidak berlaku lagi, jadi tidak ditawarkan.
+            'hasBast' => $bast && $request->bastBerlaku() && Storage::disk('local')->exists($bast->file_path),
             'isKepalaUnit' => $viewer->hasRole(UserRole::KepalaUnit),
             'isPengelolaGudang' => $viewer->hasRole(UserRole::PengelolaGudang),
             'isAdmin' => $viewer->isAdmin(),
@@ -532,7 +535,7 @@ class RequestController extends Controller
                 && $viewer->unit === $bast?->user?->unit);
 
         abort_unless($canView, 403);
-        abort_unless($bast && Storage::disk('local')->exists($bast->file_path), 404);
+        abort_unless($bast && $request->bastBerlaku() && Storage::disk('local')->exists($bast->file_path), 404);
 
         return response()->file(Storage::disk('local')->path($bast->file_path), [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -559,9 +562,85 @@ class RequestController extends Controller
 
         $requestDocument->load(['request.user', 'approvedBy']);
 
-        return view('pages.request.verify-nota-dinas', [
+        return view('pages.request.verifikasi-dokumen', [
             'title' => 'Verifikasi Nota Dinas',
-            'document' => $requestDocument,
+            'jenis' => 'Nota Dinas Permintaan Barang',
+            'keterangan' => 'Nota dinas ini tercatat sebagai dokumen yang disetujui secara digital oleh sistem.',
+            'bagian' => [
+                ['judul' => 'Dokumen', 'rincian' => [
+                    'Nomor dokumen' => $requestDocument->document_number ?? 'Belum diberi nomor',
+                    'Nomor permintaan' => $requestDocument->request?->request_number ?? '-',
+                ]],
+                ['judul' => 'Pemohon', 'rincian' => [
+                    'Nama' => $requestDocument->request?->user?->fullname ?? '-',
+                    'Unit kerja' => $requestDocument->request?->user?->unit?->label() ?? '-',
+                ]],
+                ['judul' => 'Persetujuan', 'rincian' => [
+                    'Disetujui oleh' => $requestDocument->approvedBy?->fullname ?? '-',
+                    'Jabatan' => $requestDocument->request?->user?->unit?->jabatanKepala() ?? '-',
+                    'Waktu persetujuan' => self::waktuPersetujuan($requestDocument->approved_at),
+                ]],
+            ],
+        ]);
+    }
+
+    /**
+     * Waktu di halaman verifikasi publik selalu berbahasa Indonesia dan
+     * bertanda WIB, apa pun bahasa aplikasinya.
+     */
+    public static function waktuPersetujuan(?\Carbon\CarbonInterface $waktu): string
+    {
+        return $waktu === null ? '-' : $waktu->copy()->locale('id')->translatedFormat('j F Y, H.i').' WIB';
+    }
+
+    /**
+     * Halaman publik tujuan QR BAST. Keasliannya dijamin tanda tangan URL
+     * (`signed:relative`); di sini hanya memastikan baris riwayat itu memang
+     * persetujuan BAST yang berlaku.
+     */
+    public function verifyBast(RequestHistory $requestHistory)
+    {
+        $requestHistory->load(['request.user', 'user']);
+        $request = $requestHistory->request;
+        $kolom = collect($request->persetujuanBast())
+            ->search(fn (RequestHistory $history) => $history->is($requestHistory));
+
+        abort_if($kolom === false, 404);
+
+        $pelaku = $requestHistory->user;
+        // Penutupan oleh petugas bukan persetujuan pemohon, jadi tidak boleh
+        // terbaca seolah pemohon sendiri yang menyetujui.
+        $atasNamaPemohon = $requestHistory->action === RequestHistoryAction::DitutupPetugas;
+
+        return view('pages.request.verifikasi-dokumen', [
+            'title' => 'Verifikasi BAST',
+            'jenis' => 'Berita Acara Serah Terima Persediaan',
+            'keterangan' => 'Berita acara serah terima ini tercatat sebagai dokumen yang disetujui secara digital oleh sistem.',
+            'catatan' => $atasNamaPemohon
+                ? 'Kolom PIHAK KEDUA ditutup petugas atas nama pemohon. Pemohon sendiri tidak mengonfirmasi penerimaan barang.'
+                : null,
+            'bagian' => [
+                ['judul' => 'Dokumen', 'rincian' => [
+                    'Nomor dokumen' => $request->requestDocuments()->where('document_type', 'bast')->value('document_number') ?? 'Belum diberi nomor',
+                    'Nomor permintaan' => $request->request_number,
+                ]],
+                ['judul' => 'Pemohon', 'rincian' => [
+                    'Nama' => $request->user?->fullname ?? '-',
+                    'Unit kerja' => $request->user?->unit?->label() ?? '-',
+                ]],
+                ['judul' => 'Persetujuan', 'rincian' => [
+                    'Kolom tanda tangan' => match ($kolom) {
+                        BastQrStamper::MENGETAHUI => 'Mengetahui',
+                        BastQrStamper::PIHAK_KESATU => 'PIHAK KESATU',
+                        BastQrStamper::PIHAK_KEDUA => 'PIHAK KEDUA',
+                    },
+                    'Disetujui oleh' => $atasNamaPemohon
+                        ? 'Ditutup '.($pelaku?->fullname ?? 'petugas').' atas nama pemohon'
+                        : ($pelaku?->fullname ?? '-'),
+                    'Jabatan' => $pelaku?->sebutanJabatan() ?? '-',
+                    'Waktu persetujuan' => self::waktuPersetujuan($requestHistory->created_at),
+                ]],
+            ],
         ]);
     }
 

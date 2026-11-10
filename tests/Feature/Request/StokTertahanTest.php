@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\NotificationScanner;
 use App\Support\RequestDocumentGenerator;
 use App\Support\StockReservation;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /*
@@ -166,12 +167,36 @@ describe('batal otomatis', function () {
         $notifikasi = Notification::where('user_id', $this->pemohon->user_id)
             ->where('type', NotificationType::PermintaanDitolak)
             ->first();
-        expect($notifikasi?->body)->toContain('Oleh Sistem')->toContain('14 hari');
+        expect($notifikasi?->body)->toContain('Oleh Sistem')->toContain(ModelsRequest::BATAS_HARI_PERSETUJUAN.' hari');
 
         $this->actingAs($this->pemohon)
             ->get(route('request.show', $lama))
             ->assertSee('Dibatalkan Otomatis')
             ->assertSee('Sistem');
+    });
+
+    it('membatasi persetujuan tujuh hari kalender', function () {
+        expect(ModelsRequest::BATAS_HARI_PERSETUJUAN)->toBe(7);
+    });
+
+    it('menghitung batas menurut tanggal sehingga hari terakhir berlaku penuh', function () {
+        // Diajukan dini hari, sebelum jadwal 05:55, supaya hitungan jam dan
+        // hitungan tanggal berbeda hasilnya.
+        $diajukan = Carbon::parse('2026-11-04 03:00');
+        $this->travelTo($diajukan);
+        $request = permintaanTahan($this->pemohon, 'submitted', $this->kertas, 3);
+
+        $this->travelTo($diajukan->copy()->addDays(ModelsRequest::BATAS_HARI_PERSETUJUAN)->setTime(5, 55));
+        $this->artisan('permintaan:kedaluwarsa')->assertSuccessful();
+
+        expect($request->refresh()->status)->toBe('submitted')
+            ->and(StockReservation::availableFor($this->kertas))->toBe(7);
+
+        $this->travelTo($diajukan->copy()->addDays(ModelsRequest::BATAS_HARI_PERSETUJUAN + 1)->setTime(5, 55));
+        $this->artisan('permintaan:kedaluwarsa')->assertSuccessful();
+
+        expect($request->refresh()->status)->toBe('rejected')
+            ->and(StockReservation::availableFor($this->kertas))->toBe(10);
     });
 
     it('menyebut tenggatnya pada tagihan Kepala Unit', function () {

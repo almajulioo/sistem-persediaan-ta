@@ -12,6 +12,7 @@ use App\Models\ItemSubcategory;
 use App\Models\Notification;
 use App\Models\StockMutation;
 use App\Models\User;
+use App\Support\ItemApplicationDocumentGenerator;
 
 /**
  * Usulan barang baru — pintu depan katalog (ADR 0032), yang sejak ADR 0053
@@ -24,13 +25,22 @@ use App\Models\User;
 
 /**
  * Usulan barang baru lewat jalur satu-satunya: permohonan barang baru yang
- * disetujui Pengelola Gudang.
+ * disetujui sampai tahap akhir.
+ *
+ * Permohonan disetujui bertahap: pimpinan unit, Pengelola Gudang, lalu
+ * Kasubbag Umum dan TI. Pemohonnya beragam unit, jadi tahap pimpinan unit dan
+ * tahap akhir diputuskan Admin, yang boleh di setiap tahap. Nota Dinasnya
+ * ditiru supaya uji ini tidak menulis berkas ke penyimpanan.
  */
 function usulanBarangDariPermohonan(?User $pemohon = null, string $nama = 'Spidol Whiteboard Warna Emas'): ItemProposal
 {
+    static $nomorUrut = 500;
+
     $pemohon ??= User::factory()->role(UserRole::Pengguna)->create();
+    test()->mock(ItemApplicationDocumentGenerator::class)->shouldIgnoreMissing();
 
     $response = test()->actingAs($pemohon)->post(route('item-applications.store'), [
+        'nd_sequence' => (string) ++$nomorUrut,
         'purpose' => 'Kebutuhan rapat pleno triwulan IV',
         'items' => [[
             'type' => 'barang_baru',
@@ -47,9 +57,14 @@ function usulanBarangDariPermohonan(?User $pemohon = null, string $nama = 'Spido
     $id = (string) str($response->headers->get('Location'))->match('#/permohonan/([^/?]+)#');
     $permohonan = ItemApplication::findOrFail($id);
 
-    test()->actingAs(pengelolaGudang())
-        ->patch(route('item-applications.approve', $permohonan))
-        ->assertSessionHasNoErrors();
+    $admin = User::factory()->role(UserRole::Admin)->create();
+
+    foreach ([$admin, pengelolaGudang(), $admin] as $penyetuju) {
+        test()->actingAs($penyetuju)
+            ->patch(route('item-applications.approve', $permohonan))
+            ->assertSessionHasNoErrors()
+            ->assertSessionMissing('error');
+    }
 
     return $permohonan->details()->whereNotNull('item_proposal_id')->sole()->itemProposal;
 }

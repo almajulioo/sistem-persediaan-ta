@@ -1,14 +1,16 @@
 {{--
     Modal keputusan Setujui/Tolak, dipakai halaman daftar dan detail
     permintaan. Dibuka lewat event `open-respond-modal` berisi
-    { id, number, action: 'approve'|'reject', label, needsNd, preview, sequence }.
+    { id, number, action: 'approve'|'reject', label, needsNd, preview, sequence, qr, qrUlang }.
 
     Catatan wajib saat menolak dan opsional saat menyetujui; catatan itulah
     yang dibaca pemohon di riwayat permintaan dan notifikasinya. Nomor urut
     Nota Dinas hanya diminta untuk permintaan yang belum bernomor (data lama
     atau hasil penggabungan permintaan umum). Konteks ikut dikirim sebagai
     `respond_context` supaya modal terbuka lagi dengan isi yang sama saat
-    validasi gagal.
+    validasi gagal. `qr` berisi pemberitahuan dari App\Support\PemberitahuanQr,
+    tampil hanya saat menyetujui tahap yang memang menghasilkan QR. `qrUlang`
+    berisi peringatan bila nomor yang diisi menerbitkan ulang QR Nota Dinas.
 
     $kembali (opsional): 'dasbor' supaya kembali ke dasbor setelah diproses.
 --}}
@@ -70,6 +72,18 @@
         @else
             <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">Tampil di riwayat permintaan dan dikirim ke pemohon.</p>
         @enderror
+
+        <template x-if="ctx.qr && ! isReject">
+            <div>
+                @include('pages.request._qr-notice', ['sumber' => 'ctx.qr'])
+            </div>
+        </template>
+
+        <template x-if="ctx.qrUlang && ! isReject">
+            <div>
+                @include('pages.request._qr-warning', ['sumber' => 'ctx.qrUlang'])
+            </div>
+        </template>
 
         <div class="mt-6 flex justify-end gap-3">
             <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>

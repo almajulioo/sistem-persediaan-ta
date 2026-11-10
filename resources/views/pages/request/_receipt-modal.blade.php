@@ -2,7 +2,7 @@
     Modal penerimaan barang di halaman detail permintaan: konfirmasi diterima
     dan laporan masalah (pemohon), tanggapan dan penutupan atas nama pemohon
     (Pengelola Gudang/Admin). Dibuka lewat event `open-receipt-modal` berisi
-    { action, label, title, description, required, placeholder, danger }.
+    { action, label, title, description, required, placeholder, danger, qr }.
     Konteks ikut dikirim sebagai `receipt_context` supaya modal terbuka lagi
     dengan isi yang sama saat validasi gagal.
 
@@ -36,6 +36,12 @@
         @else
             <p class="text-theme-xs mt-1.5 text-gray-500 dark:text-gray-400">Tercatat di riwayat permintaan.</p>
         @enderror
+
+        <template x-if="ctx.qr">
+            <div>
+                @include('pages.request._qr-notice', ['sumber' => 'ctx.qr'])
+            </div>
+        </template>
 
         <div class="mt-6 flex justify-end gap-3">
             <button type="button" @click="open = false" class="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.03]">Batal</button>

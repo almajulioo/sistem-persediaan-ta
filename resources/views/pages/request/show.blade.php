@@ -34,6 +34,8 @@
             'needsNd' => $requestData->status === 'approved_by_head' && $requestData->nd_number === null,
             'preview' => $requestData->documentNumber('ND'),
             'sequence' => $requestData->ndSequence(),
+            'qr' => \App\Support\PemberitahuanQr::persetujuan($requestData),
+            'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($requestData),
         ];
     @endphp
 
@@ -60,13 +62,13 @@
             @if ($hasNotaDinas)
                 <a href="{{ route('request.nota-dinas', $requestData) }}" target="_blank" rel="noopener"
                     class="rounded-lg px-4 py-2.5 text-sm font-medium {{ \App\Enums\ModulPengajuan::Permintaan->tombolClass() }}">
-                    Lihat Nota Dinas PDF
+                    Unduh Nota Dinas 
                 </a>
             @endif
             @if ($hasBast)
                 <a href="{{ route('request.bast', $requestData) }}" target="_blank" rel="noopener"
                     class="rounded-lg bg-success-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-success-600">
-                    Lihat BAST PDF
+                    Unduh BAST
                 </a>
             @endif
     </x-modul.judul>
@@ -101,6 +103,7 @@
                                 'required' => false,
                                 'placeholder' => 'mis. diterima lengkap oleh staf kami',
                                 'danger' => false,
+                                'qr' => \App\Support\PemberitahuanQr::penerimaan($requestData, 'confirm'),
                             ]))"
                             class="bg-success-500 hover:bg-success-600 inline-flex items-center rounded-lg px-4 py-2.5 text-sm font-medium text-white transition">
                             Konfirmasi Diterima
@@ -146,6 +149,7 @@
                                 'required' => true,
                                 'placeholder' => 'mis. barang diambil langsung oleh pemohon, konfirmasi tidak kunjung diberikan',
                                 'danger' => false,
+                                'qr' => \App\Support\PemberitahuanQr::penerimaan($requestData, 'close'),
                             ]))"
                             class="text-theme-sm inline-flex items-center rounded-lg px-4 py-2.5 font-medium text-gray-700 ring-1 ring-gray-300 ring-inset transition hover:bg-gray-50 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
                             Tutup atas Nama Pemohon

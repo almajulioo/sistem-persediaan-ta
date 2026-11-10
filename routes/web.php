@@ -44,6 +44,15 @@ Route::middleware('guest')->group(function () {
 Route::get('/verifikasi/nota-dinas/{requestDocument}/{token}', [RequestController::class, 'verifyNotaDinas'])
     ->whereUuid('requestDocument')
     ->name('request.nota-dinas.verify');
+Route::get('/verifikasi/nota-dinas-permohonan/{itemApplication}/{token}', [ItemApplicationController::class, 'verifyNotaDinas'])
+    ->whereUuid('itemApplication')
+    ->name('item-applications.nota-dinas.verify');
+// Tujuan QR pada BAST permintaan, satu per persetujuan. Tanda tangan URL-nya
+// relatif supaya tidak batal bila alamat aplikasi berubah.
+Route::get('/verifikasi/bast/{requestHistory}', [RequestController::class, 'verifyBast'])
+    ->whereNumber('requestHistory')
+    ->middleware('signed:relative')
+    ->name('request.bast.verify');
 
 // Verifikasi TTE BAST pengadaan dari QR (ADR 0051). Publik: pemeriksa dan
 // auditor tidak punya akun. Kodenya 40 karakter acak, jadi `throttle` bukan
@@ -92,7 +101,8 @@ Route::middleware('auth')->group(function () {
 
     // Permohonan barang baru dan tambah stok. Siapa pun yang login boleh
     // mengajukan dan melihat permohonan yang terlihat olehnya (dijaga di
-    // controller); memutuskan wewenang `kelola-permintaan`. Barang baru yang
+    // controller). Memutuskan tanpa gate rute karena pemutusnya berganti per
+    // tahap; otorisasinya di ItemApplicationWorkflowService. Barang baru yang
     // disetujui menjadi usulan barang dan tetap diputuskan lewat satu jalur
     // `items.create` / `item-proposals.reject`, dari halaman rincian
     // permohonan itu sendiri (ADR 0032/0033/0053).
@@ -102,13 +112,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/permohonan/{itemApplication}', [ItemApplicationController::class, 'show'])
         ->whereUuid('itemApplication')
         ->name('item-applications.show');
-
-    Route::middleware('can:kelola-permintaan')->group(function () {
-        Route::patch('/permohonan/{itemApplication}/setujui', [ItemApplicationController::class, 'approve'])
-            ->name('item-applications.approve');
-        Route::patch('/permohonan/{itemApplication}/tolak', [ItemApplicationController::class, 'reject'])
-            ->name('item-applications.reject');
-    });
+    Route::get('/permohonan/{itemApplication}/nota-dinas', [ItemApplicationController::class, 'notaDinas'])
+        ->whereUuid('itemApplication')
+        ->name('item-applications.nota-dinas');
+    Route::patch('/permohonan/{itemApplication}/setujui', [ItemApplicationController::class, 'approve'])
+        ->whereUuid('itemApplication')
+        ->name('item-applications.approve');
+    Route::patch('/permohonan/{itemApplication}/tolak', [ItemApplicationController::class, 'reject'])
+        ->whereUuid('itemApplication')
+        ->name('item-applications.reject');
 
     Route::post('/permintaan', [RequestController::class, 'store'])->name('request.store');
     Route::get('/permintaan', [RequestController::class, 'index'])->name('request.index');

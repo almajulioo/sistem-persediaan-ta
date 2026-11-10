@@ -9,6 +9,7 @@ use App\Enums\RequestHistoryAction;
 use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
+use App\Models\ItemApplication;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestHistory;
 use App\Models\User;
@@ -107,7 +108,6 @@ class RequestWorkflowService
                 $this->documentGenerator->approveNotaDinas($request, $actor);
             } elseif ($nextStatus === 'delivered') {
                 $this->recordIssuance($request, $actor);
-                $this->documentGenerator->generateBast($request, $actor);
             }
 
             if ($assignsNumber) {
@@ -115,6 +115,13 @@ class RequestWorkflowService
             }
 
             RequestHistory::catat($request, $actor, RequestHistoryAction::Disetujui, $fromStatus, $nextStatus, $note);
+
+            // Sesudah riwayatnya tercatat, karena QR BAST menunjuk baris riwayat.
+            if ($nextStatus === 'in_issuance') {
+                $this->documentGenerator->startBast($request);
+            } elseif ($nextStatus === 'delivered') {
+                $this->documentGenerator->generateBast($request, $actor);
+            }
         });
 
         $request = $request->fresh('user');
@@ -197,6 +204,11 @@ class RequestWorkflowService
             }
 
             RequestHistory::catat($request, $actor, $historyAction, 'delivered', $toStatus, $note);
+
+            // QR PIHAK KEDUA menyusul setelah penerimaannya tercatat.
+            if ($toStatus === 'completed') {
+                $this->documentGenerator->refreshBast($request);
+            }
         });
 
         $request = $request->fresh('user');
@@ -224,14 +236,16 @@ class RequestWorkflowService
      */
     public function expireStale(): int
     {
-        $batas = now()->subDays(ModelsRequest::BATAS_HARI_PERSETUJUAN);
+        $batas = now()->subDays(ModelsRequest::BATAS_HARI_PERSETUJUAN)->toDateString();
         $dibatalkan = 0;
 
         ModelsRequest::query()
             ->with('user')
             ->where('type', '!=', 'umum')
             ->where('status', 'submitted')
-            ->where('created_at', '<=', $batas)
+            // Menurut tanggal, bukan jam, supaya hari terakhir berlaku penuh
+            // sesuai tenggat yang tertulis pada tagihan Kepala Unit.
+            ->whereDate('created_at', '<', $batas)
             // Diambil sekaligus, bukan per halaman: status yang disaring ikut
             // berubah di dalam perulangan, sehingga penomoran halaman akan
             // melompati sebagian baris.
@@ -349,6 +363,15 @@ class RequestWorkflowService
         if (ModelsRequest::query()->where('nd_number', $ndNumber)->whereKeyNot($request->getKey())->exists()) {
             throw ValidationException::withMessages([
                 'nd_sequence' => "Nomor Nota Dinas {$ndNumber} sudah dipakai permintaan lain.",
+            ]);
+        }
+
+        // Permohonan memakai agenda unit yang sama, dengan format BMN.09.03.
+        $setaraPermohonan = ItemApplication::formatNomorNotaDinas($request->user?->unit, $request->date ?? now(), $sequence);
+
+        if (ItemApplication::query()->where('nd_number', $setaraPermohonan)->exists()) {
+            throw ValidationException::withMessages([
+                'nd_sequence' => "Nomor Nota Dinas {$ndNumber} sudah dipakai permohonan.",
             ]);
         }
 

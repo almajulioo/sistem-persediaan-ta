@@ -86,7 +86,10 @@ enum NotificationType: string
     case PermintaanMasalahPenerimaan = 'permintaan_masalah_penerimaan';
 
     // --- Keadaan dan peristiwa permohonan ---
+    case PermohonanMenungguKepalaUnit = 'permohonan_menunggu_kepala_unit';
     case PermohonanMenungguTinjauan = 'permohonan_menunggu_tinjauan';
+    case PermohonanMenungguPersetujuanAkhir = 'permohonan_menunggu_persetujuan_akhir';
+    case PermohonanDiperbarui = 'permohonan_diperbarui';
     case PermohonanDisetujui = 'permohonan_disetujui';
     case PermohonanDitolak = 'permohonan_ditolak';
 
@@ -131,7 +134,10 @@ enum NotificationType: string
             self::PermintaanUmumMenunggu => 'Permintaan Umum Menunggu',
             self::PermintaanMenungguKonfirmasi => 'Konfirmasi Penerimaan Barang',
             self::PermintaanMasalahPenerimaan => 'Masalah Penerimaan Barang',
+            self::PermohonanMenungguKepalaUnit => 'Permohonan Menunggu Kepala Unit',
             self::PermohonanMenungguTinjauan => 'Permohonan Menunggu Tinjauan',
+            self::PermohonanMenungguPersetujuanAkhir => 'Permohonan Menunggu Persetujuan Akhir',
+            self::PermohonanDiperbarui => 'Permohonan Diperbarui',
             self::PermohonanDisetujui => 'Permohonan Disetujui',
             self::PermohonanDitolak => 'Permohonan Ditolak',
         };
@@ -178,7 +184,10 @@ enum NotificationType: string
             self::PermintaanUmumMenunggu => 'Permintaan umum baru menunggu ditinjau Pengelola Gudang untuk diubah, ditolak, atau digabung.',
             self::PermintaanMenungguKonfirmasi => 'Barang permintaan Anda sudah diserahkan gudang; konfirmasi penerimaannya atau laporkan bila ada masalah.',
             self::PermintaanMasalahPenerimaan => 'Pemohon melaporkan masalah pada barang yang diserahkan dan menunggu tanggapan Pengelola Gudang.',
-            self::PermohonanMenungguTinjauan => 'Permohonan barang baru atau tambah stok menunggu ditinjau Pengelola Gudang.',
+            self::PermohonanMenungguKepalaUnit => 'Permohonan barang baru atau tambah stok menunggu disetujui pimpinan unit pemohon.',
+            self::PermohonanMenungguTinjauan => 'Permohonan yang disetujui pimpinan unit menunggu ditinjau Pengelola Gudang.',
+            self::PermohonanMenungguPersetujuanAkhir => 'Permohonan yang sudah ditinjau menunggu keputusan akhir Kasubbag Umum dan TI.',
+            self::PermohonanDiperbarui => 'Permohonan Anda maju ke tahap persetujuan berikutnya.',
             self::PermohonanDisetujui => 'Permohonan disetujui dan diteruskan ke draf usulan pengadaan atau usulan barang baru.',
             self::PermohonanDitolak => 'Permohonan tidak diteruskan; alasannya tercatat pada keputusan.',
         };
@@ -213,9 +222,12 @@ enum NotificationType: string
             self::PermintaanUmumMenunggu,
             self::PermintaanMenungguKonfirmasi,
             self::PermintaanMasalahPenerimaan => true,
+            self::PermohonanDiperbarui,
             self::PermohonanDisetujui,
             self::PermohonanDitolak => false,
-            self::PermohonanMenungguTinjauan => true,
+            self::PermohonanMenungguKepalaUnit,
+            self::PermohonanMenungguTinjauan,
+            self::PermohonanMenungguPersetujuanAkhir => true,
             default => true,
         };
     }
@@ -282,8 +294,11 @@ enum NotificationType: string
             self::PermintaanDitolak => NotificationLevel::Perhatian,
             self::PermintaanSelesai => NotificationLevel::Info,
             self::PermintaanDiperbarui => NotificationLevel::Info,
+            self::PermohonanMenungguKepalaUnit,
             self::PermohonanMenungguTinjauan,
+            self::PermohonanMenungguPersetujuanAkhir,
             self::PermohonanDitolak => NotificationLevel::Perhatian,
+            self::PermohonanDiperbarui,
             self::PermohonanDisetujui => NotificationLevel::Info,
             self::StokBerlebih,
             self::BarangTidakBergerak,

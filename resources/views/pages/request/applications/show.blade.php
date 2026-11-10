@@ -1,7 +1,8 @@
 @extends('layouts.app')
 
 @php
-    $canDecide = $application->isDiajukan() && auth()->user()->can('kelola-permintaan');
+    $canDecide = $application->bisaDiputuskanOleh(auth()->user());
+    $tahapAkhir = $application->status === \App\Enums\ItemApplicationStatus::DitinjauGudang;
 @endphp
 
 @section('content')
@@ -21,6 +22,13 @@
             <x-ui.pill :warna="$application->status->warna()" :ikon="$application->status->icon()">
                 {{ $application->status->label() }}
             </x-ui.pill>
+
+            @if ($hasNotaDinas)
+                <a href="{{ route('item-applications.nota-dinas', $application) }}" target="_blank" rel="noopener"
+                    class="rounded-lg px-4 py-2.5 text-sm font-medium {{ \App\Enums\ModulPengajuan::Permohonan->tombolClass() }}">
+                    Unduh Nota Dinas
+                </a>
+            @endif
 
             @if ($canDecide)
                 <button type="button" x-data @click="$dispatch('buka-setujui-permohonan')"
@@ -45,6 +53,7 @@
                         'Pemohon' => $application->user?->fullname ?? '—',
                         'Unit Kerja' => $application->user?->unit?->label() ?? '—',
                         'Tanggal' => $application->date?->translatedFormat('d F Y') ?? '—',
+                        'Nomor Nota Dinas' => $application->nd_number ?? '—',
                         'Rincian' => ucfirst($application->ringkasan()),
                     ] as $label => $value)
                         <div class="flex items-start justify-between gap-4">
@@ -60,7 +69,41 @@
                 </div>
             </div>
 
-            @unless ($application->isDiajukan())
+            {{-- Permohonan dari sebelum alur bertahap tidak punya Nota Dinas,
+                 dan keputusannya tidak melewati tahap-tahap ini. --}}
+            @if ($application->nd_number)
+                <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
+                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">Tahapan Persetujuan</h3>
+                    <ol class="mt-4 space-y-4">
+                        @foreach ($application->tahapan() as $tahap)
+                            @php
+                                [$warna, $ikon, $keterangan] = match ($tahap['keadaan']) {
+                                    'selesai' => ['success', 'check-circle', 'Disetujui '.($tahap['oleh']?->fullname ?? '')],
+                                    'ditolak' => ['error', 'x-circle', 'Ditolak '.($tahap['oleh']?->fullname ?? '')],
+                                    'menunggu' => ['warning', 'clock', 'Menunggu keputusan'],
+                                    default => ['gray', 'clock', 'Belum sampai tahap ini'],
+                                };
+                            @endphp
+                            <li class="flex items-start gap-3">
+                                <span class="flex size-8 shrink-0 items-center justify-center rounded-lg {{ \App\Support\Warna::lembut($warna) }}">
+                                    <x-ui.icon :name="$ikon" class="size-4" />
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="text-theme-sm font-medium text-gray-800 dark:text-white/90">{{ $tahap['label'] }}</p>
+                                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">
+                                        {{ $keterangan }}
+                                        @if ($tahap['pada'])
+                                            · {{ $tahap['pada']->translatedFormat('d F Y, H:i') }}
+                                        @endif
+                                    </p>
+                                </div>
+                            </li>
+                        @endforeach
+                    </ol>
+                </div>
+            @endif
+
+            @unless ($application->isMenunggu())
                 <div @class([
                     'rounded-2xl border bg-white p-5 dark:bg-white/[0.03] md:p-6',
                     'border-error-200 dark:border-error-500/30' => $application->isDitolak(),
@@ -217,9 +260,16 @@
                 <p class="text-sm font-medium text-success-600">Setujui permohonan {{ $application->application_number }}</p>
                 <h3 class="mt-2 text-xl font-semibold text-gray-800 dark:text-white/90">Teruskan permohonan ini?</h3>
                 <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                    Setelah disetujui, permohonan tidak bisa dibatalkan dari sini. Barangnya diteruskan sebagai berikut.
+                    @if ($tahapAkhir)
+                        Ini keputusan akhir. Setelah disetujui, permohonan tidak bisa dibatalkan dari sini. Barangnya diteruskan sebagai berikut.
+                    @elseif ($application->isDiajukan())
+                        Permohonan diteruskan ke Pengelola Gudang untuk ditinjau.
+                    @else
+                        Permohonan diteruskan ke Kasubbag Umum dan TI untuk keputusan akhir. Barangnya belum masuk pengadaan.
+                    @endif
                 </p>
 
+                @if ($tahapAkhir)
                 <div class="mt-5 space-y-3">
                     @if ($tambahStok->isNotEmpty())
                         <div class="rounded-xl border border-gray-200 p-4 dark:border-gray-800">
@@ -259,6 +309,13 @@
                         </div>
                     @endif
                 </div>
+                @endif
+
+                @if ($pemberitahuanQr = \App\Support\PemberitahuanQr::permohonan($application))
+                    <div x-data="{ qr: @js($pemberitahuanQr) }">
+                        @include('pages.request._qr-notice', ['sumber' => 'qr'])
+                    </div>
+                @endif
 
                 <div class="mt-6 flex justify-end gap-3">
                     <button type="button" @click="open = false"

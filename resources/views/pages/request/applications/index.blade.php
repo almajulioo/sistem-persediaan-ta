@@ -10,7 +10,6 @@
         'url' => route('item-applications.index', array_filter(['q' => $filters['q'], 'status' => $key], fn ($value) => $value !== '')),
         'aktif' => $filters['status'] === $key,
     ])->values()->all();
-    $canDecide = auth()->user()->can('kelola-permintaan');
 
     // Kotak ikon selalu berwarna Permohonan; ikonnya mengikuti isi: satu
     // jenis memakai ikon jenis itu, campuran keduanya ikon tumpukan.
@@ -165,7 +164,7 @@
                                     </x-ui.pill>
                                 </td>
                                 <td class="px-5 py-4">
-                                    @if ($application->isDiajukan() && $canDecide)
+                                    @if ($application->bisaDiputuskanOleh(auth()->user()))
                                         <a href="{{ route('item-applications.show', $application) }}"
                                             class="text-theme-xs rounded-lg px-3 py-1.5 font-medium transition {{ $modul->tombolClass() }}">
                                             Tinjau

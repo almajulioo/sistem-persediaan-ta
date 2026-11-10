@@ -4,8 +4,11 @@ namespace App\Models;
 
 use App\Enums\ItemApplicationStatus;
 use App\Enums\ItemApplicationType;
+use App\Enums\UnitKerja;
 use App\Enums\UserRole;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,8 +19,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Berbeda dari permintaan (`requests`) yang meminta barang keluar dari gudang,
  * permohonan meminta gudang mengadakan barang: menambah stok barang yang sudah
- * terdaftar, atau mendaftarkan barang yang belum ada. Setelah disetujui
- * Pengelola Gudang, barisnya diteruskan lewat App\Services\ItemApplicationWorkflowService.
+ * terdaftar, atau mendaftarkan barang yang belum ada. Disetujui berurutan oleh
+ * Kepala Unit, Pengelola Gudang, dan Kasubbag Umum dan TI; baru setelah
+ * keputusan akhir itu barisnya diteruskan lewat
+ * App\Services\ItemApplicationWorkflowService.
  */
 class ItemApplication extends Model
 {
@@ -31,6 +36,7 @@ class ItemApplication extends Model
 
     protected $fillable = [
         'application_number',
+        'nd_number',
         'user_id',
         'date',
         'purpose',
@@ -39,13 +45,16 @@ class ItemApplication extends Model
 
     /**
      * Tidak fillable, ditulis hanya lewat forceFill saat keputusan dibuat:
-     * `decided_by`, `decided_at`, `decision_note`.
+     * `head_approved_by`, `head_approved_at`, `reviewed_by`, `reviewed_at`,
+     * `decided_by`, `decided_at`, `decision_note`, `nd_verification_hash`.
      */
     protected function casts(): array
     {
         return [
             'date' => 'date',
             'status' => ItemApplicationStatus::class,
+            'head_approved_at' => 'datetime',
+            'reviewed_at' => 'datetime',
             'decided_at' => 'datetime',
         ];
     }
@@ -53,6 +62,11 @@ class ItemApplication extends Model
     public function isDiajukan(): bool
     {
         return $this->status === ItemApplicationStatus::Diajukan;
+    }
+
+    public function isMenunggu(): bool
+    {
+        return $this->status->menunggu();
     }
 
     public function isDisetujui(): bool
@@ -63,6 +77,143 @@ class ItemApplication extends Model
     public function isDitolak(): bool
     {
         return $this->status === ItemApplicationStatus::Ditolak;
+    }
+
+    /**
+     * Apakah sekarang giliran akun ini memutuskan. Admin lolos di setiap tahap,
+     * dua tahap terakhir lewat Gate::before.
+     */
+    public function bisaDiputuskanOleh(User $user): bool
+    {
+        return match ($this->status) {
+            ItemApplicationStatus::Diajukan => $user->isAdmin() || $this->dipimpinOleh($user),
+            ItemApplicationStatus::DisetujuiKepalaUnit => $user->can('kelola-permintaan'),
+            ItemApplicationStatus::DitinjauGudang => $user->can('setujui-permohonan'),
+            default => false,
+        };
+    }
+
+    private function dipimpinOleh(User $user): bool
+    {
+        $unit = $this->user?->unit;
+
+        return $unit !== null && $user->unit === $unit && $user->hasRole(self::peranPimpinan($unit));
+    }
+
+    /**
+     * Sama dengan Request::kepalaUnit(): Subbagian Umum dan TI dipimpin
+     * Kasubbag Umum dan TI, bukan peran Kepala Unit.
+     */
+    private static function peranPimpinan(UnitKerja $unit): UserRole
+    {
+        return $unit === UnitKerja::SubbagianUmumTi ? UserRole::KasubbagUmumTi : UserRole::KepalaUnit;
+    }
+
+    /**
+     * Akun yang berhak menyetujui di tahap pertama, yaitu pimpinan unit pemohon.
+     *
+     * @return Collection<int, User>
+     */
+    public function penyetujuUnit(): Collection
+    {
+        $unit = $this->user?->unit;
+
+        if ($unit === null) {
+            return new Collection;
+        }
+
+        return User::query()
+            ->where('is_active', true)
+            ->where('role', self::peranPimpinan($unit)->value)
+            ->where('unit', $unit)
+            ->get();
+    }
+
+    /**
+     * Penanda tangan Nota Dinas selama belum disetujui.
+     */
+    public function kepalaUnit(): ?User
+    {
+        return $this->penyetujuUnit()->first();
+    }
+
+    /**
+     * Tiga tahap persetujuan berurutan. Tahap pertama yang belum selesai adalah
+     * yang sedang menunggu, atau yang menolak bila permohonannya ditolak.
+     *
+     * @return list<array{label: string, oleh: ?User, pada: ?\Illuminate\Support\Carbon, keadaan: 'selesai'|'menunggu'|'ditolak'|'belum'}>
+     */
+    public function tahapan(): array
+    {
+        $tahap = [
+            ['label' => $this->user?->unit?->sebutanKepala() ?? 'Kepala Unit', 'oleh' => $this->headApprovedBy, 'pada' => $this->head_approved_at],
+            ['label' => 'Pengelola Gudang', 'oleh' => $this->reviewedBy, 'pada' => $this->reviewed_at],
+            ['label' => 'Kasubbag Umum dan TI', 'oleh' => null, 'pada' => null],
+        ];
+
+        if ($this->isDisetujui()) {
+            $tahap[2] = [...$tahap[2], 'oleh' => $this->decidedBy, 'pada' => $this->decided_at];
+        }
+
+        $sudahBerhenti = false;
+
+        return array_map(function (array $baris) use (&$sudahBerhenti): array {
+            if ($baris['pada'] !== null) {
+                return [...$baris, 'keadaan' => 'selesai'];
+            }
+
+            if ($sudahBerhenti) {
+                return [...$baris, 'keadaan' => 'belum'];
+            }
+
+            $sudahBerhenti = true;
+
+            return $this->isDitolak()
+                ? [...$baris, 'oleh' => $this->decidedBy, 'pada' => $this->decided_at, 'keadaan' => 'ditolak']
+                : [...$baris, 'keadaan' => 'menunggu'];
+        }, $tahap);
+    }
+
+    /**
+     * Nomor naskah dinas permohonan ini, lihat formatNomorNotaDinas().
+     */
+    public function nomorNotaDinas(?string $sequence = null): string
+    {
+        return self::formatNomorNotaDinas($this->user?->unit, $this->date ?? now(), $sequence);
+    }
+
+    /**
+     * Format nomor Nota Dinas Permohonan ATK/ARTK, mis.
+     * 51/B/ND/DJPKN-V.BLP.1.2/BMN.09.03/5/2026. Berbeda dari permintaan
+     * (Request::documentNumber(): KEU.02.02, bulan dua digit) karena klasifikasi
+     * arsipnya barang milik negara. Tanpa nomor urut, bagian depannya "……".
+     */
+    public static function formatNomorNotaDinas(?UnitKerja $unit, CarbonInterface $tanggal, ?string $sequence = null): string
+    {
+        return sprintf(
+            '%s/B/ND/DJPKN-V.%s/BMN.09.03/%s',
+            $sequence ?? '……',
+            $unit?->kodeNaskah() ?? 'BLP',
+            $tanggal->format('n/Y'),
+        );
+    }
+
+    public function notaDinasPath(): string
+    {
+        return 'nota-dinas-permohonan/'.$this->item_application_id.'.docx';
+    }
+
+    /**
+     * Perihal Nota Dinas, mis. "Permohonan ATK/ARTK Subbagian SDM Bulan Mei
+     * 2026". Bulannya berbahasa Indonesia apa pun bahasa aplikasinya.
+     */
+    public function perihalNotaDinas(): string
+    {
+        return sprintf(
+            'Permohonan ATK/ARTK %s Bulan %s',
+            $this->user?->unit?->label() ?? '-',
+            ($this->date ?? now())->copy()->locale('id')->translatedFormat('F Y'),
+        );
     }
 
     /**
@@ -144,6 +295,16 @@ class ItemApplication extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function headApprovedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'head_approved_by', 'user_id');
+    }
+
+    public function reviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by', 'user_id');
     }
 
     public function decidedBy(): BelongsTo
