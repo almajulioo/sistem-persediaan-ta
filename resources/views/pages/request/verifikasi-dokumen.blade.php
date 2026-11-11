@@ -22,6 +22,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
     <title>{{ $title }}</title>
+    @include('layouts.favicon')
     <style>
         :root {
             --latar: #f2f4f7; --kartu: #ffffff; --garis: #e4e7ec; --teks: #101828; --redup: #667085;
