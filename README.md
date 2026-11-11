@@ -42,6 +42,15 @@ php artisan migrate --seed
 composer run dev
 ```
 
+`migrate --seed` hanya mengisi data dasar: akun, sub kategori, dan master
+barang beserta saldo awal per 1 Oktober 2026. Data transaksi contoh (penyedia,
+mutasi, stok opname, pengadaan, usulan barang, log aktivitas) ada di seeder
+terpisah dan hanya untuk pengembangan:
+
+```bash
+php artisan db:seed --class=DataContohSeeder
+```
+
 Akun awal di lingkungan lokal, kata sandi `Persediaan#2026`:
 
 | Username | Peran |

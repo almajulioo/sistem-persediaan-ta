@@ -7,7 +7,9 @@ use Illuminate\Database\Seeder;
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Seed the application's database.
+     * Data dasar sistem: akun, sub kategori, dan master barang beserta saldo
+     * awalnya. Tidak ada data transaksi contoh di sini; untuk itu jalankan
+     * DataContohSeeder secara terpisah.
      */
     public function run(): void
     {
@@ -15,14 +17,6 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             ItemSubcategorySeeder::class,
             ItemSeeder::class,
-            SupplierSeeder::class,
-            StockMutationSeeder::class,
-            StockOpnameSeeder::class,
-            ProcurementRequestSeeder::class,
-            ProcurementSeeder::class,
-            ItemProposalSeeder::class,
-            // Paling akhir: barisnya menunjuk dokumen yang dibuat seeder di atas.
-            AuditLogSeeder::class,
         ]);
     }
 }
