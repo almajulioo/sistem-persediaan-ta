@@ -133,6 +133,19 @@ class AppServiceProvider extends ServiceProvider
             fn (User $user) => $user->hasRole(UserRole::PengelolaGudang, UserRole::KasubbagUmumTi),
         );
 
+        // Master Barang dibaca juga oleh Pejabat Pengadaan, sesuai use case
+        // "Lihat Stok Persediaan" pada rancangan awal: ia perlu tahu stok
+        // barang yang akan diadakannya. Riwayat mutasi dan stok opname tetap
+        // di `akses-gudang`.
+        Gate::define(
+            'akses-barang',
+            fn (User $user) => $user->hasRole(
+                UserRole::PengelolaGudang,
+                UserRole::KasubbagUmumTi,
+                UserRole::PejabatPengadaan,
+            ),
+        );
+
         Gate::define(
             'akses-penyedia',
             fn (User $user) => $user->hasRole(UserRole::PejabatPengadaan, UserRole::KasubbagUmumTi),

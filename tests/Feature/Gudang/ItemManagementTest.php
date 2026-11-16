@@ -39,10 +39,17 @@ describe('hak akses', function () {
         $this->get('/barang')->assertRedirect('/login');
     });
 
-    it('menolak Pejabat Pengadaan', function () {
-        $this->actingAs(User::factory()->role(UserRole::PejabatPengadaan)->create())
+    it('menolak Pengguna', function () {
+        $this->actingAs(User::factory()->role(UserRole::Pengguna)->create())
             ->get('/barang')
             ->assertForbidden();
+    });
+
+    it('mengizinkan Pejabat Pengadaan membaca tanpa tombol ubah', function () {
+        $this->actingAs(User::factory()->role(UserRole::PejabatPengadaan)->create())
+            ->get('/barang')
+            ->assertOk()
+            ->assertDontSee('Tambah Barang');
     });
 
     it('mengizinkan Pengelola Gudang', function () {
@@ -65,11 +72,13 @@ describe('hak akses', function () {
         expect(Item::where('item_code', 'ATK-001')->exists())->toBeFalse();
     });
 
-    it('menyembunyikan menu gudang dari Pejabat Pengadaan', function () {
+    it('hanya menampilkan Master Barang dari menu gudang bagi Pejabat Pengadaan', function () {
         $this->actingAs(User::factory()->role(UserRole::PejabatPengadaan)->create())
             ->get('/dasbor')
             ->assertOk()
-            ->assertDontSee('Master Barang');
+            ->assertSee('Master Barang')
+            ->assertDontSee('Riwayat Mutasi')
+            ->assertDontSee('Sub Kategori Barang');
     });
 });
 

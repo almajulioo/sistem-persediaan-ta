@@ -63,7 +63,7 @@ class DashboardController extends Controller
             'pintuPengguna' => $user->hasRole(UserRole::Pengguna) ? $this->pintuPengguna($user) : null,
             'dasborUnit' => $user->hasRole(UserRole::KepalaUnit) && $user->unit !== null ? $this->dasborUnit($user) : null,
             'tugas' => $this->perluTindakan($user),
-            'stok' => $bisaGudang || $bisaPengadaan ? $this->kondisiStok(bertaut: $bisaGudang) : null,
+            'stok' => $bisaGudang || $bisaPengadaan ? $this->kondisiStok(bertaut: $user->can('akses-barang')) : null,
             'alurPermintaan' => $this->alurPermintaan($user),
             'alur' => $bisaPengadaan ? $this->alurPengadaan() : null,
             'grafikMutasi' => $bisaGudang ? $this->grafikMutasi() : null,
@@ -96,7 +96,7 @@ class DashboardController extends Controller
         $ubin = [
             ['Permintaan Barang', 'request.index', null, ModulPengajuan::Permintaan->icon(), ModulPengajuan::Permintaan->warna()],
             ['Permohonan', 'item-applications.index', null, ModulPengajuan::Permohonan->icon(), ModulPengajuan::Permohonan->warna()],
-            ['Master Barang', 'items.index', 'akses-gudang', 'package', 'brand'],
+            ['Master Barang', 'items.index', 'akses-barang', 'package', 'brand'],
             ['Mutasi Stok', 'mutations.index', 'akses-gudang', 'arrows', 'success'],
             ['Stok Opname', 'opname.index', 'akses-gudang', 'clipboard-check', 'orange'],
             ['Usulan Pengadaan', 'procurement-requests.index', 'akses-pengadaan', 'file-plus', 'purple'],
@@ -481,9 +481,8 @@ class DashboardController extends Controller
 
     /**
      * Sebaran status stok barang aktif, ditambah barang yang paling mendesak
-     * diisi ulang. `bertaut` false bagi peran tanpa `akses-gudang` (Pejabat
-     * Pengadaan): datanya tetap berguna untuk merencanakan pengadaan, tetapi
-     * halaman barang tertutup baginya.
+     * diisi ulang. `bertaut` false bagi peran tanpa `akses-barang`, supaya
+     * tidak ada tautan yang berujung 403.
      *
      * @return array{total: int, sebaran: array<int, array{status: StockStatus, jumlah: int, persen: float, url: ?string}>, kritis: \Illuminate\Support\Collection<int, Item>, bertaut: bool}
      */

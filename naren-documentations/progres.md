@@ -5,6 +5,30 @@ perubahan.
 
 ---
 
+## 16 November 2026 — Pejabat Pengadaan dapat membaca Master Barang
+
+Permintaan Narendra: kembalikan use case "Lihat Stok Persediaan" milik Pejabat
+Pengadaan dari rancangan awal. Sejak modul gudang dibangun, halaman barang
+tertutup baginya tanpa keputusan yang tercatat. Tanpa ADR, atas permintaan
+Narendra.
+
+- Gate baru `akses-barang` (Pengelola Gudang, Kasubbag Umum dan TI, Pejabat
+  Pengadaan) untuk daftar barang, rincian barang, dan Kartu Persediaan.
+  Riwayat mutasi, stok opname, dan sub kategori tetap di `akses-gudang`.
+- Menu Manajemen Gudang tampil bagi Pejabat Pengadaan dengan Master Barang
+  saja. Tombol ubah sudah dijaga `kelola-gudang`, jadi halamannya baca-saja.
+- Dasbor: ubin Master Barang dan tautan Kondisi Stok memakai `akses-barang`.
+- Tautan kode barang di rincian permohonan (berkas Alma) masih dijaga
+  `akses-gudang`, jadi bagi Pejabat Pengadaan kodenya tampil tanpa tautan.
+  Tidak menimbulkan 403, sengaja tidak disentuh.
+
+**Verifikasi.** Enam tes lama yang menegaskan penolakan disesuaikan; tes
+verifikasi sementara (11 kasus: baca, tolak aksi ubah, menu per peran, dasbor,
+tamu) dijalankan lalu dihapus. `php artisan test`: 995 lulus. Pint bersih pada
+berkas yang diubah.
+
+---
+
 ## 10 November 2026 — Tombol Buang Draf stok opname
 
 Permintaan Narendra: "tambahkan tombol buang draf stok opname". Rute

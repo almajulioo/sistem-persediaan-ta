@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-    {{-- Kasubbag Umum dan TI membuka halaman ini baca-saja (ADR 0041). --}}
+    {{-- Kasubbag Umum dan TI (ADR 0041) dan Pejabat Pengadaan membuka halaman ini baca-saja. --}}
     @php $bisaKelola = auth()->user()->can('kelola-gudang'); @endphp
 
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">

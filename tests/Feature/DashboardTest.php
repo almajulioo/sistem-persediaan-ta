@@ -152,7 +152,7 @@ describe('akses cepat', function () {
         }
     })->with([
         'Pengelola Gudang' => [UserRole::PengelolaGudang, ['Master Barang', 'Stok Opname', 'Realisasi Pengadaan'], ['Penyedia Barang', 'Manajemen Pengguna']],
-        'Pejabat Pengadaan' => [UserRole::PejabatPengadaan, ['Usulan Pengadaan', 'Penyedia Barang'], ['Master Barang', 'Stok Opname', 'Log Aktivitas']],
+        'Pejabat Pengadaan' => [UserRole::PejabatPengadaan, ['Usulan Pengadaan', 'Penyedia Barang', 'Master Barang'], ['Mutasi Stok', 'Stok Opname', 'Log Aktivitas']],
         // Pengawas baca-saja (ADR 0041): seluruh modul subbagiannya, tanpa administrasi sistem.
         'Kasubbag' => [UserRole::KasubbagUmumTi, ['Realisasi Pengadaan', 'Master Barang', 'Stok Opname', 'Penyedia Barang'], ['Manajemen Pengguna', 'Log Aktivitas']],
         'Pengguna' => [UserRole::Pengguna, ['Permintaan Barang', 'Permohonan'], ['Master Barang', 'Realisasi Pengadaan']],
@@ -167,7 +167,7 @@ describe('akses cepat', function () {
     it('tidak menautkan halaman yang akan ditolak', function () {
         $this->actingAs(penggunaDasbor(UserRole::PejabatPengadaan))->get('/dasbor')
             ->assertSee(route('suppliers.index'), false)
-            ->assertDontSee(route('items.index'), false);
+            ->assertDontSee(route('mutations.index'), false);
     });
 });
 
@@ -306,7 +306,7 @@ describe('kondisi stok', function () {
             ->toBe([$habis->item_id, $sepersepuluh->item_id, $setengah->item_id]);
     });
 
-    it('menautkan barang hanya bagi peran yang boleh membuka halamannya', function () {
+    it('menautkan barang bagi peran yang boleh membuka halamannya', function () {
         $item = Item::factory()->habis()->create(['item_name' => 'Kertas HVS A4']);
 
         $this->actingAs(penggunaDasbor(UserRole::PengelolaGudang))->get('/dasbor')
@@ -314,7 +314,7 @@ describe('kondisi stok', function () {
 
         $this->actingAs(penggunaDasbor(UserRole::PejabatPengadaan))->get('/dasbor')
             ->assertSee('Kertas HVS A4')
-            ->assertDontSee(route('items.show', $item), false);
+            ->assertSee(route('items.show', $item), false);
     });
 
     it('tidak ditampilkan bagi peran sub sistem permintaan', function () {

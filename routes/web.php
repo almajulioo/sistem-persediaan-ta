@@ -395,7 +395,8 @@ Route::middleware('auth')->group(function () {
     | berparameter di sini akan menelan "barang/create", "opname/create", dan
     | "penyedia/create" bila didaftarkan lebih dulu.
     */
-    Route::middleware('can:akses-gudang')->group(function () {
+    // Master Barang juga dibaca Pejabat Pengadaan (gate `akses-barang`).
+    Route::middleware('can:akses-barang')->group(function () {
         Route::resource('barang', ItemController::class)
             ->only(['index', 'show'])
             ->parameters(['barang' => 'item'])
@@ -403,7 +404,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('barang/{item}/kartu-persediaan', [StockMutationController::class, 'kartuPersediaan'])
             ->name('items.kartu-persediaan');
+    });
 
+    Route::middleware('can:akses-gudang')->group(function () {
         Route::get('sub-kategori-barang', [ItemSubcategoryController::class, 'index'])
             ->name('item-subcategories.index');
 

@@ -121,7 +121,7 @@ describe('Kasubbag membaca', function () {
     it('tetap menutup halaman baca gudang bagi Pejabat Pengadaan', function () {
         $pejabat = penggunaPengawasan(UserRole::PejabatPengadaan);
 
-        $this->actingAs($pejabat)->get('/barang')->assertForbidden();
+        $this->actingAs($pejabat)->get('/opname')->assertForbidden();
         $this->actingAs($pejabat)->get('/mutasi')->assertForbidden();
         $this->actingAs($this->petugas)->get('/penyedia')->assertForbidden();
     });

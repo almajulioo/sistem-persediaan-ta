@@ -9,6 +9,12 @@ use App\Models\User;
 class MenuHelper
 {
     /**
+     * Peran yang lolos gate `akses-gudang`, ditulis harfiah karena penyaring
+     * menu memakai `hasRole()`, bukan gate, sehingga Admin harus disebut.
+     */
+    private const PERAN_GUDANG = [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KasubbagUmumTi];
+
+    /**
      * Menu utama modul sistem persediaan.
      *
      * Kunci `roles` menentukan peran yang boleh melihat item tersebut.
@@ -45,8 +51,8 @@ class MenuHelper
                     ],
                     [
                         'name' => 'Daftar Permintaan',
-                        'path' => '/permintaan'
-                        ],
+                        'path' => '/permintaan',
+                    ],
                 ],
             ],
             // Barang yang belum terdaftar dan stok yang kurang dimohonkan di
@@ -78,15 +84,16 @@ class MenuHelper
             [
                 'icon' => 'tables',
                 'name' => 'Manajemen Gudang',
-                'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KasubbagUmumTi],
+                'roles' => [UserRole::Admin, UserRole::PengelolaGudang, UserRole::KasubbagUmumTi, UserRole::PejabatPengadaan],
                 // Dua sub-item pengadaan hanya untuk Pengelola Gudang, yang
                 // tidak melihat grup Pengadaan. Admin dan Kasubbag sudah
                 // mendapatkannya di sana, jadi tidak perlu muncul dua kali.
+                // Pejabat Pengadaan hanya membaca Master Barang (`akses-barang`).
                 'subItems' => [
                     ['name' => 'Master Barang', 'path' => '/barang'],
-                    ['name' => 'Sub Kategori Barang', 'path' => '/sub-kategori-barang'],
-                    ['name' => 'Riwayat Mutasi', 'path' => '/mutasi'],
-                    ['name' => 'Stok Opname', 'path' => '/opname'],
+                    ['name' => 'Sub Kategori Barang', 'path' => '/sub-kategori-barang', 'roles' => self::PERAN_GUDANG],
+                    ['name' => 'Riwayat Mutasi', 'path' => '/mutasi', 'roles' => self::PERAN_GUDANG],
+                    ['name' => 'Stok Opname', 'path' => '/opname', 'roles' => self::PERAN_GUDANG],
                     ['name' => 'Usulan Pengadaan', 'path' => '/usulan-pengadaan', 'roles' => [UserRole::PengelolaGudang]],
                     ['name' => 'Realisasi Pengadaan', 'path' => '/pengadaan', 'roles' => [UserRole::PengelolaGudang]],
                 ],
