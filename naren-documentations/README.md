@@ -86,6 +86,7 @@ di editor, dan potongannya dapat dipakai ulang untuk naskah tugas akhir.
 | [0055](keputusan/0055-laporan-stok-opname-dalam-excel.md) | Laporan Stok Opname dalam Excel, menggantikan PDF | Sebagian digantikan oleh 0057 |
 | [0056](keputusan/0056-barang-tidak-diisi-mengikuti-stok-sistem.md) | Barang yang tidak diisi mengikuti stok sistem saat opname diposting | Sebagian digantikan oleh 0057 |
 | [0057](keputusan/0057-prosedur-lapangan-stok-opname.md) | Prosedur lapangan stok opname: wajib diisi kecuali insidental, pembanding pada waktu cacah, ruang tanda tangan Kasubbag, satu draf aktif | Diterima |
+| [0058](keputusan/0058-saldo-awal-diganti-sebelum-sistem-dipakai.md) | Saldo awal 1 Oktober diganti saldo awal 1 November sebelum sistem dipakai, lewat `persediaan:ganti-saldo-awal` | Diterima |
 
 ## Cara memelihara dokumentasi ini
 

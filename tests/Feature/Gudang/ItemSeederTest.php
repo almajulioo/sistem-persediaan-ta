@@ -24,18 +24,19 @@ it('memuat sub kategori, master barang, dan saldo awal dari berkas CSV', functio
         ->count();
 
     expect(ItemSubcategory::count())->toBe(75)
-        ->and(Item::count())->toBe(1801)
+        ->and(Item::count())->toBe(1806)
         ->and($tanpaSubKategori)->toBe(0)
         ->and($kategoriBerbeda)->toBe(0)
-        ->and(Item::where('is_active', true)->count())->toBe(120)
-        ->and((int) StockMutation::where('mutation_type', MutationType::SaldoAwal)->sum('amount'))->toBe(1792);
+        ->and(Item::where('is_active', true)->count())->toBe(122)
+        ->and((int) StockMutation::where('mutation_type', MutationType::SaldoAwal)->sum('amount'))->toBe(1902)
+        ->and(StockMutation::whereDate('mutation_date', '!=', '2026-11-01')->exists())->toBeFalse();
 
     // Idempoten: menjalankan ulang tidak menggandakan apa pun.
     $this->seed([ItemSubcategorySeeder::class, ItemSeeder::class]);
 
     expect(ItemSubcategory::count())->toBe(75)
-        ->and(Item::count())->toBe(1801)
-        ->and(StockMutation::count())->toBe(120);
+        ->and(Item::count())->toBe(1806)
+        ->and(StockMutation::count())->toBe(122);
 });
 
 it('mengisi sub kategori barang lama yang belum punya', function () {

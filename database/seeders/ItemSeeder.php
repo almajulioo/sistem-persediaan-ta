@@ -11,12 +11,22 @@ use App\Models\User;
 use App\Support\StockLedger;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class ItemSeeder extends Seeder
 {
-    private const TANGGAL_SALDO_AWAL = '2026-10-01';
+    /**
+     * Saldo awal yang berlaku. Ikut dipakai perintah
+     * `persediaan:ganti-saldo-awal`, yang mengganti saldo awal 1 Oktober di
+     * server yang sudah terisi sebelum sistem dipakai (ADR 0058).
+     */
+    public const TANGGAL_SALDO_AWAL = '2026-11-01';
+
+    public const BERKAS_SALDO_AWAL = 'saldo_awal_2026_11_01.csv';
+
+    public const CATATAN_SALDO_AWAL = 'Saldo awal per 1 November 2026.';
 
     /**
      * Master barang dan saldo awal kantor, dari dua berkas di data/.
@@ -33,9 +43,7 @@ class ItemSeeder extends Seeder
      */
     public function run(): void
     {
-        $saldo = collect($this->bacaCsv('saldo_awal_2026_10_01.csv'))
-            ->mapWithKeys(fn (array $baris) => [$baris['item_code'] => (int) $baris['qty']]);
-
+        $saldo = self::saldoAwal();
         $subkategori = ItemSubcategory::pluck('subcategory_id', 'subcategory_code');
         $petugas = User::where('role', UserRole::PengelolaGudang)->first();
         $tanggal = CarbonImmutable::parse(self::TANGGAL_SALDO_AWAL);
@@ -44,27 +52,18 @@ class ItemSeeder extends Seeder
         $diarsipkan = 0;
 
         DB::transaction(function () use ($saldo, $subkategori, $petugas, $tanggal, &$dibuat, &$diarsipkan) {
-            foreach ($this->bacaCsv('barang.csv') as $baris) {
+            foreach (self::bacaCsv('barang.csv') as $baris) {
                 $stokAwal = $saldo->get($baris['item_code'], 0);
-                $subcategoryId = $subkategori->get($baris['subcategory_code'])
-                    ?? throw new RuntimeException("Sub kategori {$baris['subcategory_code']} untuk barang {$baris['item_code']} tidak ditemukan.");
 
                 $item = Item::firstOrCreate(
                     ['item_code' => $baris['item_code']],
-                    [
-                        'item_name' => $baris['item_name'],
-                        'subcategory_id' => $subcategoryId,
-                        'unit' => SatuanBarang::from(strtolower($baris['unit'])),
-                        'stock_min' => 1,
-                        'stock_max' => 1000,
-                        'is_active' => $stokAwal > 0,
-                    ],
+                    self::atributBarangBaru($baris, $subkategori, aktif: $stokAwal > 0),
                 );
 
                 // Hanya isi saldo awal untuk barang yang baru dibuat.
                 if (! $item->wasRecentlyCreated) {
                     if ($item->subcategory_id === null) {
-                        $item->update(['subcategory_id' => $subcategoryId]);
+                        $item->update(['subcategory_id' => self::subcategoryId($baris, $subkategori)]);
                     }
 
                     continue;
@@ -83,7 +82,7 @@ class ItemSeeder extends Seeder
                     type: MutationType::SaldoAwal,
                     amount: $stokAwal,
                     recordedBy: $petugas,
-                    notes: 'Saldo awal per 1 Oktober 2026.',
+                    notes: self::CATATAN_SALDO_AWAL,
                     date: $tanggal,
                 );
             }
@@ -93,9 +92,49 @@ class ItemSeeder extends Seeder
     }
 
     /**
+     * Jumlah saldo awal per kode barang, dari BERKAS_SALDO_AWAL.
+     *
+     * @return Collection<string, int>
+     */
+    public static function saldoAwal(): Collection
+    {
+        return collect(self::bacaCsv(self::BERKAS_SALDO_AWAL))
+            ->mapWithKeys(fn (array $baris) => [$baris['item_code'] => (int) $baris['qty']]);
+    }
+
+    /**
+     * Atribut barang yang belum terdaftar, dari satu baris barang.csv.
+     *
+     * @param  array<string, string>  $baris
+     * @param  Collection<string, string>  $subkategori  subcategory_code => subcategory_id
+     * @return array<string, mixed>
+     */
+    public static function atributBarangBaru(array $baris, Collection $subkategori, bool $aktif): array
+    {
+        return [
+            'item_name' => $baris['item_name'],
+            'subcategory_id' => self::subcategoryId($baris, $subkategori),
+            'unit' => SatuanBarang::from(strtolower($baris['unit'])),
+            'stock_min' => 1,
+            'stock_max' => 1000,
+            'is_active' => $aktif,
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $baris
+     * @param  Collection<string, string>  $subkategori
+     */
+    private static function subcategoryId(array $baris, Collection $subkategori): string
+    {
+        return $subkategori->get($baris['subcategory_code'])
+            ?? throw new RuntimeException("Sub kategori {$baris['subcategory_code']} untuk barang {$baris['item_code']} tidak ditemukan.");
+    }
+
+    /**
      * @return list<array<string, string>> baris CSV berkunci nama kolom.
      */
-    private function bacaCsv(string $berkas): array
+    public static function bacaCsv(string $berkas): array
     {
         $handle = fopen(database_path("seeders/data/{$berkas}"), 'r');
         // Nama kolom ikut di-trim: berkas ber-CRLF menyisakan carriage return

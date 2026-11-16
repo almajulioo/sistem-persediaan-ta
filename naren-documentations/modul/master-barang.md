@@ -151,7 +151,7 @@ Yang perlu diketahui dari sisi master barang:
 | [app/Http/Controllers/Gudang/ItemProposalController.php](../../app/Http/Controllers/Gudang/ItemProposalController.php) | Usulan barang baru: tolak saja (ADR 0053) |
 | [app/Http/Requests/Gudang/](../../app/Http/Requests/Gudang/) | `StoreItemRequest`, `UpdateItemRequest`, `ItemFormRules` |
 | [resources/views/pages/items/](../../resources/views/pages/items/) | `index`, `create`, `edit`, `show`, `_form` |
-| [database/seeders/ItemSeeder.php](../../database/seeders/ItemSeeder.php) | 1.801 barang kantor dari `data/barang.csv` + saldo awal 120 barang dari `data/saldo_awal_2026_10_01.csv` |
+| [database/seeders/ItemSeeder.php](../../database/seeders/ItemSeeder.php) | 1.806 barang kantor dari `data/barang.csv` + saldo awal per 1 November 2026, 122 barang dari `data/saldo_awal_2026_11_01.csv` (ADR 0058) |
 | [database/seeders/ItemProposalSeeder.php](../../database/seeders/ItemProposalSeeder.php) | 3 usulan barang contoh |
 
 ## Catatan implementasi
