@@ -20,18 +20,21 @@ use App\Support\StockLedger;
 use App\Support\StockReservation;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class RequestWorkflowService
 {
+    public const FORMAT_NOMOR_ND = 'Nomor Nota Dinas diawali nomor urut berupa angka lalu garis miring, tanpa spasi, mis. 51/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026.';
+
     public function __construct(
         private readonly RequestDocumentGenerator $documentGenerator,
     ) {
     }
 
     /**
-     * @param  string|null  $ndSequence  nomor urut Nota Dinas, wajib saat
+     * @param  string|null  $ndNumber  nomor Nota Dinas lengkap, wajib saat
      *                                    menyetujui permintaan yang sudah disetujui Kepala Unit
      *                                    tetapi belum bernomor (data lama atau hasil penggabungan
      *                                    permintaan umum); permintaan biasa sudah bernomor sejak diajukan
@@ -43,7 +46,7 @@ class RequestWorkflowService
         ModelsRequest $request,
         User $actor,
         string $action,
-        ?string $ndSequence = null,
+        ?string $ndNumber = null,
         ?string $note = null,
     ): ModelsRequest
     {
@@ -69,7 +72,7 @@ class RequestWorkflowService
             && $request->status === 'approved_by_head'
             && $request->nd_number === null;
 
-        DB::transaction(function () use ($request, $actor, $action, $assignsNumber, $ndSequence, $note): void {
+        DB::transaction(function () use ($request, $actor, $action, $assignsNumber, $ndNumber, $note): void {
             $fromStatus = $request->status;
 
             if ($action === 'reject') {
@@ -83,7 +86,7 @@ class RequestWorkflowService
             }
 
             if ($assignsNumber) {
-                $this->assignNotaDinasNumber($request, $ndSequence);
+                $this->assignNotaDinasNumber($request, $ndNumber);
             }
 
             $nextStatus = $this->nextStatus($request, $actor);
@@ -340,44 +343,51 @@ class RequestWorkflowService
     }
 
     /**
-     * Menetapkan nomor Nota Dinas dari nomor urut yang diisi pemohon saat
-     * mengajukan (atau Pengelola Gudang, untuk permintaan yang belum bernomor).
-     * Nomor BAST ikut ditetapkan dengan nomor urut yang sama, dan keduanya
+     * Menetapkan nomor Nota Dinas yang diketik lengkap oleh pemohon saat
+     * mengajukan (atau Pengelola Gudang, untuk permintaan yang belum
+     * bernomor). Nomor BAST ikut ditetapkan dari nomor itu, dan keduanya
      * dibekukan di sini supaya tidak berubah walau unit pemohon diganti.
      *
      * @throws ValidationException
      */
-    public function assignNotaDinasNumber(ModelsRequest $request, ?string $sequence): void
+    public function assignNotaDinasNumber(ModelsRequest $request, ?string $ndNumber): void
     {
-        $sequence = trim((string) $sequence);
+        $ndNumber = trim((string) $ndNumber);
 
-        if (preg_match(ModelsRequest::ND_SEQUENCE_PATTERN, $sequence) !== 1) {
+        if ($ndNumber === '') {
             throw ValidationException::withMessages([
-                'nd_sequence' => 'Nomor urut Nota Dinas wajib diisi berupa angka, paling banyak 6 digit.',
+                'nd_number' => 'Nomor Nota Dinas wajib diisi.',
+            ]);
+        }
+
+        if (preg_match(ModelsRequest::ND_NUMBER_PATTERN, $ndNumber) !== 1
+            || mb_strlen($ndNumber) > ModelsRequest::ND_NUMBER_MAX) {
+            throw ValidationException::withMessages([
+                'nd_number' => self::FORMAT_NOMOR_ND,
             ]);
         }
 
         $request->loadMissing('user');
-        $ndNumber = $request->documentNumber('ND', $sequence);
 
         if (ModelsRequest::query()->where('nd_number', $ndNumber)->whereKeyNot($request->getKey())->exists()) {
             throw ValidationException::withMessages([
-                'nd_sequence' => "Nomor Nota Dinas {$ndNumber} sudah dipakai permintaan lain.",
+                'nd_number' => "Nomor Nota Dinas {$ndNumber} sudah dipakai permintaan lain.",
             ]);
         }
 
         // Permohonan memakai agenda unit yang sama, dengan format BMN.09.03.
+        $sequence = Str::before($ndNumber, '/');
         $setaraPermohonan = ItemApplication::formatNomorNotaDinas($request->user?->unit, $request->date ?? now(), $sequence);
 
         if (ItemApplication::query()->where('nd_number', $setaraPermohonan)->exists()) {
             throw ValidationException::withMessages([
-                'nd_sequence' => "Nomor Nota Dinas {$ndNumber} sudah dipakai permohonan.",
+                'nd_number' => "Nomor urut {$sequence} sudah dipakai permohonan {$setaraPermohonan}.",
             ]);
         }
 
         $request->update([
             'nd_number' => $ndNumber,
-            'bast_number' => $request->documentNumber('BAST', $sequence),
+            'bast_number' => $request->nomorBastDari($ndNumber),
         ]);
     }
 

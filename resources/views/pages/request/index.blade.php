@@ -223,8 +223,7 @@
                                                     'id' => $row->request_id,
                                                     'number' => $row->request_number,
                                                     'needsNd' => $row->status === 'approved_by_head' && $row->nd_number === null,
-                                                    'preview' => $row->documentNumber('ND'),
-                                                    'sequence' => $row->ndSequence(),
+                                                    'akhiranNd' => $row->nomorAkhiran(),
                                                     'qr' => \App\Support\PemberitahuanQr::persetujuan($row),
                                                     'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($row),
                                                 ];

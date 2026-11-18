@@ -9,8 +9,8 @@ use Illuminate\Validation\Validator;
 
 /**
  * Ubah kuantitas oleh Pengelola Gudang. Aturannya sama dengan saat
- * mengajukan, termasuk nomor urut Nota Dinas: kolomnya sudah terisi nomor
- * dari pemohon dan hanya diubah bila keliru.
+ * mengajukan, termasuk nomor Nota Dinas: kolomnya sudah terisi nomor dari
+ * pemohon dan hanya diubah bila keliru.
  *
  * Bedanya, jumlah boleh 0 (barang itu tidak diberikan), dan setiap jumlah
  * yang tidak sama dengan permintaan wajib disertai alasan untuk pemohon.

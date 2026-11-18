@@ -32,8 +32,7 @@
             'id' => $requestData->request_id,
             'number' => $requestData->request_number,
             'needsNd' => $requestData->status === 'approved_by_head' && $requestData->nd_number === null,
-            'preview' => $requestData->documentNumber('ND'),
-            'sequence' => $requestData->ndSequence(),
+            'akhiranNd' => $requestData->nomorAkhiran(),
             'qr' => \App\Support\PemberitahuanQr::persetujuan($requestData),
             'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($requestData),
         ];

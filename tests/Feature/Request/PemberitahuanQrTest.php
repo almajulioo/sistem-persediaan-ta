@@ -204,7 +204,7 @@ describe('peringatan penerbitan ulang QR', function () {
         $this->actingAs($this->gudang)
             ->put(route('request.update', $request), [
                 'items' => [['item_id' => $this->kertas->item_id, 'qty' => 2]],
-                'nd_sequence' => '77',
+                'nd_number' => $request->documentNumber('ND', '77'),
             ])
             ->assertSessionHasNoErrors();
 

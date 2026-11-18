@@ -667,14 +667,14 @@ describe('nota dinas permohonan', function () {
             'status' => 'submitted',
             'request_number' => 'REQ-'.Str::random(8),
         ]);
-        app(RequestWorkflowService::class)->assignNotaDinasNumber($permintaan, '9001');
+        app(RequestWorkflowService::class)->assignNotaDinasNumber($permintaan, $permintaan->documentNumber('ND', '9001'));
 
         $kirim('9001')->assertSessionHasErrors('nd_sequence');
 
         expect(ItemApplication::count())->toBe(1)
             ->and(fn () => app(RequestWorkflowService::class)->assignNotaDinasNumber(
                 $permintaan->fresh(),
-                Str::before($application->nd_number, '/'),
+                $permintaan->documentNumber('ND', Str::before($application->nd_number, '/')),
             ))->toThrow(ValidationException::class);
     });
 });
@@ -687,7 +687,7 @@ describe('permintaan barang', function () {
     it('tidak lagi menghitung selisih stok menjadi draf usulan pengadaan', function () {
         $this->actingAs($this->pemohon)
             ->post(route('request.store'), [
-                'nd_sequence' => '51',
+                'nd_number' => '51/B/ND/DJPKN-V.BLP/KEU.02.02/11/2026',
                 'items' => [['item_id' => $this->item->item_id, 'qty' => 3]],
             ])
             ->assertSessionHasNoErrors()
@@ -699,7 +699,7 @@ describe('permintaan barang', function () {
 
     it('menolak jumlah yang melebihi stok, termasuk gabungan baris barang yang sama', function () {
         $this->actingAs($this->pemohon)
-            ->post(route('request.store'), ['nd_sequence' => '51', 'items' => [
+            ->post(route('request.store'), ['nd_number' => '51/B/ND/DJPKN-V.BLP/KEU.02.02/11/2026', 'items' => [
                 ['item_id' => $this->item->item_id, 'qty' => 2],
                 ['item_id' => $this->item->item_id, 'qty' => 2],
             ]])
@@ -711,7 +711,7 @@ describe('permintaan barang', function () {
 
     it('tidak lagi menerima barang yang belum terdaftar', function () {
         $this->actingAs($this->pemohon)
-            ->post(route('request.store'), ['nd_sequence' => '51', 'items' => [[
+            ->post(route('request.store'), ['nd_number' => '51/B/ND/DJPKN-V.BLP/KEU.02.02/11/2026', 'items' => [[
                 'source' => 'proposal',
                 'item_name' => 'Barang Baru',
                 'unit' => SatuanBarang::Buah->value,

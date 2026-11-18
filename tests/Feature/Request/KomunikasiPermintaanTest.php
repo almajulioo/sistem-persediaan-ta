@@ -64,7 +64,7 @@ function ubahKomunikasi(ModelsRequest $request, array $qty, ?string $note)
         ->from(route('request.edit', $request))
         ->put(route('request.update', $request), [
             'items' => collect($qty)->map(fn (int $value, string $itemId) => ['item_id' => $itemId, 'qty' => $value])->values()->all(),
-            'nd_sequence' => '51',
+            'nd_number' => $request->nd_number ?? $request->documentNumber('ND', '51'),
             'adjustment_note' => $note,
         ]);
 }

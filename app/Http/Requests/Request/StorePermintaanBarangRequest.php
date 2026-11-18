@@ -5,6 +5,7 @@ namespace App\Http\Requests\Request;
 use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\Request as ModelsRequest;
+use App\Services\RequestWorkflowService;
 use App\Support\StockReservation;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -21,8 +22,8 @@ class StorePermintaanBarangRequest extends FormRequest
 
     /**
      * Hanya barang yang sudah terdaftar. Barang yang belum terdaftar diajukan
-     * lewat menu Permohonan. Nomor urut Nota Dinas diisi pemohon saat
-     * mengajukan; nomor lengkapnya disusun RequestWorkflowService.
+     * lewat menu Permohonan. Nomor Nota Dinas diketik lengkap oleh pemohon
+     * (ADR 0059); bentroknya diperiksa RequestWorkflowService.
      *
      * @return array<string, mixed>
      */
@@ -31,7 +32,7 @@ class StorePermintaanBarangRequest extends FormRequest
         return [
             'emergency' => ['sometimes', 'boolean'],
             'requester_id' => ['nullable', 'uuid', Rule::exists('users', 'user_id')->where('is_active', true)],
-            'nd_sequence' => ['required', 'regex:'.ModelsRequest::ND_SEQUENCE_PATTERN],
+            'nd_number' => ['required', 'string', 'max:'.ModelsRequest::ND_NUMBER_MAX, 'regex:'.ModelsRequest::ND_NUMBER_PATTERN],
             'items' => ['required', 'array', 'min:1'],
             'items.*.item_id' => ['required', 'string', Rule::exists('items', 'item_id')],
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:999999'],
@@ -42,7 +43,7 @@ class StorePermintaanBarangRequest extends FormRequest
     {
         $this->merge([
             'emergency' => $this->boolean('emergency'),
-            'nd_sequence' => trim((string) $this->input('nd_sequence')),
+            'nd_number' => trim((string) $this->input('nd_number')),
         ]);
 
         // Item ID adalah UUID; cukup rapikan whitespace tanpa mengubah casing.
@@ -146,7 +147,7 @@ class StorePermintaanBarangRequest extends FormRequest
         return [
             'emergency' => 'jenis permintaan',
             'requester_id' => 'peminta',
-            'nd_sequence' => 'nomor urut Nota Dinas',
+            'nd_number' => 'nomor Nota Dinas',
             'items' => 'Daftar Barang',
             'items.*.item_id' => 'Kode Barang',
             'items.*.qty' => 'Jumlah Barang',
@@ -169,8 +170,8 @@ class StorePermintaanBarangRequest extends FormRequest
             'items.*.qty.min' => 'Jumlah barang minimal 1.',
             'requester_id.exists' => 'Peminta yang dipilih tidak ditemukan atau sudah nonaktif.',
             'requester_id.uuid' => 'Format peminta tidak valid.',
-            'nd_sequence.required' => 'Nomor urut Nota Dinas wajib diisi.',
-            'nd_sequence.regex' => 'Nomor urut Nota Dinas hanya berupa angka, paling banyak 6 digit.',
+            'nd_number.required' => 'Nomor Nota Dinas wajib diisi.',
+            'nd_number.regex' => RequestWorkflowService::FORMAT_NOMOR_ND,
         ];
     }
 }

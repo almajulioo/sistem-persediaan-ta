@@ -47,7 +47,7 @@ function ajukanTahan(User $pemohon, Item $item, int $qty)
     return test()->actingAs($pemohon)
         ->from(route('request.create'))
         ->post(route('request.store'), [
-            'nd_sequence' => (string) random_int(1, 999999),
+            'nd_number' => random_int(1, 999999).'/B/ND/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
             'items' => [['item_id' => $item->item_id, 'qty' => $qty]],
         ]);
 }
@@ -113,7 +113,7 @@ describe('gudang memproses', function () {
         $this->actingAs($this->gudang)
             ->put(route('request.update', $request), [
                 'items' => [['item_id' => $this->kertas->item_id, 'qty' => 8]],
-                'nd_sequence' => '51',
+                'nd_number' => '51/B/ND/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
             ])
             ->assertSessionHasNoErrors();
 
@@ -137,7 +137,7 @@ describe('gudang memproses', function () {
         // Jalan keluarnya: kurangi sesuai stok tersedia lewat Ubah Kuantitas.
         $this->put(route('request.update', $request), [
             'items' => [['item_id' => $this->kertas->item_id, 'qty' => 5]],
-            'nd_sequence' => '52',
+            'nd_number' => '52/B/ND/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
             'adjustment_note' => 'Stok tersedia tinggal 5 rim.',
         ])->assertSessionHasNoErrors();
 

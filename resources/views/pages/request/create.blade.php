@@ -37,7 +37,7 @@
         'items' => $items,
         'users' => $users,
         'canCreateEmergency' => $canCreateEmergency,
-        'ndTemplate' => $ndTemplate,
+        'ndAkhiran' => $ndAkhiran,
         'action' => route('request.store'),
     ])
 @endsection

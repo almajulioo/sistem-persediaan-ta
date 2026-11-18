@@ -345,9 +345,19 @@ class Request extends Model
     }
 
     /**
-     * Nomor urut Nota Dinas yang diisi pemohon saat mengajukan: hanya angka.
+     * Nomor urut Nota Dinas: hanya angka. Dipakai juga oleh permohonan.
      */
     public const ND_SEQUENCE_PATTERN = '/^\d{1,6}$/';
+
+    /**
+     * Nomor Nota Dinas permintaan diketik lengkap oleh pemohon (ADR 0059),
+     * tetapi harus diawali nomor urut agenda unit lalu garis miring, tanpa
+     * spasi: nomor urut itulah yang dipakai nomor BAST cadangan dan
+     * pemeriksaan bentrok dengan permohonan.
+     */
+    public const ND_NUMBER_PATTERN = '/^\d{1,6}\/\S+$/';
+
+    public const ND_NUMBER_MAX = 100;
 
     /**
      * Nomor naskah dinas permintaan ini, mis.
@@ -368,6 +378,30 @@ class Request extends Model
             $this->user?->unit?->kodeNaskah() ?? 'BLP',
             ($this->date ?? now())->format('m/Y'),
         );
+    }
+
+    /**
+     * Bagian nomor naskah setelah nomor urut, mis.
+     * "/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026". Ditawarkan sebagai saran
+     * yang bisa diklik di formulir; pemohon tetap mengetik nomornya sendiri.
+     *
+     * @param  'ND'|'BAST'  $kind
+     */
+    public function nomorAkhiran(string $kind = 'ND'): string
+    {
+        return $this->documentNumber($kind, '');
+    }
+
+    /**
+     * Nomor BAST mengikuti nomor Nota Dinas yang diketik pemohon, dengan
+     * jenis naskah ND diganti BAST. Bila jenis naskahnya tidak tertulis,
+     * nomor BAST disusun dari nomor urutnya dengan format baku.
+     */
+    public function nomorBastDari(string $ndNumber): string
+    {
+        return str_contains($ndNumber, '/ND/')
+            ? Str::replaceFirst('/ND/', '/BAST/', $ndNumber)
+            : $this->documentNumber('BAST', Str::before($ndNumber, '/'));
     }
 
     /**

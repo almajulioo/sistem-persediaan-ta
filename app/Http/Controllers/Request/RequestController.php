@@ -149,7 +149,7 @@ class RequestController extends Controller
                 ->map(fn (User $user) => [
                     ...$user->only(['user_id', 'fullname', 'username']),
                     'unit' => $user->unit?->label(),
-                    'nd_template' => $this->notaDinasTemplate($user),
+                    'nd_akhiran' => $this->akhiranNotaDinas($user),
                 ])
             : collect();
 
@@ -159,20 +159,20 @@ class RequestController extends Controller
             'subcategories' => KatalogBarang::subkategori(),
             'users' => $users,
             'canCreateEmergency' => $canCreateEmergency,
-            'ndTemplate' => $this->notaDinasTemplate($request->user()),
+            'ndAkhiran' => $this->akhiranNotaDinas($request->user()),
         ]);
     }
 
     /**
-     * Pola nomor Nota Dinas untuk pratinjau di formulir; `__SEQ__` diganti
-     * nomor urut yang diketik. Formatnya tetap satu sumber di
-     * ModelsRequest::documentNumber().
+     * Bagian nomor Nota Dinas setelah nomor urut, sesuai unit pengguna,
+     * untuk saran yang bisa diklik di formulir. Formatnya tetap satu sumber
+     * di ModelsRequest::documentNumber().
      */
-    private function notaDinasTemplate(User $user): string
+    private function akhiranNotaDinas(User $user): string
     {
         return (new ModelsRequest(['date' => now()]))
             ->setRelation('user', $user)
-            ->documentNumber('ND', '__SEQ__');
+            ->nomorAkhiran();
     }
 
     public function createUmum(Request $request)
@@ -650,8 +650,8 @@ class RequestController extends Controller
      * terdaftar dimohonkan lewat menu Permohonan, tidak lagi dihitung otomatis
      * dari permintaan.
      *
-     * Nomor Nota Dinas dan BAST ditetapkan di sini dari nomor urut yang diisi
-     * pemohon, sehingga Nota Dinas sudah bernomor sejak pertama dicetak.
+     * Nomor Nota Dinas diketik lengkap oleh pemohon dan nomor BAST
+     * mengikutinya, sehingga Nota Dinas sudah bernomor sejak pertama dicetak.
      */
     public function store(StorePermintaanBarangRequest $request, RequestWorkflowService $workflow)
     {
@@ -671,8 +671,8 @@ class RequestController extends Controller
             ]);
 
             // Nomor yang sudah dipakai menggagalkan seluruh transaksi dengan
-            // galat validasi pada kolom nomor urut.
-            $workflow->assignNotaDinasNumber($itemRequest, $validatedData['nd_sequence']);
+            // galat validasi pada kolom nomor Nota Dinas.
+            $workflow->assignNotaDinasNumber($itemRequest, $validatedData['nd_number']);
 
             $now = now();
             RequestDetail::insert(array_map(
@@ -768,10 +768,10 @@ class RequestController extends Controller
             // Nomor dari pemohon sudah tercetak sejak diajukan; Nota Dinas
             // dicetak ulang hanya bila Pengelola Gudang membetulkannya, atau
             // bila permintaan lama/gabungan belum bernomor.
-            $renumbers = $request->ndSequence() !== $validatedData['nd_sequence'];
+            $renumbers = $request->nd_number !== $validatedData['nd_number'];
 
             if ($renumbers) {
-                $workflow->assignNotaDinasNumber($request, $validatedData['nd_sequence']);
+                $workflow->assignNotaDinasNumber($request, $validatedData['nd_number']);
             }
 
             // Permintaan darurat diselesaikan langsung dari tahap ini, jadi
@@ -868,7 +868,7 @@ class RequestController extends Controller
                 $request,
                 $user,
                 $action,
-                $httpRequest->input('nd_sequence'),
+                $httpRequest->input('nd_number'),
                 $httpRequest->input('note'),
             );
         } catch (AuthorizationException $exception) {

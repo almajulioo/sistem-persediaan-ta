@@ -78,19 +78,8 @@
         @endif
 
         <x-form.section number="1" title="Nota Dinas" :warna="$modul->warna()"
-            :description="$isEdit ? 'Sudah terisi nomor dari pemohon; ubah hanya bila keliru.' : 'Nomor urut Nota Dinas dari agenda unit Anda. Nomor BAST memakai nomor urut yang sama.'">
-            @if ($isEdit)
-                <x-form.text-field name="nd_sequence" label="Nomor Urut Nota Dinas" required inputmode="numeric"
-                    :value="$request->ndSequence()" placeholder="mis. 51"
-                    :help="'Nomor lengkap: '.($request->nd_number ?? $request->documentNumber('ND'))" />
-            @else
-                <x-form.text-field name="nd_sequence" label="Nomor Urut Nota Dinas" required inputmode="numeric"
-                    maxlength="6" placeholder="mis. 51" x-model="ndSequence" />
-                <div class="rounded-lg bg-gray-50 px-4 py-3 dark:bg-white/[0.03]">
-                    <p class="text-theme-xs text-gray-500 dark:text-gray-400">Nomor lengkap</p>
-                    <p class="mt-0.5 font-mono text-sm break-all text-gray-800 dark:text-white/90" x-text="ndPreview"></p>
-                </div>
-            @endif
+            :description="$isEdit ? 'Sudah terisi nomor dari pemohon; ubah hanya bila keliru.' : 'Ketik nomor Nota Dinas lengkap dari agenda unit Anda.'">
+            <x-request.nomor-nota-dinas model="ndNumber" akhiran="ndAkhiran" />
         </x-form.section>
 
         @if ($isEdit)
@@ -273,11 +262,11 @@
             requesterSearch: '',
             selectedItem: null,
             inputQty: 1,
-            ndTemplate: @json($ndTemplate ?? ''),
-            ndSequence: @json((string) old('nd_sequence', '')),
+            ndAkhiranSendiri: @json($isEdit ? $request->nomorAkhiran() : ($ndAkhiran ?? '')),
+            ndNumber: @json((string) old('nd_number', $isEdit ? (string) $request->nd_number : '')),
             requestedList: @json($existingItems),
             isEdit: @json($isEdit),
-            ndAsli: @json($isEdit ? (string) $request->ndSequence() : ''),
+            ndAsli: @json($isEdit ? (string) $request->nd_number : ''),
             ndBerQr: @json($isEdit && $request->notaDinasBerQr()),
             yakinUbahNomor: false,
             warnaBaris: @json($warnaBaris),
@@ -351,20 +340,19 @@
             // kuantitas seperti biasa tidak terganggu.
             periksaNomor(event) {
                 if (!this.ndBerQr || this.yakinUbahNomor) return;
-                if (event.target.elements.nd_sequence.value.trim() === this.ndAsli) return;
+                if (event.target.elements.nd_number.value.trim() === this.ndAsli) return;
 
                 event.preventDefault();
                 this.$dispatch('show-nd-renumber-modal');
             },
 
-            // Kode unit pada nomor mengikuti peminta: diri sendiri, atau peminta
+            // Saran nomor mengikuti unit peminta: diri sendiri, atau peminta
             // yang dipilih untuk permintaan darurat.
-            get ndPreview() {
+            get ndAkhiran() {
                 const requester = this.isEmergency
                     ? this.requesters.find(user => user.user_id === this.selectedRequesterId)
                     : null;
-                const template = requester?.nd_template ?? this.ndTemplate;
-                return template.replace('__SEQ__', this.ndSequence.trim() || '……');
+                return requester?.nd_akhiran ?? this.ndAkhiranSendiri;
             },
 
             get filteredRequesters() {

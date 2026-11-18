@@ -159,8 +159,7 @@
                                         'id' => $antrean->request_id,
                                         'number' => $antrean->request_number,
                                         'needsNd' => false,
-                                        'preview' => $antrean->documentNumber('ND'),
-                                        'sequence' => $antrean->ndSequence(),
+                                        'akhiranNd' => $antrean->nomorAkhiran(),
                                         'qr' => \App\Support\PemberitahuanQr::persetujuan($antrean),
                                     ];
                                     $adaUsulanBarang = $antrean->item->contains(fn ($detail) => $detail->item_proposal_id !== null);
