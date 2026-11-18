@@ -218,6 +218,13 @@ class RequestController extends Controller
             return $itemRequest;
         });
 
+        AuditLogger::record(
+            user: $actor,
+            activity: sprintf('Mengajukan permintaan umum %s: %d barang', $itemRequest->request_number, count($validatedData['items'])),
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Ajukan,
+            subject: $itemRequest,
+        );
         NotificationScanner::periksaPermintaan($itemRequest->fresh('user'));
 
         return redirect()->route('request.umum.index')->with('status', 'Permintaan umum berhasil dibuat.');
@@ -289,7 +296,7 @@ class RequestController extends Controller
     {
         $validatedData = $httpRequest->validated();
 
-        DB::transaction(function () use ($validatedData, $request, $httpRequest): void {
+        $changes = DB::transaction(function () use ($validatedData, $request, $httpRequest): array {
             abort_unless($request->fresh()->status === 'submitted', 409);
 
             $changes = $httpRequest->changes();
@@ -323,7 +330,28 @@ class RequestController extends Controller
                     $changes,
                 );
             }
+
+            return $changes;
         });
+
+        // Simpan tanpa perubahan jumlah tidak mengubah apa pun, jadi tidak
+        // dicatat, sama seperti riwayatnya.
+        if ($changes !== []) {
+            $note = $validatedData['adjustment_note'] ?? null;
+
+            AuditLogger::record(
+                user: $httpRequest->user(),
+                activity: sprintf(
+                    'Mengubah permintaan umum %s: %s%s',
+                    $request->request_number,
+                    collect($changes)->map(fn (array $change) => "{$change['item_name']} {$change['before']} → {$change['after']}")->implode(', '),
+                    $note !== null ? ". Alasan: {$note}" : '',
+                ),
+                module: AuditModule::Permintaan,
+                event: AuditEvent::Ubah,
+                subject: $request,
+            );
+        }
 
         return redirect()->route('request.umum.index')->with('status', 'Permintaan umum berhasil diperbarui.');
     }
@@ -343,6 +371,13 @@ class RequestController extends Controller
             RequestHistory::catat($request, $httpRequest->user(), RequestHistoryAction::Ditolak, 'submitted', 'rejected', $note);
         });
 
+        AuditLogger::record(
+            user: $httpRequest->user(),
+            activity: "Menolak permintaan umum {$request->request_number}. Alasan: {$note}",
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Tolak,
+            subject: $request,
+        );
         NotificationScanner::periksaPermintaan($request->fresh('user'));
 
         return redirect()->route('request.umum.index')->with('status', 'Permintaan umum ditolak.');
@@ -422,10 +457,25 @@ class RequestController extends Controller
 
         app(RequestDocumentGenerator::class)->generateNotaDinas($mergedRequest->fresh(['user', 'item.itemProposal']));
 
-        ModelsRequest::with('user')
+        $asal = ModelsRequest::with('user')
             ->where('merged_into_request_id', $mergedRequest->request_id)
-            ->get()
-            ->push($mergedRequest->fresh('user'))
+            ->orderBy('request_number')
+            ->get();
+
+        AuditLogger::record(
+            user: $actor,
+            activity: sprintf(
+                'Menggabung permintaan umum %s menjadi permintaan darurat %s atas nama %s',
+                $asal->pluck('request_number')->implode(', '),
+                $mergedRequest->request_number,
+                $kasubbag->fullname,
+            ),
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Tambah,
+            subject: $mergedRequest,
+        );
+
+        $asal->push($mergedRequest->fresh('user'))
             ->each(fn (ModelsRequest $request) => NotificationScanner::periksaPermintaan($request));
 
         return redirect()->route('request.index')->with('status', 'Permintaan umum berhasil digabung menjadi permintaan darurat.');
@@ -696,11 +746,23 @@ class RequestController extends Controller
             app(RequestDocumentGenerator::class)->generateNotaDinas($itemRequest->fresh(['user', 'item.itemProposal']));
         }
 
+        // Permintaan darurat dibuat petugas atas nama pemohon, jadi lognya
+        // menyebut pemohon itu; tanpa itu baris log tidak bisa dibedakan dari
+        // permintaan yang diajukan pemohon sendiri.
+        $itemRequest->loadMissing('user');
         AuditLogger::record(
             user: $request->user(),
-            activity: "Membuat permintaan barang: {$itemRequest->request_number}",
+            activity: $itemRequest->type === 'emergency'
+                ? sprintf(
+                    'Membuat permintaan darurat %s atas nama %s (%s), Nota Dinas %s',
+                    $itemRequest->request_number,
+                    $itemRequest->user?->fullname ?? 'pemohon',
+                    $itemRequest->user?->unit?->label() ?? 'tanpa unit',
+                    $itemRequest->nd_number,
+                )
+                : "Mengajukan permintaan barang {$itemRequest->request_number}, Nota Dinas {$itemRequest->nd_number}",
             module: AuditModule::Permintaan,
-            event: AuditEvent::Tambah,
+            event: AuditEvent::Ajukan,
             subject: $itemRequest,
         );
         NotificationScanner::catatPermintaanDiajukan($itemRequest->fresh('user'));
@@ -827,7 +889,10 @@ class RequestController extends Controller
             ->with('status', 'Permintaan barang berhasil diperbarui.');
     }
 
-    public function removeRejectedProposal(RequestDetail $requestDetail, Request $httpRequest)
+    // Route-nya memuat {request} lalu {requestDetail}; keduanya harus diterima
+    // di sini; bila {request} dilewati, Laravel mengoper string ID-nya ke
+    // parameter pertama dan aksi ini selalu gagal dengan TypeError.
+    public function removeRejectedProposal(ModelsRequest $request, RequestDetail $requestDetail, Request $httpRequest)
     {
         $actor = $httpRequest->user();
         abort_unless(
@@ -836,14 +901,37 @@ class RequestController extends Controller
             403,
         );
 
-        $request = $requestDetail->request;
         abort_unless(
-            $requestDetail->item_proposal_id !== null
+            $requestDetail->request_id === $request->request_id
+                && $requestDetail->item_proposal_id !== null
                 && $requestDetail->itemProposal?->status === ItemProposalStatus::Ditolak,
             404,
         );
 
-        $requestDetail->delete();
+        $namaBarang = $requestDetail->itemProposal->item_name;
+
+        // Riwayat sekaligus mengabari pemohon bahwa barisnya hilang dari
+        // permintaannya; statusnya sendiri tidak berubah.
+        DB::transaction(function () use ($requestDetail, $request, $actor, $namaBarang): void {
+            $requestDetail->delete();
+
+            RequestHistory::catat(
+                $request,
+                $actor,
+                RequestHistoryAction::UsulanDihapus,
+                $request->status,
+                $request->status,
+                "Usulan barang baru \"{$namaBarang}\" ditolak, sehingga dihapus dari permintaan.",
+            );
+        });
+
+        AuditLogger::record(
+            user: $actor,
+            activity: "Menghapus usulan barang baru yang ditolak \"{$namaBarang}\" dari permintaan {$request->request_number}",
+            module: AuditModule::Permintaan,
+            event: AuditEvent::Hapus,
+            subject: $request,
+        );
 
         return redirect()
             ->route('request.show', $request)

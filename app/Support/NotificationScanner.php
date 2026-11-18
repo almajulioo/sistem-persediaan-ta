@@ -107,6 +107,7 @@ class NotificationScanner
         self::periksaSeluruhRealisasi();
         self::periksaSeluruhUsulanBarang();
         self::periksaSeluruhPermohonan();
+        self::periksaSeluruhPermintaan();
     }
 
     /**
@@ -1013,13 +1014,25 @@ class NotificationScanner
      * Setiap keadaan menyala hanya pada tahapnya dan padam begitu permintaan
      * berpindah tahap. Kabar untuk pemohon tidak lewat sini, melainkan lewat
      * catatRiwayatPermintaan() pada setiap langkah riwayat.
+     *
+     * Penerima tetap boleh dioper supaya pemeriksaan seluruh permintaan tidak
+     * mengambil ulang daftar yang sama untuk setiap baris.
+     *
+     * @param  EloquentCollection<int, User>|null  $admin
+     * @param  EloquentCollection<int, User>|null  $pengawas
+     * @param  EloquentCollection<int, User>|null  $pemberiPersetujuan
      */
-    public static function periksaPermintaan(ModelsRequest $request): void
-    {
+    public static function periksaPermintaan(
+        ModelsRequest $request,
+        ?EloquentCollection $admin = null,
+        ?EloquentCollection $pengawas = null,
+        ?EloquentCollection $pemberiPersetujuan = null,
+    ): void {
         $request->loadMissing('user');
 
-        $admin = Notifier::penerimaBerperan(UserRole::Admin);
-        $pengawas = self::pengawasGudang();
+        $admin ??= Notifier::penerimaBerperan(UserRole::Admin);
+        $pengawas ??= self::pengawasGudang();
+        $pemberiPersetujuan ??= self::pemberiPersetujuan();
         $catatan = self::catatanTerakhirPermintaan($request);
         $tautan = route('request.show', $request, absolute: false);
 
@@ -1073,7 +1086,7 @@ class NotificationScanner
         // diselesaikan Kasubbag juga, jadi ia ikut ditagih.
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'approved_by_head',
-            penerima: $request->type === 'emergency' ? $pengawas->merge(self::pemberiPersetujuan()) : $pengawas,
+            penerima: $request->type === 'emergency' ? $pengawas->merge($pemberiPersetujuan) : $pengawas,
             type: NotificationType::PermintaanDisetujuiKepalaUnit,
             dedupKey: NotificationType::PermintaanDisetujuiKepalaUnit->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number}: ".$request->labelStatusUntuk('approved_by_head'),
@@ -1085,7 +1098,7 @@ class NotificationScanner
         // Langkah berikutnya, memulai pengeluaran, adalah giliran Kasubbag.
         Notifier::terapkanKeadaan(
             berlaku: $request->status === 'processed_by_staff',
-            penerima: self::pemberiPersetujuan(),
+            penerima: $pemberiPersetujuan,
             type: NotificationType::PermintaanDisetujuiPengelolaGudang,
             dedupKey: NotificationType::PermintaanDisetujuiPengelolaGudang->dedupKey($request->request_id),
             title: "Permintaan {$request->request_number}: ".NotificationType::PermintaanDisetujuiPengelolaGudang->label(),
@@ -1189,6 +1202,27 @@ class NotificationScanner
         $note = $request->histories()->reorder()->latest('request_history_id')->value('note');
 
         return $note === null ? '' : " Catatan terakhir: {$note}";
+    }
+
+    /**
+     * Keadaan seluruh permintaan, termasuk yang sudah selesai supaya tagihan
+     * yang pemeriksaan reaktifnya sempat gagal tetap ikut ditutup. Penyetuju
+     * unit dibaca ulang di sini, jadi Kepala Unit yang baru diangkat ikut
+     * menerima tagihan permintaan yang sudah menunggu sebelum ia menjabat.
+     */
+    public static function periksaSeluruhPermintaan(): void
+    {
+        $admin = Notifier::penerimaBerperan(UserRole::Admin);
+        $pengawas = self::pengawasGudang();
+        $pemberiPersetujuan = self::pemberiPersetujuan();
+
+        ModelsRequest::query()
+            ->with('user')
+            ->chunk(100, function ($requests) use ($admin, $pengawas, $pemberiPersetujuan) {
+                foreach ($requests as $request) {
+                    self::periksaPermintaan($request, $admin, $pengawas, $pemberiPersetujuan);
+                }
+            });
     }
 
     /**

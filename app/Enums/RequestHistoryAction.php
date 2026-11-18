@@ -15,6 +15,8 @@ enum RequestHistoryAction: string
     case KuantitasDiubah = 'kuantitas_diubah';
     case Dikembalikan = 'dikembalikan';
     case Digabung = 'digabung';
+    // Baris usulan barang baru yang ditolak dihapus dari permintaan.
+    case UsulanDihapus = 'usulan_dihapus';
 
     // --- Konfirmasi penerimaan, setelah barang diserahkan ---
     case Diterima = 'diterima';
@@ -32,6 +34,7 @@ enum RequestHistoryAction: string
             self::KuantitasDiubah => 'Kuantitas Diubah',
             self::Dikembalikan => 'Status Dikembalikan',
             self::Digabung => 'Digabung',
+            self::UsulanDihapus => 'Usulan Barang Ditolak Dihapus',
             self::Diterima => 'Penerimaan Dikonfirmasi Pemohon',
             self::MasalahDilaporkan => 'Masalah Penerimaan Dilaporkan',
             self::MasalahDitanggapi => 'Masalah Penerimaan Ditanggapi',
@@ -56,7 +59,7 @@ enum RequestHistoryAction: string
             self::Diajukan, self::Digabung, self::MasalahDitanggapi => 'bg-brand-500',
             self::Disetujui, self::Diterima => 'bg-success-500',
             self::Ditolak, self::Kedaluwarsa, self::MasalahDilaporkan => 'bg-error-500',
-            self::KuantitasDiubah, self::Dikembalikan, self::DitutupPetugas => 'bg-warning-500',
+            self::KuantitasDiubah, self::Dikembalikan, self::DitutupPetugas, self::UsulanDihapus => 'bg-warning-500',
         };
     }
 }
