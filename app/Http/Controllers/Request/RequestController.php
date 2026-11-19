@@ -958,6 +958,7 @@ class RequestController extends Controller
                 $action,
                 $httpRequest->input('nd_number'),
                 $httpRequest->input('note'),
+                $httpRequest->input('bast_number'),
             );
         } catch (AuthorizationException $exception) {
             return redirect()->back()->with('error', $exception->getMessage());

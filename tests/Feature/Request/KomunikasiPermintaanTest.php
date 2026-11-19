@@ -50,7 +50,12 @@ function responKomunikasi(ModelsRequest $request, string $action, array $data = 
 {
     return test()
         ->from(route('request.show', $request))
-        ->post(route('request.respond', $request), ['action' => $action, ...$data]);
+        // Nomor BAST hanya dibaca pada langkah yang menyerahkan barang.
+        ->post(route('request.respond', $request), [
+            'action' => $action,
+            'bast_number' => $request->bast_number ?? random_int(1, 999999).'/B/BAST/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
+            ...$data,
+        ]);
 }
 
 function notifikasiKomunikasi(User $user, NotificationType $type): ?Notification

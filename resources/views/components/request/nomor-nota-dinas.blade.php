@@ -1,13 +1,15 @@
 {{--
-    Kolom nomor Nota Dinas permintaan, diketik lengkap oleh pemohon (ADR 0059).
-    Di bawahnya ada saran nomor sesuai unit yang baru terisi bila diklik:
+    Kolom nomor naskah permintaan yang diketik lengkap: nomor Nota Dinas oleh
+    pemohon (ADR 0059) dan nomor BAST oleh petugas yang menyerahkan barang
+    (dengan name="bast_number"). Di bawahnya ada saran nomor sesuai unit yang baru terisi bila diklik:
     nomor urut yang sudah diketik dipertahankan, lalu bagian sesudahnya
     diganti format unit. Bila belum ada nomor urut, kursor diletakkan di
     depan supaya pemohon langsung mengetiknya.
 
     `model`   : properti Alpine induk yang menyimpan isian, mis. "ndNumber".
     `akhiran` : ekspresi Alpine untuk bagian nomor setelah nomor urut, mis.
-                "/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026" (Request::nomorAkhiran()).
+                "/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026" (Request::nomorAkhiran()
+                atau Request::nomorAkhiranBast()).
 --}}
 @props([
     'id' => 'nd_number',
@@ -15,7 +17,8 @@
     'model',
     'akhiran',
     'label' => 'Nomor Nota Dinas',
-    'help' => 'Ketik sesuai nomor di agenda unit. Nomor BAST mengikuti nomor ini.',
+    'placeholder' => 'mis. 51/B/ND/…',
+    'help' => 'Ketik sesuai nomor di agenda unit.',
 ])
 
 @php
@@ -42,7 +45,7 @@
         {{ $label }}<span class="text-error-500">*</span>
     </label>
     <input id="{{ $id }}" type="text" name="{{ $name }}" x-model="{{ $model }}" required autocomplete="off" spellcheck="false"
-        maxlength="{{ \App\Models\Request::ND_NUMBER_MAX }}" placeholder="mis. 51/B/ND/…"
+        maxlength="{{ \App\Models\Request::ND_NUMBER_MAX }}" placeholder="{{ $placeholder }}"
         @if ($hasError) aria-invalid="true" aria-describedby="{{ $id }}-error" @endif
         @class([
             'dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 font-mono text-sm text-gray-800 placeholder:font-sans placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30',

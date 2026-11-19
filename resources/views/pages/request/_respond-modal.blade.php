@@ -1,13 +1,16 @@
 {{--
     Modal keputusan Setujui/Tolak, dipakai halaman daftar dan detail
     permintaan. Dibuka lewat event `open-respond-modal` berisi
-    { id, number, action: 'approve'|'reject', label, needsNd, akhiranNd, qr, qrUlang }.
+    { id, number, action: 'approve'|'reject', label, needsNd, akhiranNd,
+      needsBast, akhiranBast, qr, qrUlang }.
 
     Catatan wajib saat menolak dan opsional saat menyetujui; catatan itulah
     yang dibaca pemohon di riwayat permintaan dan notifikasinya. Nomor Nota
     Dinas (diketik lengkap, dengan saran sesuai unit pemohon) hanya diminta
     untuk permintaan yang belum bernomor (data lama atau hasil penggabungan
-    permintaan umum). Konteks ikut dikirim sebagai
+    permintaan umum). Nomor BAST diminta pada langkah yang menyerahkan
+    barang, dari agenda BAST yang terpisah dari Nota Dinas.
+    Konteks ikut dikirim sebagai
     `respond_context` supaya modal terbuka lagi dengan isi yang sama saat
     validasi gagal. `qr` berisi pemberitahuan dari App\Support\PemberitahuanQr,
     tampil hanya saat menyetujui tahap yang memang menghasilkan QR. `qrUlang`
@@ -16,7 +19,7 @@
     $kembali (opsional): 'dasbor' supaya kembali ke dasbor setelah diproses.
 --}}
 @php
-    $oldRespond = ($errors->has('note') || $errors->has('nd_number')) && old('respond_context')
+    $oldRespond = ($errors->has('note') || $errors->has('nd_number') || $errors->has('bast_number')) && old('respond_context')
         ? json_decode((string) old('respond_context'), true)
         : null;
     $fieldClass = 'dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30';
@@ -25,12 +28,13 @@
 <x-ui.modal @open-respond-modal.window="open = true" :isOpen="is_array($oldRespond)" class="max-w-[520px]">
     <form method="POST" :action="actionUrl.replace('__REQUEST__', ctx.id)" class="p-6 sm:p-8"
         x-data="{
-            ctx: @js(is_array($oldRespond) ? $oldRespond : ['id' => '', 'number' => '', 'action' => 'approve', 'label' => 'Setujui', 'needsNd' => false, 'akhiranNd' => '']),
+            ctx: @js(is_array($oldRespond) ? $oldRespond : ['id' => '', 'number' => '', 'action' => 'approve', 'label' => 'Setujui', 'needsNd' => false, 'akhiranNd' => '', 'needsBast' => false, 'akhiranBast' => '']),
             actionUrl: @js(route('request.respond', '__REQUEST__')),
             nomorNd: @js((string) old('nd_number', '')),
+            nomorBast: @js((string) old('bast_number', '')),
             get isReject() { return this.ctx.action === 'reject'; },
         }"
-        @open-respond-modal.window="ctx = $event.detail; nomorNd = ''">
+        @open-respond-modal.window="ctx = $event.detail; nomorNd = ''; nomorBast = ''">
         @csrf
         <input type="hidden" name="action" :value="ctx.action">
         <input type="hidden" name="respond_context" :value="JSON.stringify(ctx)">
@@ -47,7 +51,15 @@
         <template x-if="ctx.needsNd && ! isReject">
             <div class="mt-5">
                 <x-request.nomor-nota-dinas id="nd_number_modal" model="nomorNd" akhiran="ctx.akhiranNd"
-                    help="Permintaan ini belum bernomor. Ketik sesuai agenda unit pemohon; nomor BAST mengikuti nomor ini." />
+                    help="Permintaan ini belum bernomor. Ketik sesuai agenda unit pemohon." />
+            </div>
+        </template>
+
+        <template x-if="ctx.needsBast && ! isReject">
+            <div class="mt-5">
+                <x-request.nomor-nota-dinas id="bast_number_modal" name="bast_number" model="nomorBast" akhiran="ctx.akhiranBast"
+                    label="Nomor BAST" placeholder="mis. 12/B/BAST/…"
+                    help="Ketik sesuai nomor berikutnya di agenda BAST. Bulan dan tahunnya mengikuti hari penyerahan." />
             </div>
         </template>
 

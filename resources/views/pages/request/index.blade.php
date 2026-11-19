@@ -224,6 +224,8 @@
                                                     'number' => $row->request_number,
                                                     'needsNd' => $row->status === 'approved_by_head' && $row->nd_number === null,
                                                     'akhiranNd' => $row->nomorAkhiran(),
+                                                    'needsBast' => $row->menyerahkanSaatDisetujui(),
+                                                    'akhiranBast' => $row->nomorAkhiranBast(),
                                                     'qr' => \App\Support\PemberitahuanQr::persetujuan($row),
                                                     'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($row),
                                                 ];

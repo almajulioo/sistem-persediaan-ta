@@ -61,12 +61,13 @@ function ubahKuantitasNd(ModelsRequest $request, array $overrides = [])
         ]);
 }
 
-function setujuiNd(ModelsRequest $request, ?string $ndNumber)
+function setujuiNd(ModelsRequest $request, ?string $ndNumber, ?string $bastNumber = null)
 {
     return test()
         ->from(route('request.show', $request))
         ->post(route('request.respond', ['request' => $request, 'action' => 'approve']), array_filter([
             'nd_number' => $ndNumber,
+            'bast_number' => $bastNumber,
         ], fn ($value) => $value !== null));
 }
 
@@ -91,7 +92,7 @@ beforeEach(function () {
 describe('mengajukan permintaan', function () {
     beforeEach(fn () => $this->travelTo(Carbon::parse('2026-10-15 09:00')));
 
-    it('menyimpan nomor Nota Dinas yang diketik pemohon dan menurunkan nomor BAST darinya', function () {
+    it('menyimpan nomor Nota Dinas yang diketik pemohon tanpa memberi nomor BAST', function () {
         $this->generator->shouldReceive('generateNotaDinas')->once()
             ->withArgs(fn (ModelsRequest $request) => $request->nd_number === ND_UMUM_TI_51);
         $pemohon = User::factory()->role(UserRole::Pengguna)->create(['unit' => UnitKerja::SubbagianUmumTi]);
@@ -100,7 +101,7 @@ describe('mengajukan permintaan', function () {
 
         $request = ModelsRequest::sole();
         expect($request->nd_number)->toBe(ND_UMUM_TI_51)
-            ->and($request->bast_number)->toBe('51/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/10/2026')
+            ->and($request->bast_number)->toBeNull()
             ->and($request->ndSequence())->toBe('51');
     });
 
@@ -110,18 +111,18 @@ describe('mengajukan permintaan', function () {
 
         ajukanNd($pemohon, ['nd_number' => '51/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/09/2026'])->assertSessionHasNoErrors();
 
-        expect(ModelsRequest::sole())
-            ->nd_number->toBe('51/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/09/2026')
-            ->bast_number->toBe('51/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/09/2026');
+        expect(ModelsRequest::sole()->nd_number)->toBe('51/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/09/2026');
     });
 
-    it('menyusun nomor BAST baku bila nomor yang diketik tidak memuat jenis ND', function () {
+    it('menerima nomor di luar format baku selama diawali nomor urut', function () {
         $this->generator->shouldReceive('generateNotaDinas')->once();
         $pemohon = User::factory()->role(UserRole::Pengguna)->create(['unit' => UnitKerja::SubbagianUmumTi]);
 
         ajukanNd($pemohon, ['nd_number' => '51/UMUM-TI/2026'])->assertSessionHasNoErrors();
 
-        expect(ModelsRequest::sole()->bast_number)->toBe('51/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/10/2026');
+        expect(ModelsRequest::sole())
+            ->nd_number->toBe('51/UMUM-TI/2026')
+            ->bast_number->toBeNull();
     });
 
     it('menolak nomor kosong atau yang tidak diawali nomor urut', function (string $nomor) {
@@ -214,7 +215,7 @@ describe('format nomor', function () {
 });
 
 describe('ubah kuantitas', function () {
-    it('menetapkan nomor Nota Dinas dan BAST untuk permintaan belum bernomor', function () {
+    it('menetapkan nomor Nota Dinas untuk permintaan belum bernomor', function () {
         $this->generator->shouldReceive('renumberNotaDinas')->once();
         $request = permintaanNd();
 
@@ -224,7 +225,7 @@ describe('ubah kuantitas', function () {
         $request->refresh();
         expect($request->status)->toBe('processed_by_staff')
             ->and($request->nd_number)->toBe(ND_UMUM_TI_51)
-            ->and($request->bast_number)->toBe('51/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/10/2026')
+            ->and($request->bast_number)->toBeNull()
             ->and($request->ndSequence())->toBe('51');
     });
 
@@ -269,9 +270,7 @@ describe('ubah kuantitas', function () {
         $this->actingAs($this->gudang);
         ubahKuantitasNd($request, ['nd_number' => '52/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026'])->assertRedirect(route('request.index'));
 
-        expect($request->refresh())
-            ->nd_number->toBe('52/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026')
-            ->bast_number->toBe('52/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/10/2026');
+        expect($request->refresh()->nd_number)->toBe('52/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026');
     });
 
     it('membolehkan nomor urut sama untuk unit lain', function () {
@@ -359,15 +358,15 @@ describe('tombol setujui', function () {
             ->and($request->nd_number)->toBe('12/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026');
     });
 
-    it('memakai nomor BAST saat permintaan darurat diselesaikan', function () {
-        $bast = '9/B/BAST/DJPKN-V.BLP.1.2/KEU.02.02/10/2026';
+    it('memakai nomor BAST yang diketik saat permintaan darurat diselesaikan', function () {
+        $bast = '3/B/BAST/DJPKN-V.BLP.1.2/KEU.02.02/10/2026';
         $this->generator->shouldReceive('renumberNotaDinas')->once();
         $this->generator->shouldReceive('generateBast')->once()
             ->withArgs(fn (ModelsRequest $request) => $request->bast_number === $bast);
         $request = permintaanNd(attributes: ['type' => 'emergency'], unit: UnitKerja::SubbagianSdm);
 
         $this->actingAs($this->gudang);
-        setujuiNd($request, '9/B/ND/DJPKN-V.BLP.1.2/KEU.02.02/10/2026')->assertRedirect(route('request.index'));
+        setujuiNd($request, '9/B/ND/DJPKN-V.BLP.1.2/KEU.02.02/10/2026', $bast)->assertRedirect(route('request.index'));
 
         $nd = '9/B/ND/DJPKN-V.BLP.1.2/KEU.02.02/10/2026';
         expect($request->refresh()->status)->toBe('delivered')

@@ -139,7 +139,7 @@ describe('isi pemberitahuan', function () {
             expect(PemberitahuanQr::persetujuan($request->fresh('user'))['kolom'])->toBe($kolom);
 
             $this->actingAs($penyetuju)
-                ->post(route('request.respond', $request), ['action' => 'approve'])
+                ->post(route('request.respond', $request), ['action' => 'approve', 'bast_number' => $request->bast_number])
                 ->assertSessionMissing('error');
 
             expect($request->fresh()->persetujuanBast())->toHaveKey($kunci);

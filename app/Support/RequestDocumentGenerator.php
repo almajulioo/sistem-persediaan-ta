@@ -150,7 +150,9 @@ class RequestDocumentGenerator
         ]);
         $document->fill([
             'user_id' => $request->user_id,
-            'document_number' => $request->bast_number ?? $request->documentNumber('BAST'),
+            // Nomor BAST baru diberi saat barang diserahkan, jadi
+            // draf ini dibiarkan "……" seperti tanggal serah terimanya.
+            'document_number' => $request->bast_number ?? '……',
             'file_path' => 'bast-permintaan/'.$request->request_id.'.docx',
             'approved_by_user_id' => null,
             'approved_at' => null,
@@ -173,7 +175,7 @@ class RequestDocumentGenerator
         ]);
         $document->fill([
             'user_id' => $request->user_id,
-            'document_number' => $request->bast_number ?? $request->documentNumber('BAST'),
+            'document_number' => $request->bast_number ?? '……',
             'file_path' => $filePath,
             'approved_by_user_id' => $issuer->user_id,
             'approved_at' => $issuedAt,

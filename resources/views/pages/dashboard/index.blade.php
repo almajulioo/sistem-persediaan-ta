@@ -160,6 +160,8 @@
                                         'number' => $antrean->request_number,
                                         'needsNd' => false,
                                         'akhiranNd' => $antrean->nomorAkhiran(),
+                                        'needsBast' => false,
+                                        'akhiranBast' => '',
                                         'qr' => \App\Support\PemberitahuanQr::persetujuan($antrean),
                                     ];
                                     $adaUsulanBarang = $antrean->item->contains(fn ($detail) => $detail->item_proposal_id !== null);

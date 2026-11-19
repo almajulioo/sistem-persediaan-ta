@@ -352,8 +352,9 @@ class Request extends Model
     /**
      * Nomor Nota Dinas permintaan diketik lengkap oleh pemohon (ADR 0059),
      * tetapi harus diawali nomor urut agenda unit lalu garis miring, tanpa
-     * spasi: nomor urut itulah yang dipakai nomor BAST cadangan dan
-     * pemeriksaan bentrok dengan permohonan.
+     * spasi: nomor urut itulah yang dipakai pemeriksaan bentrok dengan
+     * permohonan. Nomor BAST yang diketik Pengelola Gudang memakai bentuk
+     * yang sama.
      */
     public const ND_NUMBER_PATTERN = '/^\d{1,6}\/\S+$/';
 
@@ -368,15 +369,17 @@ class Request extends Model
      * Tanpa nomor urut, bagian depannya dibiarkan "……".
      *
      * @param  'ND'|'BAST'  $kind
+     * @param  Carbon|null  $tanggal  bulan dan tahun naskah; bawaannya tanggal
+     *                                permintaan (tanggal Nota Dinas)
      */
-    public function documentNumber(string $kind, ?string $sequence = null): string
+    public function documentNumber(string $kind, ?string $sequence = null, ?Carbon $tanggal = null): string
     {
         return sprintf(
             '%s/B/%s/DJPKN-V.%s/KEU.02.02/%s',
             $sequence ?? '……',
             $kind,
             $this->user?->unit?->kodeNaskah() ?? 'BLP',
-            ($this->date ?? now())->format('m/Y'),
+            ($tanggal ?? $this->date ?? now())->format('m/Y'),
         );
     }
 
@@ -393,15 +396,26 @@ class Request extends Model
     }
 
     /**
-     * Nomor BAST mengikuti nomor Nota Dinas yang diketik pemohon, dengan
-     * jenis naskah ND diganti BAST. Bila jenis naskahnya tidak tertulis,
-     * nomor BAST disusun dari nomor urutnya dengan format baku.
+     * Saran bagian nomor BAST setelah nomor urut, mis.
+     * "/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/11/2026". BAST punya agenda sendiri
+     * dan diberi nomor oleh Pengelola Gudang saat barang diserahkan, jadi
+     * bulan dan tahunnya mengikuti hari penyerahan, bukan tanggal Nota Dinas.
      */
-    public function nomorBastDari(string $ndNumber): string
+    public function nomorAkhiranBast(?Carbon $tanggalSerah = null): string
     {
-        return str_contains($ndNumber, '/ND/')
-            ? Str::replaceFirst('/ND/', '/BAST/', $ndNumber)
-            : $this->documentNumber('BAST', Str::before($ndNumber, '/'));
+        return $this->documentNumber('BAST', '', $tanggalSerah ?? now());
+    }
+
+    /**
+     * Langkah menyetujui yang menyerahkan barang, sekaligus menerbitkan BAST
+     * final: Serahkan Barang pada tahap Dalam Pengeluaran, atau Selesaikan
+     * pada permintaan darurat yang sudah disetujui Kepala Unit. Di langkah
+     * inilah nomor BAST wajib diisi.
+     */
+    public function menyerahkanSaatDisetujui(): bool
+    {
+        return $this->status === 'in_issuance'
+            || ($this->type === 'emergency' && $this->status === 'approved_by_head');
     }
 
     /**

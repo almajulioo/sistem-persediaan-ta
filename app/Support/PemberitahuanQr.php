@@ -124,6 +124,7 @@ class PemberitahuanQr
 
     private static function bast(ModelsRequest $request): string
     {
-        return 'BAST '.($request->bast_number ?? $request->documentNumber('BAST'));
+        // Sebelum diserahkan BAST belum bernomor.
+        return $request->bast_number !== null ? "BAST {$request->bast_number}" : 'BAST permintaan ini';
     }
 }

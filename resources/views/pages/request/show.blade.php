@@ -33,6 +33,8 @@
             'number' => $requestData->request_number,
             'needsNd' => $requestData->status === 'approved_by_head' && $requestData->nd_number === null,
             'akhiranNd' => $requestData->nomorAkhiran(),
+            'needsBast' => $requestData->menyerahkanSaatDisetujui(),
+            'akhiranBast' => $requestData->nomorAkhiranBast(),
             'qr' => \App\Support\PemberitahuanQr::persetujuan($requestData),
             'qrUlang' => \App\Support\PemberitahuanQr::penerbitanUlangSaatDisetujui($requestData),
         ];

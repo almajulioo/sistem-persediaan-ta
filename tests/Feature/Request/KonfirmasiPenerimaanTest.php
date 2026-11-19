@@ -69,7 +69,11 @@ describe('menyerahkan', function () {
         $request = permintaanPenerimaan('in_issuance', $this->pemohon, $this->item);
 
         $this->actingAs($this->gudang)
-            ->post(route('request.respond', $request), ['action' => 'approve', 'note' => 'Silakan ambil di gudang lantai 1.'])
+            ->post(route('request.respond', $request), [
+                'action' => 'approve',
+                'note' => 'Silakan ambil di gudang lantai 1.',
+                'bast_number' => '12/B/BAST/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
+            ])
             ->assertSessionHasNoErrors();
 
         $request->refresh();
@@ -109,7 +113,7 @@ describe('menyerahkan', function () {
         $request->item()->update(['quantity_approved' => null]);
 
         $this->actingAs($this->gudang)
-            ->post(route('request.respond', $request), ['action' => 'approve'])
+            ->post(route('request.respond', $request), ['action' => 'approve', 'bast_number' => '13/B/BAST/DJPKN-V.BLP.1.5/KEU.02.02/11/2026'])
             ->assertSessionHasNoErrors();
 
         expect($request->refresh()->status)->toBe('delivered')

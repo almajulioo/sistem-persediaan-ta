@@ -10,6 +10,7 @@ use App\Enums\UnitKerja;
 use App\Enums\UserRole;
 use App\Exceptions\InsufficientStockException;
 use App\Models\ItemApplication;
+use App\Models\ProcurementReceipt;
 use App\Models\Request as ModelsRequest;
 use App\Models\RequestHistory;
 use App\Models\User;
@@ -28,6 +29,8 @@ class RequestWorkflowService
 {
     public const FORMAT_NOMOR_ND = 'Nomor Nota Dinas diawali nomor urut berupa angka lalu garis miring, tanpa spasi, mis. 51/B/ND/DJPKN-V.BLP.1.4/KEU.02.02/10/2026.';
 
+    public const FORMAT_NOMOR_BAST = 'Nomor BAST diawali nomor urut berupa angka lalu garis miring, tanpa spasi, mis. 12/B/BAST/DJPKN-V.BLP.1.4/KEU.02.02/11/2026.';
+
     public function __construct(
         private readonly RequestDocumentGenerator $documentGenerator,
     ) {
@@ -39,6 +42,8 @@ class RequestWorkflowService
      *                                    tetapi belum bernomor (data lama atau hasil penggabungan
      *                                    permintaan umum); permintaan biasa sudah bernomor sejak diajukan
      * @param  string|null  $note  catatan untuk pemohon; wajib saat menolak, opsional saat menyetujui
+     * @param  string|null  $bastNumber  nomor BAST lengkap dari agenda BAST, wajib saat
+     *                                    menyetujui langkah yang menyerahkan barang
      *
      * @throws ValidationException
      */
@@ -48,6 +53,7 @@ class RequestWorkflowService
         string $action,
         ?string $ndNumber = null,
         ?string $note = null,
+        ?string $bastNumber = null,
     ): ModelsRequest
     {
         if (! in_array($action, ['approve', 'reject'], true)) {
@@ -72,7 +78,11 @@ class RequestWorkflowService
             && $request->status === 'approved_by_head'
             && $request->nd_number === null;
 
-        DB::transaction(function () use ($request, $actor, $action, $assignsNumber, $ndNumber, $note): void {
+        // Nomor BAST diberi saat barang diserahkan, karena di saat itulah BAST
+        // final terbit dan dicatat di agenda BAST.
+        $assignsBast = $action === 'approve' && $request->menyerahkanSaatDisetujui();
+
+        DB::transaction(function () use ($request, $actor, $action, $assignsNumber, $ndNumber, $note, $assignsBast, $bastNumber): void {
             $fromStatus = $request->status;
 
             if ($action === 'reject') {
@@ -87,6 +97,10 @@ class RequestWorkflowService
 
             if ($assignsNumber) {
                 $this->assignNotaDinasNumber($request, $ndNumber);
+            }
+
+            if ($assignsBast) {
+                $this->assignBastNumber($request, $bastNumber);
             }
 
             $nextStatus = $this->nextStatus($request, $actor);
@@ -345,8 +359,9 @@ class RequestWorkflowService
     /**
      * Menetapkan nomor Nota Dinas yang diketik lengkap oleh pemohon saat
      * mengajukan (atau Pengelola Gudang, untuk permintaan yang belum
-     * bernomor). Nomor BAST ikut ditetapkan dari nomor itu, dan keduanya
-     * dibekukan di sini supaya tidak berubah walau unit pemohon diganti.
+     * bernomor). Nomor dibekukan di sini supaya tidak berubah walau unit
+     * pemohon diganti. Nomor BAST tidak lagi ikut dari sini, melainkan
+     * diberi sendiri saat barang diserahkan (assignBastNumber()).
      *
      * @throws ValidationException
      */
@@ -385,10 +400,47 @@ class RequestWorkflowService
             ]);
         }
 
-        $request->update([
-            'nd_number' => $ndNumber,
-            'bast_number' => $request->nomorBastDari($ndNumber),
-        ]);
+        $request->update(['nd_number' => $ndNumber]);
+    }
+
+    /**
+     * Menetapkan nomor BAST yang diketik lengkap oleh petugas yang
+     * menyerahkan barang, dari agenda BAST yang terpisah dari agenda Nota
+     * Dinas. Nomornya tidak boleh sudah dipakai BAST permintaan
+     * lain maupun BAST penerimaan pengadaan.
+     *
+     * @throws ValidationException
+     */
+    public function assignBastNumber(ModelsRequest $request, ?string $bastNumber): void
+    {
+        $bastNumber = trim((string) $bastNumber);
+
+        if ($bastNumber === '') {
+            throw ValidationException::withMessages([
+                'bast_number' => 'Nomor BAST wajib diisi saat barang diserahkan.',
+            ]);
+        }
+
+        if (preg_match(ModelsRequest::ND_NUMBER_PATTERN, $bastNumber) !== 1
+            || mb_strlen($bastNumber) > ModelsRequest::ND_NUMBER_MAX) {
+            throw ValidationException::withMessages([
+                'bast_number' => self::FORMAT_NOMOR_BAST,
+            ]);
+        }
+
+        if (ModelsRequest::query()->where('bast_number', $bastNumber)->whereKeyNot($request->getKey())->exists()) {
+            throw ValidationException::withMessages([
+                'bast_number' => "Nomor BAST {$bastNumber} sudah dipakai permintaan lain.",
+            ]);
+        }
+
+        if (ProcurementReceipt::query()->where('bast_number', $bastNumber)->exists()) {
+            throw ValidationException::withMessages([
+                'bast_number' => "Nomor BAST {$bastNumber} sudah dipakai BAST penerimaan pengadaan.",
+            ]);
+        }
+
+        $request->update(['bast_number' => $bastNumber]);
     }
 
     /**

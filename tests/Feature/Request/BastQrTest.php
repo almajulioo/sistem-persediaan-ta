@@ -19,6 +19,8 @@ use Illuminate\Support\Str;
  * tidak bertabrakan dengan helper global berkas lain.
  */
 
+const BAST_QR = '51/B/BAST/DJPKN-V.BLP.1.5/KEU.02.02/11/2026';
+
 function permintaanBastQr(User $pemohon, Item $item, string $status, string $type = 'normal'): ModelsRequest
 {
     $request = ModelsRequest::create([
@@ -28,7 +30,6 @@ function permintaanBastQr(User $pemohon, Item $item, string $status, string $typ
         'status' => $status,
         'request_number' => 'REQ-'.Str::upper(Str::random(8)),
         'nd_number' => '51/B/ND/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
-        'bast_number' => '51/B/BAST/DJPKN-V.BLP.1.5/KEU.02.02/11/2026',
     ]);
 
     RequestDetail::create([
@@ -44,7 +45,8 @@ function permintaanBastQr(User $pemohon, Item $item, string $status, string $typ
 function setujuiBastQr(ModelsRequest $request, User $actor): void
 {
     test()->actingAs($actor)
-        ->post(route('request.respond', $request), ['action' => 'approve'])
+        // Nomor BAST hanya dibaca pada langkah yang menyerahkan barang.
+        ->post(route('request.respond', $request), ['action' => 'approve', 'bast_number' => BAST_QR])
         ->assertSessionMissing('error');
 }
 
